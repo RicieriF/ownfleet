@@ -9,6 +9,7 @@ import { TrackingModule } from './tracking/tracking.module.js';
 import { ProofOfDeliveryModule } from './proof-of-delivery/proof-of-delivery.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { RetentionModule } from './retention/retention.module.js';
+import { IntegrationsModule } from './integrations/integrations.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RetentionModule } from './retention/retention.module.js';
     ProofOfDeliveryModule,
     NotificationsModule,
     RetentionModule,
+    IntegrationsModule,
   ],
 })
 export class AppModule {}
