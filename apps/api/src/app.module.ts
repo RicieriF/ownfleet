@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { EstablishmentsModule } from './establishments/establishments.module.js';
@@ -12,10 +13,17 @@ import { RetentionModule } from './retention/retention.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
+import { WebhooksModule } from './webhooks/webhooks.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: config.getOrThrow<string>('REDIS_URL'),
+      }),
+    }),
     PrismaModule,
     AuthModule,
     EstablishmentsModule,
@@ -28,6 +36,7 @@ import { AnalyticsModule } from './analytics/analytics.module.js';
     IntegrationsModule,
     OnboardingModule,
     AnalyticsModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}
