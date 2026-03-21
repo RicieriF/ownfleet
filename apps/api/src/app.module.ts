@@ -10,6 +10,7 @@ import { ProofOfDeliveryModule } from './proof-of-delivery/proof-of-delivery.mod
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { RetentionModule } from './retention/retention.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
+import { OnboardingModule } from './onboarding/onboarding.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js';
     NotificationsModule,
     RetentionModule,
     IntegrationsModule,
+    OnboardingModule,
   ],
 })
 export class AppModule {}
