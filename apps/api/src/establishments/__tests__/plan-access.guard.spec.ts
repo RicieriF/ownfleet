@@ -5,10 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function makeCtx(establishmentId = 'est-1'): ExecutionContext {
+function makeCtx(establishmentId = 'est-1', is_platform_admin = false): ExecutionContext {
   return {
     switchToHttp: () => ({
-      getRequest: () => ({ user: { id: 'u1', establishment_id: establishmentId, role: 'manager' } }),
+      getRequest: () => ({ user: { id: 'u1', establishment_id: establishmentId, role: 'manager', is_platform_admin } }),
     }),
   } as unknown as ExecutionContext;
 }
@@ -28,6 +28,12 @@ describe('PlanAccessGuard', () => {
 
     guard = module.get<PlanAccessGuard>(PlanAccessGuard);
     jest.clearAllMocks();
+  });
+
+  it('allows platform admin regardless of plan', async () => {
+    const result = await guard.canActivate(makeCtx('est-1', true));
+    expect(result).toBe(true);
+    expect(mockPrisma.establishment.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 
   it('allows pilot plan unconditionally', async () => {

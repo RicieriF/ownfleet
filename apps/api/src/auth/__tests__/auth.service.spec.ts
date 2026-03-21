@@ -12,6 +12,7 @@ const mockUser = {
   password_hash: '',
   establishment_id: 'est-1',
   role: 'manager' as const,
+  is_platform_admin: false,
   establishment: { id: 'est-1', plan: 'starter', trial_ends_at: null, paid_until: null },
 };
 
@@ -98,8 +99,10 @@ describe('AuthService', () => {
   });
 
   describe('refresh', () => {
+    // refresh() now uses delete({where, include}) atomically — mock accordingly
+
     it('throws UnauthorizedException when token not found', async () => {
-      mockPrisma.refreshToken.findUnique.mockResolvedValue(null);
+      mockPrisma.refreshToken.delete.mockRejectedValue(new Error('not found'));
 
       await expect(service.refresh('invalid-token')).rejects.toThrow(
         UnauthorizedException,
@@ -107,7 +110,7 @@ describe('AuthService', () => {
     });
 
     it('throws UnauthorizedException when token expired', async () => {
-      mockPrisma.refreshToken.findUnique.mockResolvedValue({
+      mockPrisma.refreshToken.delete.mockResolvedValue({
         id: 'rt-1',
         expires_at: new Date(Date.now() - 1000),
         user: mockUser,
@@ -119,18 +122,15 @@ describe('AuthService', () => {
     });
 
     it('rotates token and returns new pair', async () => {
-      mockPrisma.refreshToken.findUnique.mockResolvedValue({
+      mockPrisma.refreshToken.delete.mockResolvedValue({
         id: 'rt-1',
         expires_at: new Date(Date.now() + 60_000),
-        user: mockUser,
+        user: { ...mockUser, is_platform_admin: false },
       });
-      mockPrisma.refreshToken.delete.mockResolvedValue({});
 
       const result = await service.refresh('valid-token');
 
-      expect(mockPrisma.refreshToken.delete).toHaveBeenCalledWith({
-        where: { id: 'rt-1' },
-      });
+      expect(mockPrisma.refreshToken.delete).toHaveBeenCalledTimes(1);
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
     });

@@ -26,21 +26,24 @@ export class CouriersService {
       orderBy: { name: 'asc' },
     });
 
-    // Attach last ping time and online status
-    const withStatus = await Promise.all(
-      couriers.map(async (c) => {
-        const lastPing = await this.prisma.$queryRaw<{ created_at: Date }[]>`
-          SELECT created_at FROM location_pings
-          WHERE courier_id = ${c.id}
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-        const pingAt = lastPing[0]?.created_at ?? null;
-        return { ...c, last_ping_at: pingAt, online_status: resolveStatus(pingAt) };
-      }),
-    );
+    if (couriers.length === 0) return [];
 
-    return withStatus;
+    // Single query: last ping per courier via DISTINCT ON
+    const lastPings = await this.prisma.$queryRaw<
+      { courier_id: string; created_at: Date }[]
+    >`
+      SELECT DISTINCT ON (courier_id) courier_id, created_at
+      FROM location_pings
+      WHERE courier_id = ANY(${couriers.map((c) => c.id)}::uuid[])
+      ORDER BY courier_id, created_at DESC
+    `;
+
+    const pingMap = new Map(lastPings.map((p) => [p.courier_id, p.created_at]));
+
+    return couriers.map((c) => {
+      const pingAt = pingMap.get(c.id) ?? null;
+      return { ...c, last_ping_at: pingAt, online_status: resolveStatus(pingAt) };
+    });
   }
 
   async findOne(id: string, user: AuthenticatedUser) {

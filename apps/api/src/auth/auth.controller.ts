@@ -6,11 +6,10 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { LoginDto } from './dto/login.dto.js';
-import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 
 const REFRESH_COOKIE = 'refresh_token';
 const COOKIE_OPTS = {
@@ -44,17 +43,18 @@ export class AuthController {
   ): Promise<{ accessToken: string }> {
     const raw: string | undefined = req.cookies?.[REFRESH_COOKIE];
     if (!raw) {
-      res.status(HttpStatus.UNAUTHORIZED).json({ message: 'No refresh token' });
-      return { accessToken: '' };
+      // Throw instead of manually calling res.json() to avoid double-response bug
+      throw new UnauthorizedException('No refresh token');
     }
     const { accessToken, refreshToken } = await this.authService.refresh(raw);
     res.cookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
     return { accessToken };
   }
 
+  // logout does NOT require JwtAuthGuard — access token may be expired
+  // but refresh token is still valid. We only need the refresh cookie.
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
   async logout(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,

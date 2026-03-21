@@ -21,6 +21,9 @@ export class PlanAccessGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<{ user: AuthenticatedUser }>();
     const user = req.user;
 
+    // Platform admins bypass billing checks
+    if (user.is_platform_admin) return true;
+
     const est = await this.prisma.establishment.findUniqueOrThrow({
       where: { id: user.establishment_id },
       select: { plan: true, trial_ends_at: true, paid_until: true },

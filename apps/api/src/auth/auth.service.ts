@@ -43,6 +43,7 @@ export class AuthService {
       sub: user.id,
       establishment_id: user.establishment_id,
       role: user.role,
+      is_platform_admin: user.is_platform_admin,
     };
 
     const accessToken = this.jwt.sign(payload, {
@@ -58,22 +59,20 @@ export class AuthService {
   async refresh(rawToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     const tokenHash = this.hashToken(rawToken);
 
-    const stored = await this.prisma.refreshToken.findUnique({
-      where: { token_hash: tokenHash },
-      include: { user: true },
-    });
+    // Atomic: delete-and-return in one operation prevents concurrent reuse
+    const stored = await this.prisma.refreshToken
+      .delete({ where: { token_hash: tokenHash }, include: { user: true } })
+      .catch(() => null);
 
     if (!stored || stored.expires_at < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    // Rotate: delete old, issue new
-    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
-
     const payload: JwtPayload = {
       sub: stored.user.id,
       establishment_id: stored.user.establishment_id,
       role: stored.user.role,
+      is_platform_admin: stored.user.is_platform_admin,
     };
 
     const accessToken = this.jwt.sign(payload, {

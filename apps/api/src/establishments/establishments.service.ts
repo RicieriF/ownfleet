@@ -19,21 +19,23 @@ export class EstablishmentsService {
   async create(dto: CreateEstablishmentDto, userId: string) {
     const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-    const establishment = await this.prisma.establishment.create({
-      data: {
-        name: dto.name,
-        plan: Plan.starter,
-        trial_ends_at: trialEndsAt,
-      },
-    });
+    // Atomic: both ops succeed or both roll back — no orphaned establishments
+    return this.prisma.$transaction(async (tx) => {
+      const establishment = await tx.establishment.create({
+        data: {
+          name: dto.name,
+          plan: Plan.starter,
+          trial_ends_at: trialEndsAt,
+        },
+      });
 
-    // Assign creator as owner
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { establishment_id: establishment.id },
-    });
+      await tx.user.update({
+        where: { id: userId },
+        data: { establishment_id: establishment.id },
+      });
 
-    return establishment;
+      return establishment;
+    });
   }
 
   async findOne(user: AuthenticatedUser) {

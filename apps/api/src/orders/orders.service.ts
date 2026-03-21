@@ -5,7 +5,7 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
@@ -90,6 +90,11 @@ export class OrdersService {
           status: 'assigned',
           assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
         },
+      }).catch((err) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new ConflictException('Order is already being assigned');
+        }
+        throw err;
       });
 
       return updated;
