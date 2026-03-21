@@ -1,0 +1,356 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis]
+}
+
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+
+enum UserRole {
+  owner
+  manager
+  dispatcher
+}
+
+enum Plan {
+  pilot
+  starter
+  business
+  pro
+}
+
+enum OnboardingStatus {
+  pending
+  couriers_added
+  first_order
+  completed
+}
+
+enum OrderStatus {
+  pending
+  assigned
+  in_progress
+  completed
+  cancelled
+  failed
+}
+
+enum OrderSource {
+  manual
+  poster
+  iiko
+  webhook
+}
+
+enum DeliveryStatus {
+  assigned
+  in_progress
+  completed
+  failed
+}
+
+enum IntegrationType {
+  poster
+  iiko
+}
+
+enum DevicePlatform {
+  ios
+  android
+}
+
+enum BillingEventType {
+  trial_started
+  trial_expired
+  payment_received
+  plan_changed
+  grace_period_started
+  access_revoked
+}
+
+// ─────────────────────────────────────────
+// Establishments (tenants)
+// ─────────────────────────────────────────
+
+model Establishment {
+  id                String           @id @default(uuid())
+  name              String
+  plan              Plan             @default(starter)
+  trial_ends_at     DateTime?
+  paid_until        DateTime?
+  onboarding_status OnboardingStatus @default(pending)
+  settings          Json             @default("{}")
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  users          User[]
+  couriers       Courier[]
+  orders         Order[]
+  integrations   Integration[]
+  webhooks       Webhook[]
+  invite_tokens  InviteToken[]
+  retention_logs RetentionLog[]
+  billing_events BillingEvent[]
+
+  @@map("establishments")
+}
+
+// ─────────────────────────────────────────
+// Users (managers / owners / dispatchers)
+// ─────────────────────────────────────────
+
+model User {
+  id                String   @id @default(uuid())
+  establishment_id  String
+  role              UserRole
+  email             String   @unique
+  password_hash     String
+  is_platform_admin Boolean  @default(false)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  refresh_tokens RefreshToken[]
+
+  @@index([establishment_id])
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token_hash String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// Couriers
+// ─────────────────────────────────────────
+
+model Courier {
+  id                          String          @id @default(uuid())
+  establishment_id            String
+  name                        String
+  phone                       String?
+  device_token                String?
+  device_platform             DevicePlatform?
+  active                      Boolean         @default(true)
+  battery_optimization_exempt Boolean         @default(false)
+  device_brand                String?
+  last_reminder_sent_at       DateTime?
+  reminder_count              Int             @default(0)
+  created_at                  DateTime        @default(now())
+  updated_at                  DateTime        @updatedAt
+
+  establishment  Establishment   @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  deliveries     Delivery[]
+  location_pings LocationPing[]
+  invite_tokens  InviteToken[]
+
+  @@index([establishment_id])
+  @@map("couriers")
+}
+
+// ─────────────────────────────────────────
+// Orders
+// ─────────────────────────────────────────
+
+model Order {
+  id               String      @id @default(uuid())
+  establishment_id String
+  external_id      String?
+  address          String
+  lat              Float?
+  lng              Float?
+  status           OrderStatus @default(pending)
+  source           OrderSource @default(manual)
+  notes            String?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  delivery      Delivery?
+
+  @@unique([external_id, establishment_id])
+  @@index([establishment_id])
+  @@index([establishment_id, status])
+  @@index([created_at])
+  @@map("orders")
+}
+
+// ─────────────────────────────────────────
+// Deliveries
+// ─────────────────────────────────────────
+
+model Delivery {
+  id                    String         @id @default(uuid())
+  order_id              String         @unique
+  courier_id            String
+  status                DeliveryStatus @default(assigned)
+  assigned_at           DateTime       @default(now())
+  assignment_timeout_at DateTime?
+  started_at            DateTime?
+  completed_at          DateTime?
+  order_closed_at       DateTime?
+  created_at            DateTime       @default(now())
+  updated_at            DateTime       @updatedAt
+
+  order   Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  courier Courier        @relation(fields: [courier_id], references: [id])
+  proof   DeliveryProof?
+
+  @@index([courier_id])
+  @@index([status])
+  @@map("deliveries")
+}
+
+// ─────────────────────────────────────────
+// Delivery Proofs — NEVER deleted (retention exempt)
+// ─────────────────────────────────────────
+
+model DeliveryProof {
+  id              String    @id @default(uuid())
+  delivery_id     String    @unique
+  lat             Float
+  lng             Float
+  captured_at     DateTime
+  order_closed_at DateTime?
+  photo_key       String?
+  geo_match       Boolean
+  accuracy        Float?
+  geo_flags       Json      @default("{}")
+  created_at      DateTime  @default(now())
+
+  delivery Delivery @relation(fields: [delivery_id], references: [id])
+
+  @@map("delivery_proofs")
+}
+
+// ─────────────────────────────────────────
+// Location Pings (PostGIS geometry)
+// ─────────────────────────────────────────
+
+model LocationPing {
+  id         String                          @id @default(uuid())
+  courier_id String
+  /// PostGIS GEOMETRY(Point,4326) — use ST_DWithin / ST_MakePoint for geo queries
+  location   Unsupported("geometry(Point,4326)")
+  battery    Int?
+  created_at DateTime                        @default(now())
+
+  courier Courier @relation(fields: [courier_id], references: [id], onDelete: Cascade)
+
+  @@index([courier_id])
+  @@index([created_at])
+  @@map("location_pings")
+}
+
+// ─────────────────────────────────────────
+// Integrations (Poster, iiko)
+// ─────────────────────────────────────────
+
+model Integration {
+  id               String          @id @default(uuid())
+  establishment_id String
+  type             IntegrationType
+  config           Json            @default("{}")
+  active           Boolean         @default(true)
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@unique([establishment_id, type])
+  @@index([establishment_id])
+  @@map("integrations")
+}
+
+// ─────────────────────────────────────────
+// Outbound Webhooks
+// ─────────────────────────────────────────
+
+model Webhook {
+  id                   String    @id @default(uuid())
+  establishment_id     String
+  url                  String
+  secret               String
+  events               String[]
+  active               Boolean   @default(true)
+  consecutive_failures Int       @default(0)
+  last_error           String?
+  last_error_at        DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@map("webhooks")
+}
+
+// ─────────────────────────────────────────
+// Courier Invite Tokens
+// ─────────────────────────────────────────
+
+model InviteToken {
+  id               String    @id @default(uuid())
+  establishment_id String
+  token            String    @unique
+  courier_id       String?
+  expires_at       DateTime
+  used_at          DateTime?
+  created_at       DateTime  @default(now())
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  courier       Courier?      @relation(fields: [courier_id], references: [id])
+
+  @@index([establishment_id])
+  @@map("invite_tokens")
+}
+
+// ─────────────────────────────────────────
+// Retention Logs
+// ─────────────────────────────────────────
+
+model RetentionLog {
+  id               String   @id @default(uuid())
+  establishment_id String
+  deleted_orders   Int      @default(0)
+  deleted_pings    Int      @default(0)
+  run_at           DateTime @default(now())
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@map("retention_logs")
+}
+
+// ─────────────────────────────────────────
+// Billing Events
+// ─────────────────────────────────────────
+
+model BillingEvent {
+  id               String           @id @default(uuid())
+  establishment_id String
+  type             BillingEventType
+  amount_usd       Float?
+  notes            String?
+  created_at       DateTime         @default(now())
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@map("billing_events")
+}
