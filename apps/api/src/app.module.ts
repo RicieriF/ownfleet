@@ -11,6 +11,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { RetentionModule } from './retention/retention.module.js';
 import { IntegrationsModule } from './integrations/integrations.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { OnboardingModule } from './onboarding/onboarding.module.js';
     RetentionModule,
     IntegrationsModule,
     OnboardingModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}
