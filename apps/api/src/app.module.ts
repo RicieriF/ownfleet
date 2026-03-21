@@ -16,6 +16,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
+import { HealthController } from './health/health.controller.js';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { WebhooksModule } from './webhooks/webhooks.module.js';
     AnalyticsModule,
     WebhooksModule,
   ],
+  controllers: [HealthController],
   providers: [
     // Apply ThrottlerGuard globally — all HTTP routes inherit the default limits
     { provide: APP_GUARD, useClass: ThrottlerGuard },

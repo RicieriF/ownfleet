@@ -14,7 +14,7 @@ import { CreateEstablishmentDto } from './dto/create-establishment.dto.js';
 import { UpdateSettingsDto } from './dto/update-settings.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/establishments')
+@Controller('establishments')
 @UseGuards(JwtAuthGuard)
 export class EstablishmentsController {
   constructor(private readonly service: EstablishmentsService) {}

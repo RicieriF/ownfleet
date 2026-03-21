@@ -18,10 +18,10 @@ const COOKIE_OPTS = {
   secure: process.env['NODE_ENV'] === 'production',
   sameSite: 'strict' as const,
   maxAge: 30 * 24 * 60 * 60 * 1000,
-  path: '/api/v1/auth',
+  path: '/api/v1/auth', // must match the full prefixed path for cookie scope
 };
 
-@Controller('api/v1/auth')
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

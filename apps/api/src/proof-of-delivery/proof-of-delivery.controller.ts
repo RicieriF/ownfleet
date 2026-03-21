@@ -5,7 +5,7 @@ import { ProofOfDeliveryService } from './proof-of-delivery.service.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/deliveries')
+@Controller('deliveries')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class ProofOfDeliveryController {
   constructor(private readonly service: ProofOfDeliveryService) {}

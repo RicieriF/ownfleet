@@ -18,7 +18,7 @@ import { CreateWebhookDto } from './dto/create-webhook.dto.js';
 import { UpdateWebhookDto } from './dto/update-webhook.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/webhooks')
+@Controller('webhooks')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class WebhooksController {
   constructor(private readonly service: WebhooksService) {}

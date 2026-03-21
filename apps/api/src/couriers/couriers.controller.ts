@@ -20,7 +20,7 @@ import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/couriers')
+@Controller('couriers')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class CouriersController {
   constructor(private readonly service: CouriersService) {}

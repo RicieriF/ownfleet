@@ -6,7 +6,7 @@ import { TrackingService } from './tracking.service.js';
 import { PingDto } from './dto/ping.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/tracking')
+@Controller('tracking')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class TrackingController {
   constructor(private readonly service: TrackingService) {}

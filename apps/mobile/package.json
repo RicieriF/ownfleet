@@ -21,7 +21,7 @@
     "expo-image-picker": "~15.0.7",
     "expo-device": "~6.0.2",
     "expo-constants": "~16.0.2",
-    "expo-intent-launcher": "~11.0.3",
+    "expo-intent-launcher": "~55.0.9",
     "expo-battery": "~6.0.1",
     "react": "18.2.0",
     "react-native": "0.74.5",

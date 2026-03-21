@@ -19,7 +19,7 @@ import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/orders')
+@Controller('orders')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class OrdersController {
   constructor(private readonly service: OrdersService) {}

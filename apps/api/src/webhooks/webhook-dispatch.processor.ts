@@ -1,6 +1,6 @@
 import { Processor, Process } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import type { Job } from 'bull';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WEBHOOK_QUEUE, WebhookJob } from './webhooks.service.js';

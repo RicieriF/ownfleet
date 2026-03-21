@@ -5,7 +5,7 @@ import { AnalyticsService } from './analytics.service.js';
 import { AnalyticsQueryDto, TimelineQueryDto } from './dto/analytics-query.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
-@Controller('api/v1/analytics')
+@Controller('analytics')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class AnalyticsController {
   constructor(private readonly service: AnalyticsService) {}

@@ -41,12 +41,17 @@ export class TrackingGateway
       .map((o) => o.trim())
       .filter(Boolean);
 
-    server.engine.opts.cors = {
-      origin: origins.length > 0 ? origins : false,
-      credentials: true,
-    };
+    // server.engine may not be available in all Socket.IO versions / adapter combos.
+    // When present, apply CORS dynamically; otherwise the decorator-level CORS applies.
+    const engine = (server as unknown as { engine?: { opts?: Record<string, unknown> } }).engine;
+    if (engine?.opts) {
+      engine.opts['cors'] = {
+        origin: origins.length > 0 ? origins : false,
+        credentials: true,
+      };
+    }
 
-    this.logger.log(`WebSocket gateway initialized — CORS origins: [${origins.join(', ')}]`);
+    this.logger.log(`WebSocket gateway initialized — CORS origins: [${origins.join(', ') || '*'}]`);
   }
 
   onModuleInit(): void {

@@ -14,7 +14,7 @@ import { PosterService } from './poster.service.js';
  * No JWT/PlanAccessGuard — this endpoint receives calls from Poster's servers.
  * Authentication is done via HMAC-SHA256 signature on the raw body.
  */
-@Controller('api/v1/integrations/poster')
+@Controller('integrations/poster')
 export class PosterController {
   constructor(private readonly posterService: PosterService) {}
 

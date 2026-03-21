@@ -17,7 +17,7 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
 import { AcceptInviteDto } from './dto/accept-invite.dto.js';
 
-@Controller('api/v1/onboarding')
+@Controller('onboarding')
 export class OnboardingController {
   constructor(private readonly service: OnboardingService) {}
 
