@@ -1,0 +1,22 @@
+{
+  "name": "weego-cmi",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "yarn workspace @weego/api dev",
+    "dev:web": "yarn workspace @weego/web dev",
+    "build:api": "yarn workspace @weego/api build",
+    "build:web": "yarn workspace @weego/web build",
+    "test": "yarn workspaces run test",
+    "lint": "yarn workspaces run lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
