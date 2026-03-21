@@ -9,6 +9,8 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
+import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 // Thresholds for online status (in ms)
 const ONLINE_MS = 30_000;        // < 30s  → online
@@ -18,7 +20,10 @@ const BACKGROUND_MS = 5 * 60_000; // < 5min → background
 export class CouriersService {
   private readonly logger = new Logger(CouriersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async findAll(user: AuthenticatedUser) {
     const couriers = await this.prisma.courier.findMany({
@@ -28,21 +33,38 @@ export class CouriersService {
 
     if (couriers.length === 0) return [];
 
-    // Single query: last ping per courier via DISTINCT ON
+    const courierIds = couriers.map((c) => c.id);
+
+    // Last ping per courier via DISTINCT ON (single query)
     const lastPings = await this.prisma.$queryRaw<
       { courier_id: string; created_at: Date }[]
     >`
       SELECT DISTINCT ON (courier_id) courier_id, created_at
       FROM location_pings
-      WHERE courier_id = ANY(${couriers.map((c) => c.id)}::uuid[])
+      WHERE courier_id = ANY(${courierIds}::text[])
       ORDER BY courier_id, created_at DESC
     `;
+
+    // Couriers with active deliveries (assigned or in_progress)
+    const activeDeliveries = await this.prisma.delivery.findMany({
+      where: {
+        courier_id: { in: courierIds },
+        status: { in: ['assigned', 'in_progress'] },
+      },
+      select: { courier_id: true },
+    });
+    const activeSet = new Set(activeDeliveries.map((d) => d.courier_id));
 
     const pingMap = new Map(lastPings.map((p) => [p.courier_id, p.created_at]));
 
     return couriers.map((c) => {
       const pingAt = pingMap.get(c.id) ?? null;
-      return { ...c, last_ping_at: pingAt, online_status: resolveStatus(pingAt) };
+      const hasActiveDelivery = activeSet.has(c.id);
+      return {
+        ...c,
+        last_ping_at: pingAt,
+        online_status: resolveStatus(pingAt, hasActiveDelivery),
+      };
     });
   }
 
@@ -98,6 +120,48 @@ export class CouriersService {
     });
   }
 
+  /** Courier self-registers their own FCM token (PATCH /me/device-token) */
+  async updateMyDeviceToken(dto: UpdateDeviceTokenDto, user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can register a device token');
+    }
+
+    return this.prisma.courier.update({
+      where: { id: user.courier_id },
+      data: {
+        device_token: dto.device_token,
+        device_platform: dto.device_platform,
+        ...(dto.device_brand ? { device_brand: dto.device_brand } : {}),
+      },
+      select: { id: true },
+    });
+  }
+
+  /** Manager sends a push reminder to a courier (POST /:id/remind) */
+  async remindCourier(courierId: string, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
+    const courier = await this.assertBelongs(courierId, user.establishment_id);
+
+    await this.prisma.courier.update({
+      where: { id: courierId },
+      data: {
+        last_reminder_sent_at: new Date(),
+        reminder_count: { increment: 1 },
+      },
+    });
+
+    this.notifications
+      .sendPush(courierId, {
+        title: 'Нагадування від менеджера',
+        body: 'Перевірте застосунок — є активне замовлення',
+        data: { type: 'reminder' },
+      })
+      .catch((err) => this.logger.warn(`FCM remind failed for ${courierId}`, err));
+
+    this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);
+    return { reminded: true, courier_name: courier.name };
+  }
+
   async clearDeviceToken(courierId: string): Promise<void> {
     // Called internally when FCM returns invalid_registration
     await this.prisma.courier.update({
@@ -128,10 +192,14 @@ export class CouriersService {
   }
 }
 
-function resolveStatus(pingAt: Date | null): 'online' | 'background' | 'offline' {
-  if (!pingAt) return 'offline';
+function resolveStatus(
+  pingAt: Date | null,
+  hasActiveDelivery = false,
+): 'online' | 'background' | 'not_responding' | 'offline' {
+  if (!pingAt) return hasActiveDelivery ? 'not_responding' : 'offline';
   const age = Date.now() - pingAt.getTime();
   if (age < ONLINE_MS) return 'online';
   if (age < BACKGROUND_MS) return 'background';
-  return 'offline';
+  // ping > 5 min: if courier has active delivery → "not_responding" (🔴), else offline
+  return hasActiveDelivery ? 'not_responding' : 'offline';
 }

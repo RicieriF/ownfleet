@@ -30,10 +30,10 @@ const mockConfig = {
   get: jest.fn((key: string) => {
     if (key === 'FIREBASE_SERVICE_ACCOUNT_JSON')
       return JSON.stringify({ type: 'service_account', project_id: 'test' });
+    if (key === 'TELEGRAM_BOT_TOKEN') return 'test-bot-token';
     return undefined;
   }),
   getOrThrow: jest.fn((key: string) => {
-    if (key === 'TELEGRAM_BOT_TOKEN') return 'test-bot-token';
     throw new Error(`Missing config: ${key}`);
   }),
 };

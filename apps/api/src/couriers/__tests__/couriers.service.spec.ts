@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CouriersService } from '../couriers.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -20,6 +21,9 @@ const mockPrisma = {
     update: jest.fn(),
     delete: jest.fn(),
   },
+  delivery: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   $queryRaw: jest.fn().mockResolvedValue([]),
 };
 
@@ -31,6 +35,7 @@ describe('CouriersService', () => {
       providers: [
         CouriersService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: NotificationsService, useValue: { sendPush: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = module.get<CouriersService>(CouriersService);

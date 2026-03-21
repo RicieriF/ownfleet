@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ProofOfDeliveryService } from '../proof-of-delivery.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { OrdersService } from '../../orders/orders.service.js';
+import { WebhooksService } from '../../webhooks/webhooks.service.js';
 import { ConfigService } from '@nestjs/config';
 
 const EST_A = 'est-a';
@@ -30,7 +30,7 @@ const mockPrisma = {
   $transaction: jest.fn((cb: any) => cb(mockTx)),
 };
 
-const mockOrdersService = {};
+const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
 
 const mockConfig = {
   get: jest.fn().mockReturnValue('http://localhost'),
@@ -45,7 +45,7 @@ describe('ProofOfDeliveryService', () => {
       providers: [
         ProofOfDeliveryService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: OrdersService, useValue: mockOrdersService },
+        { provide: WebhooksService, useValue: mockWebhooksService },
         { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();

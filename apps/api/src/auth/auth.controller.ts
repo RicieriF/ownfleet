@@ -8,6 +8,7 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { LoginDto } from './dto/login.dto.js';
 
@@ -26,13 +27,15 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } }) // 10 attempts / min per IP
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: any,
-  ): Promise<{ accessToken: string }> {
-    const { accessToken, refreshToken } = await this.authService.login(dto);
+  ): Promise<{ access_token: string; refresh_token: string; user: object }> {
+    const { accessToken, refreshToken, user } = await this.authService.login(dto);
+    // HttpOnly cookie for web clients; body for mobile (React Native can't read cookies)
     res.cookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
-    return { accessToken };
+    return { access_token: accessToken, refresh_token: refreshToken, user };
   }
 
   @Post('refresh')
@@ -40,15 +43,16 @@ export class AuthController {
   async refresh(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,
-  ): Promise<{ accessToken: string }> {
-    const raw: string | undefined = req.cookies?.[REFRESH_COOKIE];
+  ): Promise<{ access_token: string; refresh_token: string }> {
+    // Accept refresh token from HttpOnly cookie (web) or Authorization-like header (mobile)
+    const raw: string | undefined =
+      req.cookies?.[REFRESH_COOKIE] ?? req.headers?.['x-refresh-token'];
     if (!raw) {
-      // Throw instead of manually calling res.json() to avoid double-response bug
       throw new UnauthorizedException('No refresh token');
     }
     const { accessToken, refreshToken } = await this.authService.refresh(raw);
     res.cookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
-    return { accessToken };
+    return { access_token: accessToken, refresh_token: refreshToken };
   }
 
   // logout does NOT require JwtAuthGuard — access token may be expired

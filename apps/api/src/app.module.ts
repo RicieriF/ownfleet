@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { EstablishmentsModule } from './establishments/establishments.module.js';
@@ -18,6 +20,8 @@ import { WebhooksModule } from './webhooks/webhooks.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Global rate limiting: 120 req / 60 s per IP (overridable per-route with @Throttle)
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -37,6 +41,10 @@ import { WebhooksModule } from './webhooks/webhooks.module.js';
     OnboardingModule,
     AnalyticsModule,
     WebhooksModule,
+  ],
+  providers: [
+    // Apply ThrottlerGuard globally — all HTTP routes inherit the default limits
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

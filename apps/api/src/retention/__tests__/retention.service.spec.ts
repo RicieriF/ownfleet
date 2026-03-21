@@ -124,10 +124,13 @@ describe('RetentionService', () => {
 
   describe('runRetention', () => {
     it('iterates over all establishments and accumulates totals', async () => {
-      mockEstablishment.findMany.mockResolvedValue([
-        { id: 'est-a', settings: {} },
-        { id: 'est-b', settings: { retention_days: 30 } },
-      ]);
+      // First page: 2 establishments; second page: empty (end of cursor pagination)
+      mockEstablishment.findMany
+        .mockResolvedValueOnce([
+          { id: 'est-a', settings: {} },
+          { id: 'est-b', settings: { retention_days: 30 } },
+        ])
+        .mockResolvedValueOnce([]);
       mockOrder.deleteMany.mockResolvedValue({ count: 3 });
       mockPrisma.$executeRaw.mockResolvedValue(5);
 
@@ -139,10 +142,12 @@ describe('RetentionService', () => {
     });
 
     it('processes remaining establishments even if one fails', async () => {
-      mockEstablishment.findMany.mockResolvedValue([
-        { id: 'est-fail', settings: {} },
-        { id: 'est-ok', settings: {} },
-      ]);
+      mockEstablishment.findMany
+        .mockResolvedValueOnce([
+          { id: 'est-fail', settings: {} },
+          { id: 'est-ok', settings: {} },
+        ])
+        .mockResolvedValueOnce([]);
       mockOrder.deleteMany
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce({ count: 1 });

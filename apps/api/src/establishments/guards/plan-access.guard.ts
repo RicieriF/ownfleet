@@ -10,10 +10,19 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../../auth/auth.types.js';
 
 const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_TTL_MS = 30_000; // 30 seconds — acceptable lag for plan changes
+
+interface CachedEntry {
+  plan: string;
+  trial_ends_at: Date | null;
+  paid_until: Date | null;
+  expiresAt: number;
+}
 
 @Injectable()
 export class PlanAccessGuard implements CanActivate {
   private readonly logger = new Logger(PlanAccessGuard.name);
+  private readonly cache = new Map<string, CachedEntry>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -24,10 +33,17 @@ export class PlanAccessGuard implements CanActivate {
     // Platform admins bypass billing checks
     if (user.is_platform_admin) return true;
 
-    const est = await this.prisma.establishment.findUniqueOrThrow({
-      where: { id: user.establishment_id },
-      select: { plan: true, trial_ends_at: true, paid_until: true },
-    });
+    let est = this.getCached(user.establishment_id);
+    if (!est) {
+      est = await this.prisma.establishment.findUniqueOrThrow({
+        where: { id: user.establishment_id },
+        select: { plan: true, trial_ends_at: true, paid_until: true },
+      });
+      this.cache.set(user.establishment_id, {
+        ...est,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+    }
 
     // Pilot plan — always allowed
     if (est.plan === 'pilot') return true;
@@ -47,5 +63,15 @@ export class PlanAccessGuard implements CanActivate {
     }
 
     throw new HttpException({ code: 'PLAN_EXPIRED' }, HttpStatus.PAYMENT_REQUIRED);
+  }
+
+  private getCached(establishmentId: string): Pick<CachedEntry, 'plan' | 'trial_ends_at' | 'paid_until'> | null {
+    const entry = this.cache.get(establishmentId);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(establishmentId);
+      return null;
+    }
+    return entry;
   }
 }

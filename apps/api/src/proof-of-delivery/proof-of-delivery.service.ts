@@ -9,7 +9,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { OrdersService } from '../orders/orders.service.js';
+import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
@@ -26,7 +26,7 @@ export class ProofOfDeliveryService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ordersService: OrdersService,
+    private readonly webhooks: WebhooksService,
     private readonly config: ConfigService,
   ) {
     this.s3 = new S3Client({
@@ -40,8 +40,40 @@ export class ProofOfDeliveryService {
     this.bucket = config.getOrThrow<string>('S3_BUCKET');
   }
 
+  async getActiveDelivery(user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can access active deliveries');
+    }
+
+    const delivery = await this.prisma.delivery.findFirst({
+      where: {
+        courier_id: user.courier_id,
+        status: { in: [DeliveryStatus.assigned, DeliveryStatus.in_progress] },
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            address: true,
+            lat: true,
+            lng: true,
+            status: true,
+            external_id: true,
+          },
+        },
+      },
+    });
+
+    return delivery ?? null;
+  }
+
   async getUploadUrl(deliveryId: string, user: AuthenticatedUser): Promise<{ upload_url: string; photo_key: string }> {
-    await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Couriers may only get upload URLs for their own active delivery
+    if (user.courier_id && delivery.courier_id !== user.courier_id) {
+      throw new ForbiddenException('This delivery is not assigned to you');
+    }
 
     const photoKey = `proofs/${user.establishment_id}/${deliveryId}/${Date.now()}.jpg`;
     const cmd = new PutObjectCommand({
@@ -89,7 +121,7 @@ export class ProofOfDeliveryService {
     });
 
     const now = new Date();
-    const capturedAt = new Date(dto.captured_at);
+    const capturedAt = dto.captured_at ? new Date(dto.captured_at) : now;
 
     // ── Geo flags ──────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,6 +184,14 @@ export class ProofOfDeliveryService {
     });
 
     // Delivery ALWAYS completes regardless of geo_match — it's audit info only
+    this.webhooks
+      .dispatch(user.establishment_id, 'delivery.completed', {
+        delivery_id: deliveryId,
+        order_id: delivery.order_id,
+        geo_match: geoMatch,
+      })
+      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed', err));
+
     return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
   }
 
@@ -169,6 +209,13 @@ export class ProofOfDeliveryService {
         data: { status: OrderStatus.failed },
       });
     });
+
+    this.webhooks
+      .dispatch(user.establishment_id, 'delivery.failed', {
+        delivery_id: deliveryId,
+        order_id: delivery.order_id,
+      })
+      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.failed', err));
 
     return { status: DeliveryStatus.failed };
   }

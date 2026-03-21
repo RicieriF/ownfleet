@@ -17,6 +17,7 @@ import { CouriersService } from './couriers.service.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
+import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
 @Controller('api/v1/couriers')
@@ -27,6 +28,19 @@ export class CouriersController {
   @Get()
   findAll(@Req() req: any) {
     return this.service.findAll(req.user as AuthenticatedUser);
+  }
+
+  /** Alias used by dashboard: returns couriers with online_status field */
+  @Get('status')
+  findAllWithStatus(@Req() req: any) {
+    return this.service.findAll(req.user as AuthenticatedUser);
+  }
+
+  /** Courier self-registers FCM token after login */
+  @Patch('me/device-token')
+  @HttpCode(HttpStatus.OK)
+  updateMyDeviceToken(@Body() dto: UpdateDeviceTokenDto, @Req() req: any) {
+    return this.service.updateMyDeviceToken(dto, req.user as AuthenticatedUser);
   }
 
   @Get(':id')
@@ -52,6 +66,12 @@ export class CouriersController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string, @Req() req: any) {
     return this.service.remove(id, req.user as AuthenticatedUser);
+  }
+
+  @Post(':id/remind')
+  @HttpCode(HttpStatus.OK)
+  remind(@Param('id') id: string, @Req() req: any) {
+    return this.service.remindCourier(id, req.user as AuthenticatedUser);
   }
 
   @Post(':id/device-token')

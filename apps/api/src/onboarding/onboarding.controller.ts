@@ -15,6 +15,7 @@ import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { OnboardingService } from './onboarding.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
+import { AcceptInviteDto } from './dto/accept-invite.dto.js';
 
 @Controller('api/v1/onboarding')
 export class OnboardingController {
@@ -45,7 +46,7 @@ export class OnboardingController {
 
   @Post('accept-invite/:token')
   @HttpCode(HttpStatus.OK)
-  acceptInvite(@Param('token') token: string) {
-    return this.service.acceptInvite(token);
+  acceptInvite(@Param('token') token: string, @Body() dto: AcceptInviteDto) {
+    return this.service.acceptInvite(token, dto.password);
   }
 }

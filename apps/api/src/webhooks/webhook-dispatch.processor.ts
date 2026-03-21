@@ -48,15 +48,21 @@ export class WebhookDispatchProcessor {
         signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
       });
     } catch (err: unknown) {
-      // Network error / timeout — record and rethrow so Bull retries
+      // Network error / timeout — rethrow so Bull retries.
+      // Increment consecutive_failures only on the final attempt.
       const message = err instanceof Error ? err.message : String(err);
-      await this.recordFailure(webhookId, `Network error: ${message}`);
+      if (this.isFinalAttempt(job)) {
+        await this.recordFailure(webhookId, `Network error: ${message}`);
+      }
       throw err;
     }
 
     if (!response.ok) {
       const errorMsg = `HTTP ${response.status}`;
-      await this.recordFailure(webhookId, errorMsg);
+      // Increment consecutive_failures only on the final attempt.
+      if (this.isFinalAttempt(job)) {
+        await this.recordFailure(webhookId, errorMsg);
+      }
       throw new Error(`Webhook delivery failed: ${errorMsg} for ${webhook.url}`);
     }
 
@@ -67,6 +73,17 @@ export class WebhookDispatchProcessor {
     });
 
     this.logger.debug(`Delivered event "${event}" to ${webhook.url} [webhook: ${webhookId}]`);
+  }
+
+  /**
+   * Returns true when this is the last Bull retry for the job.
+   * consecutive_failures should only be incremented once per delivery attempt,
+   * not once per retry — matching industry standard (Stripe, GitHub Webhooks).
+   */
+  private isFinalAttempt(job: Job): boolean {
+    const maxAttempts = job.opts.attempts ?? 1;
+    // attemptsMade is 0-based and already incremented before this handler runs
+    return job.attemptsMade >= maxAttempts;
   }
 
   private async recordFailure(webhookId: string, error: string): Promise<void> {

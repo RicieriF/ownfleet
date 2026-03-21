@@ -12,16 +12,20 @@ export interface PushPayload {
 @Injectable()
 export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly telegramToken: string;
-  private readonly telegramApiBase: string;
+  private readonly telegramApiBase: string | null;
   private fcmApp: admin.app.App | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.telegramToken = this.config.getOrThrow<string>('TELEGRAM_BOT_TOKEN');
-    this.telegramApiBase = `https://api.telegram.org/bot${this.telegramToken}`;
+    const telegramToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
+    if (!telegramToken) {
+      this.logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram notifications disabled');
+      this.telegramApiBase = null;
+    } else {
+      this.telegramApiBase = `https://api.telegram.org/bot${telegramToken}`;
+    }
   }
 
   onModuleInit(): void {
@@ -105,6 +109,10 @@ export class NotificationsService implements OnModuleInit {
    * Call without await at the callsite.
    */
   async sendTelegram(chatId: string, text: string): Promise<void> {
+    if (!this.telegramApiBase) {
+      this.logger.debug(`Telegram disabled — skipping message to chat ${chatId}`);
+      return;
+    }
     const url = `${this.telegramApiBase}/sendMessage`;
     try {
       const response = await fetch(url, {

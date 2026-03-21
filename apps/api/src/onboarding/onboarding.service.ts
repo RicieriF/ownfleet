@@ -3,12 +3,16 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
+import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AuthenticatedUser } from '../auth/auth.types.js';
-import { OnboardingStatus } from '@prisma/client';
+import { AuthenticatedUser, JwtPayload } from '../auth/auth.types.js';
+import { OnboardingStatus, UserRole } from '@prisma/client';
 
 const TOKEN_TTL_HOURS = 24;
 
@@ -16,7 +20,11 @@ const TOKEN_TTL_HOURS = 24;
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) {}
 
   // ── Manager: create invite ──────────────────────────────────────────────
 
@@ -94,7 +102,22 @@ export class OnboardingService {
 
   // ── Courier (public): accept invite ────────────────────────────────────
 
-  async acceptInvite(token: string) {
+  async acceptInvite(token: string, password: string) {
+    const now = new Date();
+
+    // Atomic claim: only succeeds if token exists, unused, and not expired.
+    const updated = await this.prisma.inviteToken.updateMany({
+      where: { token, used_at: null, expires_at: { gt: now } },
+      data: { used_at: now },
+    });
+
+    if (updated.count === 0) {
+      const invite = await this.prisma.inviteToken.findUnique({ where: { token } });
+      if (!invite) throw new NotFoundException('Invalid invite token');
+      if (invite.used_at) throw new BadRequestException('Invite token has already been used');
+      throw new BadRequestException('Invite token has expired');
+    }
+
     const invite = await this.prisma.inviteToken.findUnique({
       where: { token },
       include: {
@@ -103,30 +126,71 @@ export class OnboardingService {
       },
     });
 
-    if (!invite) {
-      throw new NotFoundException('Invalid invite token');
+    // invite cannot be null — we just claimed it
+    const courier = invite!.courier!;
+
+    // Check if a user already exists for this courier (idempotent re-invite)
+    const existingUser = await this.prisma.user.findUnique({
+      where: { courier_id: courier.id },
+    });
+    if (existingUser) {
+      throw new ConflictException('Courier account already exists. Please log in instead.');
     }
 
-    if (invite.used_at) {
-      throw new BadRequestException('Invite token has already been used');
-    }
+    const passwordHash = await bcrypt.hash(password, 12);
 
-    if (invite.expires_at < new Date()) {
-      throw new BadRequestException('Invite token has expired');
-    }
+    // Use phone as email for courier accounts (phone is the login identifier)
+    const email = courier.phone ?? `courier-${courier.id}@weego.internal`;
 
-    await this.prisma.inviteToken.update({
-      where: { id: invite.id },
-      data: { used_at: new Date() },
+    const user = await this.prisma.user.create({
+      data: {
+        establishment_id: invite!.establishment_id,
+        role: UserRole.dispatcher, // lowest-privilege role for couriers
+        email,
+        password_hash: passwordHash,
+        courier_id: courier.id,
+      },
     });
 
-    this.logger.log(`Invite accepted for courier ${invite.courier_id} (est: ${invite.establishment_id})`);
+    this.logger.log(`Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`);
+
+    // Issue tokens so the courier is immediately logged in after accepting invite
+    const payload: JwtPayload = {
+      sub: user.id,
+      establishment_id: user.establishment_id,
+      role: user.role,
+      is_platform_admin: false,
+      courier_id: courier.id,
+    };
+
+    const ACCESS_TOKEN_TTL = '15m';
+    const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+    const accessToken = this.jwt.sign(payload, {
+      secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      expiresIn: ACCESS_TOKEN_TTL,
+    });
+
+    const rawRefresh = crypto.randomBytes(64).toString('hex');
+    const refreshHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: refreshHash,
+        expires_at: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      },
+    });
 
     return {
-      courier_id: invite.courier_id,
-      courier_name: invite.courier?.name ?? null,
-      establishment_id: invite.establishment_id,
-      establishment_name: invite.establishment.name,
+      access_token: accessToken,
+      refresh_token: rawRefresh,
+      user: {
+        id: user.id,
+        courier_id: courier.id,
+        name: courier.name,
+        establishment_id: user.establishment_id,
+        establishment_name: invite!.establishment.name,
+      },
     };
   }
 

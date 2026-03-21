@@ -42,6 +42,19 @@ export class WebhooksService {
   async findAll(user: AuthenticatedUser) {
     return this.prisma.webhook.findMany({
       where: { establishment_id: user.establishment_id },
+      select: {
+        id: true,
+        establishment_id: true,
+        url: true,
+        events: true,
+        active: true,
+        consecutive_failures: true,
+        last_error: true,
+        last_error_at: true,
+        created_at: true,
+        updated_at: true,
+        // secret intentionally excluded — write-only field
+      },
       orderBy: { created_at: 'desc' },
     });
   }

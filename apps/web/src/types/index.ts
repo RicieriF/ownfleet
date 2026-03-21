@@ -1,0 +1,142 @@
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: 'owner' | 'manager' | 'dispatcher';
+  establishment_id: string;
+  is_platform_admin: boolean;
+}
+
+// ── Establishment ──────────────────────────────────────────────────────────
+
+export interface Establishment {
+  id: string;
+  name: string;
+  plan: 'pilot' | 'trial' | 'starter' | 'business' | 'pro';
+  trial_ends_at: string | null;
+  paid_until: string | null;
+  onboarding_status: 'pending' | 'couriers_added' | 'first_order' | 'completed';
+  settings: {
+    retention_days?: number;
+    retention_pings_days?: number;
+    [key: string]: unknown;
+  } | null;
+}
+
+// ── Couriers ───────────────────────────────────────────────────────────────
+
+export interface Courier {
+  id: string;
+  establishment_id: string;
+  name: string;
+  phone: string;
+  active: boolean;
+  device_token: string | null;
+  device_platform: 'ios' | 'android' | null;
+}
+
+export type CourierStatus = 'online' | 'background' | 'not_responding' | 'offline';
+
+export interface CourierWithStatus extends Courier {
+  status: CourierStatus;
+  last_ping_at: string | null;
+  last_lat: number | null;
+  last_lng: number | null;
+}
+
+// ── Orders ─────────────────────────────────────────────────────────────────
+
+export type OrderStatus =
+  | 'pending'
+  | 'assigned'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+export type OrderSource = 'manual' | 'poster' | 'iiko';
+
+export interface Order {
+  id: string;
+  establishment_id: string;
+  external_id: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  status: OrderStatus;
+  source: OrderSource;
+  notes: string | null;
+  created_at: string;
+  delivery: Delivery | null;
+}
+
+// ── Deliveries ─────────────────────────────────────────────────────────────
+
+export type DeliveryStatus = 'assigned' | 'in_progress' | 'completed' | 'failed';
+
+export interface Delivery {
+  id: string;
+  order_id: string;
+  courier_id: string;
+  status: DeliveryStatus;
+  assigned_at: string;
+  assignment_timeout_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  courier: { id: string; name: string } | null;
+}
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummary {
+  period_days: number;
+  total_deliveries: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  completion_rate: number;
+  avg_delivery_minutes: number | null;
+}
+
+export interface CourierAnalytics {
+  courier_id: string;
+  courier_name: string;
+  total: number;
+  completed: number;
+  failed: number;
+  avg_minutes: number | null;
+}
+
+// ── Webhooks ───────────────────────────────────────────────────────────────
+
+export interface Webhook {
+  id: string;
+  establishment_id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  consecutive_failures: number;
+  last_error: string | null;
+  last_error_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── WebSocket events ───────────────────────────────────────────────────────
+
+export interface CourierMovedEvent {
+  courier_id: string;
+  lat: number;
+  lng: number;
+  battery: number | null;
+  ts: number;
+}
+
+// ── API responses ──────────────────────────────────────────────────────────
+
+export interface ApiError {
+  statusCode: number;
+  message: string;
+  error?: string;
+}

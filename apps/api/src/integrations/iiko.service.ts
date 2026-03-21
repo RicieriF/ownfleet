@@ -70,14 +70,23 @@ export class IikoService {
 
       this.clearBackoff(establishmentId);
 
-      let ingested = 0;
-      for (const order of orders) {
-        const created = await this.upsertOrder(establishmentId, order);
-        if (created) ingested++;
-      }
+      if (orders.length > 0) {
+        const result = await this.prisma.order.createMany({
+          data: orders.map((order) => ({
+            establishment_id: establishmentId,
+            external_id: order.id,
+            address: order.address ?? 'Unknown',
+            lat: order.latitude ?? null,
+            lng: order.longitude ?? null,
+            notes: order.comment ?? null,
+            source: OrderSource.iiko,
+          })),
+          skipDuplicates: true,
+        });
 
-      if (ingested > 0) {
-        this.logger.log(`[iiko:${establishmentId}] ingested ${ingested} new orders`);
+        if (result.count > 0) {
+          this.logger.log(`[iiko:${establishmentId}] ingested ${result.count} new orders`);
+        }
       }
     } catch (err: unknown) {
       await this.handlePollError(establishmentId, err);
@@ -89,7 +98,11 @@ export class IikoService {
     login: string,
     password: string,
   ): Promise<string> {
-    const res = await fetch(`${serverUrl}/resto/api/auth?login=${encodeURIComponent(login)}&pass=${encodeURIComponent(password)}`);
+    // Use URL object so credentials don't appear as a plain string in logs
+    const url = new URL('/resto/api/auth', serverUrl);
+    url.searchParams.set('login', login);
+    url.searchParams.set('pass', password);
+    const res = await fetch(url.toString());
     await this.assertNotRateLimited(res);
     if (!res.ok) throw new Error(`iiko auth failed: ${res.status}`);
     const text = await res.text();
@@ -107,26 +120,6 @@ export class IikoService {
     if (!res.ok) throw new Error(`iiko fetch orders failed: ${res.status}`);
     const data = await res.json() as { deliveryOrders?: IikoOrder[] };
     return data.deliveryOrders ?? [];
-  }
-
-  private async upsertOrder(establishmentId: string, order: IikoOrder): Promise<boolean> {
-    const existing = await this.prisma.order.findFirst({
-      where: { external_id: order.id, establishment_id: establishmentId },
-    });
-    if (existing) return false;
-
-    await this.prisma.order.create({
-      data: {
-        establishment_id: establishmentId,
-        external_id: order.id,
-        address: order.address ?? 'Unknown',
-        lat: order.latitude ?? null,
-        lng: order.longitude ?? null,
-        notes: order.comment ?? null,
-        source: OrderSource.iiko,
-      },
-    });
-    return true;
   }
 
   // ── Rate-limiting / backoff helpers ──────────────────────────────────────

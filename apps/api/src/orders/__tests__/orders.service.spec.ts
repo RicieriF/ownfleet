@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { OrdersService } from '../orders.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { WebhooksService } from '../../webhooks/webhooks.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -37,10 +38,12 @@ describe('OrdersService', () => {
   let service: OrdersService;
 
   beforeEach(async () => {
+    const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: WebhooksService, useValue: mockWebhooksService },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);

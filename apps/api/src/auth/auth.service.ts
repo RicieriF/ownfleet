@@ -24,10 +24,17 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
-  async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string }> {
+  async login(dto: LoginDto): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: { id: string; establishment_id: string; role: string; name: string | null; email: string };
+  }> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
-      include: { establishment: { select: { id: true, plan: true, trial_ends_at: true, paid_until: true } } },
+      include: {
+        establishment: { select: { id: true, plan: true, trial_ends_at: true, paid_until: true } },
+        courier: { select: { name: true, phone: true } },
+      },
     });
 
     if (!user) {
@@ -44,6 +51,7 @@ export class AuthService {
       establishment_id: user.establishment_id,
       role: user.role,
       is_platform_admin: user.is_platform_admin,
+      ...(user.courier_id ? { courier_id: user.courier_id } : {}),
     };
 
     const accessToken = this.jwt.sign(payload, {
@@ -53,7 +61,18 @@ export class AuthService {
 
     const refreshToken = await this.createRefreshToken(user.id);
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        establishment_id: user.establishment_id,
+        role: user.role,
+        // For courier accounts, use courier name; for manager/owner, use email
+        name: user.courier?.name ?? null,
+        email: user.email,
+      },
+    };
   }
 
   async refresh(rawToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -73,6 +92,7 @@ export class AuthService {
       establishment_id: stored.user.establishment_id,
       role: stored.user.role,
       is_platform_admin: stored.user.is_platform_admin,
+      ...(stored.user.courier_id ? { courier_id: stored.user.courier_id } : {}),
     };
 
     const accessToken = this.jwt.sign(payload, {

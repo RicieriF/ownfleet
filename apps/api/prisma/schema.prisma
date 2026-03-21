@@ -115,8 +115,12 @@ model User {
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
+  // Optional link to a courier — set when a courier accepts an invite and creates an account
+  courier_id String? @unique
+
   establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   refresh_tokens RefreshToken[]
+  courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull)
 
   @@index([establishment_id])
   @@map("users")
@@ -158,6 +162,7 @@ model Courier {
   deliveries     Delivery[]
   location_pings LocationPing[]
   invite_tokens  InviteToken[]
+  user           User?
 
   @@index([establishment_id])
   @@map("couriers")

@@ -26,21 +26,34 @@ export class RetentionService {
   async runRetention(): Promise<void> {
     this.logger.log('Starting retention cleanup');
 
-    const establishments = await this.prisma.establishment.findMany({
-      select: { id: true, settings: true },
-    });
-
+    const PAGE_SIZE = 100;
+    let cursor: string | undefined;
     let totalOrders = 0;
     let totalPings = 0;
+    let totalEstablishments = 0;
 
-    for (const est of establishments) {
-      const { deletedOrders, deletedPings } = await this.cleanupEstablishment(est.id, est.settings);
-      totalOrders += deletedOrders;
-      totalPings += deletedPings;
-    }
+    // Process establishments in pages to avoid loading all rows into memory
+    do {
+      const page = await this.prisma.establishment.findMany({
+        select: { id: true, settings: true },
+        take: PAGE_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        orderBy: { id: 'asc' },
+      });
+
+      if (page.length === 0) break;
+      cursor = page[page.length - 1].id;
+      totalEstablishments += page.length;
+
+      for (const est of page) {
+        const { deletedOrders, deletedPings } = await this.cleanupEstablishment(est.id, est.settings);
+        totalOrders += deletedOrders;
+        totalPings += deletedPings;
+      }
+    } while (true);
 
     this.logger.log(
-      `Retention done — deleted ${totalOrders} orders, ${totalPings} location_pings across ${establishments.length} establishments`,
+      `Retention done — deleted ${totalOrders} orders, ${totalPings} location_pings across ${totalEstablishments} establishments`,
     );
   }
 

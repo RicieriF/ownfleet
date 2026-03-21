@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../onboarding.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -28,17 +30,30 @@ const mockInviteToken = {
   findUnique: jest.fn(),
   findMany: jest.fn(),
   update: jest.fn(),
+  updateMany: jest.fn(),
   delete: jest.fn(),
 };
 const mockEstablishment = {
   findUnique: jest.fn(),
   update: jest.fn(),
 };
+const mockUser = {
+  findUnique: jest.fn(),
+  create: jest.fn(),
+};
+const mockRefreshToken = {
+  create: jest.fn(),
+};
 const mockPrisma = {
   courier: mockCourier,
   inviteToken: mockInviteToken,
   establishment: mockEstablishment,
+  user: mockUser,
+  refreshToken: mockRefreshToken,
 };
+
+const mockJwt = { sign: jest.fn().mockReturnValue('mock-access-token') };
+const mockConfig = { getOrThrow: jest.fn().mockReturnValue('test-secret'), get: jest.fn() };
 
 describe('OnboardingService', () => {
   let service: OnboardingService;
@@ -48,6 +63,8 @@ describe('OnboardingService', () => {
       providers: [
         OnboardingService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: JwtService, useValue: mockJwt },
+        { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
     service = module.get<OnboardingService>(OnboardingService);
@@ -61,7 +78,20 @@ describe('OnboardingService', () => {
     mockEstablishment.findUnique.mockResolvedValue({ onboarding_status: 'pending' });
     mockEstablishment.update.mockResolvedValue({});
     mockInviteToken.update.mockResolvedValue({});
+    mockInviteToken.updateMany.mockResolvedValue({ count: 1 });
+    mockInviteToken.findUnique.mockResolvedValue(baseInvite);
     mockInviteToken.delete.mockResolvedValue({});
+    mockUser.findUnique.mockResolvedValue(null); // no existing user
+    mockUser.create.mockResolvedValue({
+      id: 'new-user-1',
+      establishment_id: EST_ID,
+      role: 'dispatcher',
+      email: '+380501234567',
+      courier_id: 'c1',
+    });
+    mockRefreshToken.create.mockResolvedValue({});
+    mockJwt.sign.mockReturnValue('mock-access-token');
+    mockConfig.getOrThrow.mockReturnValue('test-secret');
   });
 
   // ── createInvite ─────────────────────────────────────────────────────────
@@ -110,42 +140,50 @@ describe('OnboardingService', () => {
   // ── acceptInvite ─────────────────────────────────────────────────────────
 
   describe('acceptInvite', () => {
-    it('marks token as used and returns courier+establishment info', async () => {
+    it('marks token as used, creates user account, and returns tokens', async () => {
+      mockInviteToken.updateMany.mockResolvedValue({ count: 1 });
       mockInviteToken.findUnique.mockResolvedValue(baseInvite);
+      mockUser.findUnique.mockResolvedValue(null);
 
-      const result = await service.acceptInvite(baseInvite.token);
+      const result = await service.acceptInvite(baseInvite.token, 'password123');
 
-      expect(result.courier_id).toBe('c1');
-      expect(result.establishment_id).toBe(EST_ID);
-      expect(result.establishment_name).toBe('Тест Кафе');
-      expect(mockInviteToken.update).toHaveBeenCalledWith({
-        where: { id: 'inv-1' },
-        data: { used_at: expect.any(Date) },
-      });
+      expect(result.access_token).toBe('mock-access-token');
+      expect(result.refresh_token).toBeDefined();
+      expect(result.user.courier_id).toBe('c1');
+      expect(result.user.establishment_id).toBe(EST_ID);
+      expect(result.user.establishment_name).toBe('Тест Кафе');
+      expect(mockInviteToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { used_at: expect.any(Date) } }),
+      );
+      expect(mockUser.create).toHaveBeenCalled();
     });
 
     it('throws NotFoundException for unknown token', async () => {
+      mockInviteToken.updateMany.mockResolvedValue({ count: 0 });
       mockInviteToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.acceptInvite('bad-token')).rejects.toThrow(NotFoundException);
+      await expect(service.acceptInvite('bad-token', 'password123')).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when token already used', async () => {
+      mockInviteToken.updateMany.mockResolvedValue({ count: 0 });
       mockInviteToken.findUnique.mockResolvedValue({
         ...baseInvite,
         used_at: new Date(Date.now() - 3600_000),
       });
 
-      await expect(service.acceptInvite(baseInvite.token)).rejects.toThrow(BadRequestException);
+      await expect(service.acceptInvite(baseInvite.token, 'password123')).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when token is expired', async () => {
+      mockInviteToken.updateMany.mockResolvedValue({ count: 0 });
       mockInviteToken.findUnique.mockResolvedValue({
         ...baseInvite,
-        expires_at: new Date(Date.now() - 1000), // 1 second ago
+        expires_at: new Date(Date.now() - 1000),
+        used_at: null,
       });
 
-      await expect(service.acceptInvite(baseInvite.token)).rejects.toThrow(BadRequestException);
+      await expect(service.acceptInvite(baseInvite.token, 'password123')).rejects.toThrow(BadRequestException);
     });
   });
 

@@ -9,8 +9,10 @@ export class CompleteDeliveryDto {
   @Min(-180) @Max(180)
   lng: number;
 
+  // Optional: defaults to server time if not provided (mobile may omit this)
+  @IsOptional()
   @IsDateString()
-  captured_at: string;
+  captured_at?: string;
 
   @IsOptional()
   @IsNumber()

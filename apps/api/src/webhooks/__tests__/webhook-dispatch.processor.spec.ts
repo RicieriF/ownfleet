@@ -20,13 +20,18 @@ const mockWebhook = {
 };
 const mockPrisma = { webhook: mockWebhook };
 
-const makeJob = (data = {}) => ({
+// By default simulate the final (5th) attempt so recordFailure assertions work.
+// Pass opts/attemptsMade overrides to test intermediate-retry behaviour.
+const makeJob = (data = {}, jobMeta: Record<string, unknown> = {}) => ({
   data: {
     webhookId: 'wh-1',
     event: 'order.created',
     payload: { order_id: 'o1' },
     ...data,
   },
+  opts: { attempts: 5 },
+  attemptsMade: 5, // final attempt → consecutive_failures should be recorded
+  ...jobMeta,
 }) as any;
 
 const makeResponse = (status: number) => ({
@@ -103,6 +108,17 @@ describe('WebhookDispatchProcessor', () => {
     it('throws on failure so Bull can retry', async () => {
       mockFetch.mockResolvedValue(makeResponse(503));
       await expect(processor.handleDeliver(makeJob())).rejects.toThrow();
+    });
+
+    it('does NOT increment consecutive_failures on intermediate retry (not final attempt)', async () => {
+      mockFetch.mockResolvedValue(makeResponse(500));
+      // 3rd of 5 attempts — not final
+      await expect(
+        processor.handleDeliver(makeJob({}, { attemptsMade: 3, opts: { attempts: 5 } })),
+      ).rejects.toThrow();
+
+      // consecutive_failures must NOT be updated — only success reset is allowed
+      expect(mockWebhook.update).not.toHaveBeenCalled();
     });
   });
 

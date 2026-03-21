@@ -6,7 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-const mockOrder = { findFirst: jest.fn(), create: jest.fn().mockResolvedValue({}) };
+const mockOrder = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
 const mockIntegration = { findMany: jest.fn() };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
 
@@ -39,13 +39,13 @@ describe('IikoService', () => {
     }).compile();
     service = module.get<IikoService>(IikoService);
     jest.clearAllMocks();
-    mockOrder.create.mockResolvedValue({});
+    mockOrder.createMany.mockResolvedValue({ count: 1 });
   });
 
   // ── Happy path ─────────────────────────────────────────────────────────
 
   describe('pollEstablishment — happy path', () => {
-    it('fetches token, polls orders, and creates new orders', async () => {
+    it('fetches token, polls orders, and creates new orders via createMany', async () => {
       mockFetch
         .mockResolvedValueOnce(makeResponse(200)) // auth → token
         .mockResolvedValueOnce(
@@ -55,32 +55,37 @@ describe('IikoService', () => {
             ],
           }),
         );
-      mockOrder.findFirst.mockResolvedValue(null); // not seen before
+      mockOrder.createMany.mockResolvedValue({ count: 1 });
 
       await service.pollEstablishment(EST_ID, VALID_CONFIG);
 
-      expect(mockOrder.create).toHaveBeenCalledTimes(1);
-      expect(mockOrder.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          establishment_id: EST_ID,
-          external_id: 'iiko-1',
-          address: 'вул. Тестова 1',
-          source: 'iiko',
-        }),
+      expect(mockOrder.createMany).toHaveBeenCalledTimes(1);
+      expect(mockOrder.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            establishment_id: EST_ID,
+            external_id: 'iiko-1',
+            address: 'вул. Тестова 1',
+            source: 'iiko',
+          }),
+        ]),
+        skipDuplicates: true,
       });
     });
 
-    it('skips already-ingested orders (idempotent)', async () => {
+    it('skips already-ingested orders via skipDuplicates (idempotent)', async () => {
       mockFetch
         .mockResolvedValueOnce(makeResponse(200))
         .mockResolvedValueOnce(makeResponse(200, {
           deliveryOrders: [{ id: 'iiko-exists', address: 'Some St' }],
         }));
-      mockOrder.findFirst.mockResolvedValue({ id: 'local-order-id' }); // already exists
+      // DB reports 0 inserted because of duplicate skip
+      mockOrder.createMany.mockResolvedValue({ count: 0 });
 
       await service.pollEstablishment(EST_ID, VALID_CONFIG);
 
-      expect(mockOrder.create).not.toHaveBeenCalled();
+      // createMany is called but inserts nothing — no separate check needed
+      expect(mockOrder.createMany).toHaveBeenCalledTimes(1);
     });
   });
 

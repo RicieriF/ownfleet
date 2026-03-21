@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "Weego Courier",
+    "slug": "weego-courier",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e293b"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ua.weego.courier",
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Weego відстежує ваше місцезнаходження під час активної доставки для координації з менеджером.",
+        "NSLocationAlwaysUsageDescription": "Weego відстежує ваше місцезнаходження під час активної доставки у фоновому режимі.",
+        "NSLocationWhenInUseUsageDescription": "Weego потребує доступу до геолокації для відстеження доставок.",
+        "NSCameraUsageDescription": "Weego використовує камеру для фотофіксації при здачі замовлення.",
+        "UIBackgroundModes": ["location", "fetch"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e293b"
+      },
+      "package": "ua.weego.courier",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Weego відстежує ваше місцезнаходження під час активної доставки.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563eb",
+          "sounds": []
+        }
+      ]
+    ],
+    "scheme": "weego-courier",
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

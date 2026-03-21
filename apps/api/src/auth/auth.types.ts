@@ -5,6 +5,8 @@ export interface JwtPayload {
   establishment_id: string;
   role: UserRole;
   is_platform_admin: boolean;
+  /** Set only for users linked to a courier (courier mobile app accounts) */
+  courier_id?: string;
 }
 
 export interface AuthenticatedUser {
@@ -12,4 +14,6 @@ export interface AuthenticatedUser {
   establishment_id: string;
   role: UserRole;
   is_platform_admin: boolean;
+  /** Set only for courier-linked users */
+  courier_id?: string;
 }

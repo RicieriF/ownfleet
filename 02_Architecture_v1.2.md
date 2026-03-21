@@ -87,15 +87,15 @@ API побудований як Modular Monolith з чіткими межами 
 |--------|-----------------|------------------|-|
 | `AuthModule` | JWT аутентифікація, refresh tokens, tenant isolation | `POST /api/v1/auth/login`<br>`/api/v1/auth/refresh`<br>`/api/v1/auth/logout` | |
 | `EstablishmentsModule` | Multi-tenant управління закладами | `CRUD /api/v1/establishments`<br>`GET\|PATCH /api/v1/establishments/:id/settings` | |
-| `CouriersModule` | Управління кур'єрами закладу | `CRUD /api/v1/couriers`<br>`/api/v1/couriers/:id/assign`<br>`POST /api/v1/couriers/:id/device-token` | |
+| `CouriersModule` | Управління кур'єрами закладу | `CRUD /api/v1/couriers`<br>`GET /api/v1/couriers/status`<br>`PATCH /api/v1/couriers/me/device-token`<br>`POST /api/v1/couriers/:id/remind` | |
 | `OrdersModule` | Замовлення, статусна машина, призначення. `UNIQUE(external_id, establishment_id)` — захист від дублікатів POS | `CRUD /api/v1/orders`<br>`POST /api/v1/orders/:id/assign`<br>`PATCH /api/v1/orders/:id/cancel` | **FIXED** |
 | `TrackingModule` (WS Gateway) | Прийом GPS пінгів, Redis pub/sub, WebSocket до дашборду | `POST /api/v1/tracking/ping`<br>`WS: courier_moved` | |
-| `ProofOfDeliveryModule` | Гео-пруф (обов'язковий) + фото (опціональний), радіус 300м, два timestamps | `GET /api/v1/deliveries/:id/upload-url`<br>`POST /api/v1/deliveries/:id/complete`<br>`PATCH /api/v1/deliveries/:id/start`<br>`PATCH /api/v1/deliveries/:id/fail` | **UPDATED** |
+| `ProofOfDeliveryModule` | Гео-пруф (обов'язковий) + фото (опціональний), радіус 300м, два timestamps | `GET /api/v1/deliveries/active`<br>`GET /api/v1/deliveries/:id/upload-url`<br>`POST /api/v1/deliveries/:id/proof`<br>`PATCH /api/v1/deliveries/:id/start`<br>`PATCH /api/v1/deliveries/:id/fail` | **UPDATED** |
 | `RetentionModule` | Cron очищення замовлень та GPS-пінгів. Окреме `retention_pings_days` (1–3 дні) | `Internal: @Cron("0 3 * * *")`<br>`GET\|PATCH /api/v1/establishments/:id/settings` | **NEW** |
 | `IntegrationsModule` | Адаптери Poster POS та iiko/Syrve | `POST /api/v1/integrations/poster/webhook`<br>`GET /api/v1/integrations/iiko/orders` | |
 | `WebhooksModule` | Outbound webhook dispatcher з HMAC | `CRUD /api/v1/webhooks`<br>`Internal: dispatch events` | |
-| `NotificationsModule` | Telegram Bot + Firebase FCM. **Fire-and-forget**, ніколи не блокує API. Управляє lifecycle push-токенів: реєстрація, оновлення при ротації, очищення stale токенів після помилки `invalid_registration` | `Internal: send() async`<br>`POST /api/v1/couriers/:id/device-token` | **UPDATED** |
-| `OnboardingModule` | Управляє процесом реєстрації закладу, invite-токенами кур'єрів, прогресом onboarding-стану | `POST /api/v1/onboarding/invite-courier`<br>`GET /api/v1/onboarding/status`<br>`POST /api/v1/onboarding/accept-invite/:token` | **NEW** |
+| `NotificationsModule` | Telegram Bot + Firebase FCM. **Fire-and-forget**, ніколи не блокує API. Управляє lifecycle push-токенів: очищення stale токенів після помилки `invalid_registration` | `Internal: sendPush() / sendTelegram()` | **UPDATED** |
+| `OnboardingModule` | Управляє процесом реєстрації закладу, invite-токенами кур'єрів, прогресом onboarding-стану | `POST /api/v1/onboarding/invites`<br>`GET /api/v1/onboarding/invites`<br>`DELETE /api/v1/onboarding/invites/:id`<br>`POST /api/v1/onboarding/accept-invite/:token` | **NEW** |
 | `AnalyticsModule` | Статистика доставок, ефективність кур'єрів | `GET /api/v1/analytics/summary`<br>`GET /api/v1/analytics/couriers` | |
 
 ---
@@ -141,7 +141,7 @@ API побудований як Modular Monolith з чіткими межами 
 | 2 | Пристрій фіксує GPS (ОБОВ'ЯЗКОВО) — `lat, lng, accuracy, captured_at` | **FIXED** |
 | 3 | Відкривається камера для фото (ОПЦІОНАЛЬНО). Якщо є — стискається до ~150 KB | |
 | 4 | Якщо є фото: `GET /api/v1/deliveries/{id}/upload-url` → Presigned R2 URL (TTL 5 хв) → `PUT` фото напряму в R2 | |
-| 5 | `POST /api/v1/deliveries/{id}/complete { lat, lng, captured_at, photo_key? }` | |
+| 5 | `POST /api/v1/deliveries/{id}/proof { lat, lng, captured_at?, photo_key? }` | |
 | 6 | Backend: `PostGIS ST_DWithin` — перевірка GPS в радіусі 300м → `geo_match = true/false` | |
 | 7 | `INSERT delivery_proofs` · `UPDATE deliveries SET status='completed', order_closed_at=NOW()` | |
 | 8 | **[async]** Telegram менеджеру: "Доставлено. Гео: [посилання]" + фото якщо є | **FIXED** |
@@ -216,7 +216,7 @@ plan               TEXT  CHECK (plan IN ('pilot','trial','starter','business','p
 trial_ends_at      TIMESTAMP  -- NULL for pilot; set to registration_date + 14 days for trial
 paid_until         TIMESTAMP  -- NULL until first payment; updated on each payment
 created_at         TIMESTAMP
-onboarding_status  TEXT CHECK (onboarding_status IN ('registered','couriers_added','first_delivery','completed'))
+onboarding_status  TEXT CHECK (onboarding_status IN ('pending','couriers_added','first_order','completed'))
 settings           JSONB  -- { retention_days: 1|3|5|7|14|30,
                           --   retention_pings_days: 1-3 }
 ```
@@ -249,8 +249,12 @@ throw new HttpException({ code: 'PLAN_EXPIRED', message: 'Trial expired' }, 402)
 id                UUID PRIMARY KEY
 establishment_id  UUID REFERENCES establishments
 role              TEXT  CHECK (role IN ('owner','manager','dispatcher'))
-email             TEXT
+email             TEXT  -- for couriers: phone number is used as email
 password_hash     TEXT
+is_platform_admin BOOLEAN DEFAULT false
+courier_id        TEXT UNIQUE REFERENCES couriers  -- NULL for manager/owner; set for courier accounts
+
+INDEX (courier_id)  -- для зворотного зв'язку user ↔ courier
 ```
 
 **Permissions table:**
@@ -267,13 +271,18 @@ password_hash     TEXT
 
 ### `couriers`
 ```sql
-id                UUID PRIMARY KEY
-establishment_id  UUID REFERENCES establishments
-name              TEXT
-phone             TEXT
-device_token      TEXT  -- для FCM push
-device_platform   TEXT  -- 'ios' | 'android'
-active            BOOLEAN
+id                          UUID PRIMARY KEY
+establishment_id            UUID REFERENCES establishments
+name                        TEXT
+phone                       TEXT
+device_token                TEXT        -- для FCM push
+device_platform             TEXT        -- 'ios' | 'android'
+device_brand                TEXT        -- для аналітики OEM (Xiaomi, Samsung, Huawei)
+active                      BOOLEAN
+battery_optimization_exempt BOOLEAN DEFAULT false  -- чи отримано дозвіл на фонову роботу
+last_reminder_sent_at       TIMESTAMP   -- коли менеджер останній раз натиснув [Нагадати]
+reminder_count              INT DEFAULT 0
+created_at                  TIMESTAMP
 
 INDEX (establishment_id)               -- для multi-tenant запитів
 INDEX (establishment_id, active)       -- для запитів активних кур'єрів закладу
@@ -441,12 +450,13 @@ assignment_timeout_at  TIMESTAMP  -- коли спрацьовує auto-unassign
 ```
 1. Manager registers establishment → POST /api/v1/auth/register
 2. Manager adds first courier → POST /api/v1/couriers
-3. Manager generates invite → POST /api/v1/onboarding/invite-courier → returns deep link
+3. Manager generates invite → POST /api/v1/onboarding/invites → returns token + deep link
 4. Deep link sent via SMS/Telegram to courier
-5. Courier opens link → installs app → POST /api/v1/onboarding/accept-invite/:token
-6. Courier is linked to establishment, device_token registered
+5. Courier opens link → installs app → POST /api/v1/onboarding/accept-invite/:token { password }
+   → receives { access_token, refresh_token, user } — immediately authenticated
+6. Courier registers FCM token → PATCH /api/v1/couriers/me/device-token
 7. Manager creates first test order → POST /api/v1/orders
-8. Courier accepts and delivers → POST /api/v1/deliveries/:id/complete
+8. Courier accepts and delivers → POST /api/v1/deliveries/:id/proof
 9. onboarding_status → 'completed'
 ```
 
@@ -455,8 +465,8 @@ assignment_timeout_at  TIMESTAMP  -- коли спрацьовує auto-unassign
 ### Push Token Lifecycle
 
 ```
-App start → POST /api/v1/couriers/:id/device-token { token, platform: 'ios'|'android' }
-         → UPDATE couriers SET device_token = token, device_platform = platform
+App start → PATCH /api/v1/couriers/me/device-token { device_token, device_platform: 'ios'|'android', device_brand? }
+         → UPDATE couriers SET device_token, device_platform, device_brand WHERE id = user.courier_id
 
 FCM send fails with 'invalid_registration' or 'NotRegistered'
          → DELETE couriers.device_token (stale token cleanup)
@@ -464,7 +474,7 @@ FCM send fails with 'invalid_registration' or 'NotRegistered'
 
 Token refresh (Firebase rotates tokens periodically)
          → App detects new token via onTokenRefresh callback
-         → POST /api/v1/couriers/:id/device-token with new token
+         → PATCH /api/v1/couriers/me/device-token with new token
 ```
 
 ---

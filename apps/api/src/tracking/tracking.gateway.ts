@@ -17,10 +17,7 @@ import type { CourierMovedEvent } from './tracking.service.js';
 const PUBSUB_CHANNEL = 'courier_moved';
 
 @Injectable()
-@WebSocketGateway({
-  cors: { origin: '*', credentials: true },
-  namespace: '/',
-})
+@WebSocketGateway({ namespace: '/' })
 export class TrackingGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
 {
@@ -35,8 +32,21 @@ export class TrackingGateway
     @InjectRedisSubscriber() private readonly redisSub: Redis,
   ) {}
 
-  afterInit(): void {
-    this.logger.log('WebSocket gateway initialized');
+  afterInit(server: Server): void {
+    // Apply CORS after init so we can read the env variable.
+    // ALLOWED_ORIGINS is a comma-separated list, e.g. "https://app.weego.ua,https://admin.weego.ua"
+    const raw = this.config.get<string>('ALLOWED_ORIGINS') ?? '';
+    const origins = raw
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+
+    server.engine.opts.cors = {
+      origin: origins.length > 0 ? origins : false,
+      credentials: true,
+    };
+
+    this.logger.log(`WebSocket gateway initialized — CORS origins: [${origins.join(', ')}]`);
   }
 
   onModuleInit(): void {

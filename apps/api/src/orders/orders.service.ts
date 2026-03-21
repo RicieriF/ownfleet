@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
@@ -18,13 +19,20 @@ const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly webhooks: WebhooksService,
+  ) {}
 
-  async findAll(user: AuthenticatedUser, status?: OrderStatus) {
+  async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
     return this.prisma.order.findMany({
       where: {
         establishment_id: user.establishment_id,
-        ...(status ? { status } : {}),
+        ...(statuses && statuses.length > 0
+          ? statuses.length === 1
+            ? { status: statuses[0] }
+            : { status: { in: statuses } }
+          : {}),
       },
       include: {
         delivery: {
@@ -51,17 +59,40 @@ export class OrdersService {
       if (existing) return existing; // idempotent — return existing
     }
 
-    return this.prisma.order.create({
-      data: {
-        establishment_id: user.establishment_id,
-        external_id: dto.external_id,
-        address: dto.address,
-        lat: dto.lat,
-        lng: dto.lng,
-        source: dto.source ?? 'manual',
-        notes: dto.notes,
-      },
-    });
+    try {
+      const order = await this.prisma.order.create({
+        data: {
+          establishment_id: user.establishment_id,
+          external_id: dto.external_id,
+          address: dto.address,
+          lat: dto.lat,
+          lng: dto.lng,
+          source: dto.source ?? 'manual',
+          notes: dto.notes,
+        },
+      });
+      this.webhooks.dispatch(user.establishment_id, 'order.created', { order_id: order.id }).catch(
+        (err) => this.logger.warn('webhook dispatch failed for order.created', err),
+      );
+      return order;
+    } catch (err) {
+      // Race condition: two concurrent requests for the same external_id both passed
+      // the findFirst check. The second one hits a unique constraint (P2002).
+      if (
+        dto.external_id &&
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        const existing = await this.prisma.order.findFirst({
+          where: {
+            external_id: dto.external_id,
+            establishment_id: user.establishment_id,
+          },
+        });
+        if (existing) return existing;
+      }
+      throw err;
+    }
   }
 
   async assign(id: string, dto: AssignOrderDto, user: AuthenticatedUser) {
@@ -106,10 +137,14 @@ export class OrdersService {
     const order = await this.assertBelongs(id, user.establishment_id);
     assertOrderTransition(order.status, OrderStatus.cancelled);
 
-    return this.prisma.order.update({
+    const updated = await this.prisma.order.update({
       where: { id },
       data: { status: OrderStatus.cancelled },
     });
+    this.webhooks.dispatch(user.establishment_id, 'order.cancelled', { order_id: id }).catch(
+      (err) => this.logger.warn('webhook dispatch failed for order.cancelled', err),
+    );
+    return updated;
   }
 
   // ── Called internally by ProofOfDeliveryModule ───────────────────────────
