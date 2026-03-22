@@ -277,11 +277,16 @@ Always read `DESIGN.md` before making any visual or UI decisions for `apps/web` 
 All font choices, colors, spacing, border-radius, and aesthetic direction are defined there. Do not deviate without explicit user approval.
 
 Key decisions to remember:
-- **Dark-first** — background `#0f172a`, surface `#1e293b`. Do NOT switch to a light dashboard.
-- **Onest** — primary font for all UI text (web). Import from Google Fonts.
-- **JetBrains Mono** — for all numerical data, timestamps, IDs.
-- **Primary accent** — `#2563eb` (blue-600). Already established in mobile.
-- **Compact density** — operational tool, not a marketing page. Keep padding tight.
-- **Border-radius ≤ 8px** — no `rounded-2xl` or `rounded-3xl` on cards.
+- **Dark-first** — background `#09090b` (zinc-950), surface `#18181b` (zinc-900). Do NOT switch to a light dashboard.
+- **Manrope** — primary font for all UI text (web + mobile). Import from Google Fonts. NOT Onest, Inter, or Roboto.
+- **JetBrains Mono** — for all numerical data, timestamps, IDs, coordinates, battery %, order counts.
+- **Sage accent** — `#6aaa84` (dark mode) / `#3d7a5a` (light mode). The ONLY non-neutral interactive color. No blue, no indigo, no violet.
+- **Semantic-only status colors** — green/amber/red ONLY for courier status dots and system alerts, never for buttons or nav.
+- **Compact density** — operational tool, not a marketing page. Table rows `py-2.5 px-3`.
+- **Border-radius ≤ 8px** — no `rounded-2xl` or `rounded-3xl` on cards. Buttons: 6px.
+- **Card depth** — `inset 0 1px 0 rgba(255,255,255,0.05)` top-edge shine, no box-shadow outlines.
+- **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 3px #6aaa84`.
+- **Table headers** — always UPPERCASE, 11px/600/+0.05em tracking, `--text-4` color.
+- **Map is the hero** — live courier map is the largest element in the dashboard, not a widget.
 
 In QA or review mode: flag any code that deviates from DESIGN.md without an explicit reason.
