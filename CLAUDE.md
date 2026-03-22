@@ -267,3 +267,21 @@ WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
 4. Тести — писати разом з кодом, не після
 
 Після завершення модуля: `git commit` → новий контекст.
+
+---
+
+## Design System
+
+Always read `DESIGN.md` before making any visual or UI decisions for `apps/web` or `apps/mobile`.
+
+All font choices, colors, spacing, border-radius, and aesthetic direction are defined there. Do not deviate without explicit user approval.
+
+Key decisions to remember:
+- **Dark-first** — background `#0f172a`, surface `#1e293b`. Do NOT switch to a light dashboard.
+- **Onest** — primary font for all UI text (web). Import from Google Fonts.
+- **JetBrains Mono** — for all numerical data, timestamps, IDs.
+- **Primary accent** — `#2563eb` (blue-600). Already established in mobile.
+- **Compact density** — operational tool, not a marketing page. Keep padding tight.
+- **Border-radius ≤ 8px** — no `rounded-2xl` or `rounded-3xl` on cards.
+
+In QA or review mode: flag any code that deviates from DESIGN.md without an explicit reason.
