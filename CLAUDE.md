@@ -287,6 +287,10 @@ Key decisions to remember:
 - **Card depth** — `inset 0 1px 0 rgba(255,255,255,0.05)` top-edge shine, no box-shadow outlines.
 - **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 3px #6aaa84`.
 - **Table headers** — always UPPERCASE, 11px/600/+0.05em tracking, `--text-4` color.
-- **Map is the hero** — live courier map is the largest element in the dashboard, not a widget.
+- **Dashboard is info-first** — main `/` dashboard shows KPIs, alerts, pending assignments, active deliveries table, courier status panel. No map on the main page.
+- **Map is a separate `/map` page** — full-screen Leaflet map with right-side courier panel. Real routing via OSRM (free, no API key). Real ETA in minutes per transport mode.
+- **Map stack:** Leaflet.js v1.9 + CartoDB Dark Matter tiles. No Mapbox, no Google Maps.
+- **Courier markers:** Circle with initials only (no transport badge). Pulse animation on 🔴 danger (1.4s, red glow) and 🟡 background (3.5s, amber glow). 🟢 online is static — pulsing "all good" is noise.
+- **Routes hidden by default** — shown only for selected courier (OSRM real road geometry, animated dashed line).
 
 In QA or review mode: flag any code that deviates from DESIGN.md without an explicit reason.

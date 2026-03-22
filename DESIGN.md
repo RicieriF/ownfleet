@@ -127,15 +127,7 @@ Semantic colors use `rgba(color, 0.1)` backgrounds + `rgba(color, 0.2)` borders 
 | 🔴 Не відповідає | `#ef4444` | ping > 5min during active delivery |
 | ⚫ Офлайн | `#71717a` | no active delivery + ping > 5min |
 
-The 🟢 Онлайн dot uses CSS animation for "alive" feel:
-```css
-@keyframes pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(34,197,94,.5); }
-  70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
-  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-}
-.dot-online { animation: pulse 2s ease-out infinite; }
-```
+Status dots in the sidebar courier list are static — no animation. Animation belongs on the map markers (see Map Page section), not in the data panel.
 
 ### Card Depth
 
@@ -271,35 +263,154 @@ Navigation: arrow keys + Enter. Close: Escape.
 
 ---
 
-## Dashboard — Map-First Layout
+## Dashboard Layout (Main Page)
 
-The live map is the hero of the manager dashboard. Layout:
+The main dashboard is **info-first** — the map is a dedicated `/map` page (see below). Splitting concerns lets the manager parse operational status immediately without visual noise of the map.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ Sidebar (220px) │ Topbar (48px)                      │
-│                 ├─────────────────────────────────────│
-│                 │ Tab bar: Карта / Замовлення / ...   │
-│                 ├──────────────────┬──────────────────│
-│                 │                  │ Courier list     │
-│                 │   Live Map       │ (320px panel)   │
-│                 │   (fills rest)   │                 │
-│                 │                  │                 │
-└─────────────────┴──────────────────┴─────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ Sidebar (220px) │ Topbar (48px) — title, LIVE pill, actions │
+│                 ├────────────────────────────────────────────│
+│                 │ KPI row: Active deliveries / Pending / ... │
+│                 ├────────────────────────────────────────────│
+│                 │ Alert card (if any — red courier, timeout) │
+│                 ├──────────────────────┬─────────────────────│
+│                 │ Pending assignments  │ Courier status panel│
+│                 │ (unassigned orders)  │ (right, 300px)      │
+│                 ├──────────────────────┤                     │
+│                 │ Active deliveries    │                     │
+│                 │ table                │                     │
+└─────────────────┴──────────────────────┴────────────────────┘
 ```
 
-### Map Style
+---
 
-Dark tile aesthetic (similar to Mapbox dark theme):
-- Background: `#1a1a2e` (deep navy-dark, not zinc — maps have their own palette)
-- Roads: `#2d2d44` (subtle, secondary streets even darker)
-- Buildings: `#0f0f1a` (near-black)
-- Parks/green areas: `#1a2e1a` (very dark green)
-- Water: `#0a1628` (deep blue-dark)
-- Labels: `#71717a` (zinc-500, minimal)
+## Map Page (/map)
 
-Courier markers: colored circle with initials, pulsing ring for online status.
-Destination pins: numbered (order sequence).
+Separate route — full-screen operational map. Courier selects courier → see real route + ETA.
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ Sidebar (220px) │ Map topbar: title, LIVE pill, filter btns │
+│                 ├──────────────────────┬─────────────────────│
+│                 │                      │ Courier list panel  │
+│                 │  Leaflet map         │ (300px) — scrollable│
+│                 │  (fills rest)        │ click → select      │
+│                 │                      │                     │
+│                 │  [legend bottom-left]│ [Assign / Details]  │
+└─────────────────┴──────────────────────┴────────────────────┘
+```
+
+### Map Tiles
+
+**Library:** [Leaflet.js](https://leafletjs.com/) v1.9.x (free, no API key, open-source).
+**Tile provider:** CartoDB Dark Matter — free, no API key, professional dark aesthetic.
+
+```
+https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
+subdomains: 'abcd'
+attribution: © OpenStreetMap © CARTO
+maxZoom: 19
+```
+
+Do NOT use Google Maps or Mapbox (require paid API keys). CartoDB Dark Matter is production-ready and matches the zinc-950 dashboard background.
+
+### Courier Markers
+
+Each marker is a circle `DivIcon` with courier initials — no badge, no emoji, no transport icon on the marker itself.
+
+```
+Size: zoom≥14 → 28px | zoom≥12 → 21px | zoom<12 → 16px (updates on zoom event)
+Background: status color (see Courier Status Dots table)
+Text: courier initials, Manrope 800, dark on light colors / white on red
+Border: 1.5px rgba(255,255,255,.12) | selected: 2.5px rgba(255,255,255,.45)
+```
+
+**Marker animation — pulse only where attention is needed:**
+
+| Status | Animation | Duration | Glow color |
+|--------|-----------|----------|------------|
+| 🔴 Danger (not responding) | Fast urgent pulse | 1.4s | `rgba(239,68,68,.65)` red |
+| 🟡 Background (fading) | Slow subtle pulse | 3.5s | `rgba(245,158,11,.45)` amber |
+| 🟢 Online (all good) | **No animation — static** | — | — |
+| ⚫ Offline | Static | — | — |
+
+Rationale: animation = "look here". Pulsing the "all good" state is noise. Pulsing danger/warning draws the manager's eye to what actually needs attention. Implemented via `box-shadow` keyframes on the marker element (no separate ring DOM element — eliminates offset bugs).
+
+```css
+@keyframes courier-glow-danger {
+  0%  { box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 0   rgba(239,68,68,.65) }
+  60% { box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 12px rgba(239,68,68,0)  }
+  100%{ box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 0   rgba(239,68,68,0)  }
+}
+@keyframes courier-glow-bg {
+  0%  { box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 0  rgba(245,158,11,.45) }
+  55% { box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 9px rgba(245,158,11,0)  }
+  100%{ box-shadow: 0 2px 10px rgba(0,0,0,.75), 0 0 0 0  rgba(245,158,11,0)  }
+}
+```
+
+### Establishment Marker
+
+Sage-bordered circle (32px) with SVG house/building icon in sage. No emoji. Binds a tooltip with the establishment name. `zIndexOffset: 500` (below couriers).
+
+### Destination Markers
+
+Order number in a status-colored circle, connected to ground with a 2px stem. Hidden by default — visible only when that courier's route is shown. Smooth `opacity` transition (180ms).
+
+### Route-on-Select Pattern
+
+Routes are **hidden by default**. Clicking a courier marker or panel item:
+1. Hides all existing routes + destination markers
+2. Fetches the real road route from OSRM (see below)
+3. Shows the route as an animated dashed polyline + destination marker for the selected courier
+4. Map pans/zooms to fit the courier → destination bounds (padding 70px, maxZoom 15)
+5. Closing the popup or clicking map background deselects → hides the route
+
+Animated route line:
+```css
+.route-active {
+  stroke-dasharray: 12, 8;
+  animation: march 1.4s linear infinite;
+}
+@keyframes march { to { stroke-dashoffset: -20 } }
+```
+Route color: matches the courier's status color.
+
+### OSRM Routing (Real ETA)
+
+**Service:** [OSRM](http://project-osrm.org/) public demo server — free, no API key, real road routing, returns GeoJSON geometry and duration in seconds.
+
+```
+Base URL: https://router.project-osrm.org/route/v1/{profile}/{lng},{lat};{destLng},{destLat}
+          ?overview=full&geometries=geojson
+```
+
+**Transport → profile mapping:**
+| Transport type | OSRM profile |
+|----------------|-------------|
+| car | `driving` |
+| moto | `driving` |
+| bike | `cycling` |
+| foot | `foot` |
+
+**ETA calculation:** `Math.ceil(data.routes[0].duration / 60)` minutes. Displayed as `~N хв` or `~N.N год`. Cached per courier ID for the session.
+
+**Fallback:** If OSRM request fails (network error, timeout), fall back silently to a straight-line polyline between courier and destination. ETA is not shown in fallback.
+
+**Route geometry:** `data.routes[0].geometry.coordinates` — array of `[lng, lat]` pairs, converted to `[lat, lng]` for Leaflet.
+
+### Map Right Panel
+
+300px fixed-width panel. Courier list items show:
+- Status dot + name (danger state: name in `#fca5a5`, row has subtle red tint bg)
+- Battery % in JetBrains Mono with color coding
+- Current order number + address (mono), transport type (text label, no emoji on marker)
+- ETA once loaded (sage for online, amber for bg, red for danger)
+- "Нагадати" button for danger-state couriers only
+- Offline couriers: `opacity: 0.55`, at bottom of list
+
+Selected courier: sage left border (3px) + `rgba(106,170,132,.08)` background tint.
 
 ### KPI Cards
 
@@ -416,8 +527,12 @@ export default {
 | 2026-03-22 | Compact density | Operational tool — managers need maximum data per screen. Spacious = wasted. |
 | 2026-03-22 | Card inset shine instead of box-shadow | `inset 0 1px 0 rgba(255,255,255,0.05)` — top-edge highlight used by Linear, Vercel, Raycast. Adds depth without visual noise. |
 | 2026-03-22 | Double-ring focus ring | `0 0 0 1px var(--bg), 0 0 0 3px var(--acm)` — same pattern as GitHub, Linear. Accessible and polished. |
-| 2026-03-22 | Live pulse animation on 🟢 dot | CSS `@keyframes pulse` on status dot — the dashboard is a real-time tool. Static dots feel dead. |
-| 2026-03-22 | Map-first layout | The live courier map is the product's core differentiator. It must be the largest element on screen, not squeezed into a widget. |
+| 2026-03-22 | Separate /map page (not embedded in dashboard) | Map embedded in dashboard splits manager's attention between operational data and visual map. Info-first dashboard + dedicated /map page is the pattern used by Shopify, Linear, fleet tools like Samsara. Manager can stay on dashboard and use map when needed. |
+| 2026-03-22 | Leaflet.js + CartoDB Dark Matter tiles | Free, no API key, production-ready dark aesthetic matching zinc-950 palette. CartoDB Dark Matter is an industry-standard dark tile set used by professional tools. Rejected Mapbox (paid, API key) and Google Maps (paid, API key). |
+| 2026-03-22 | OSRM for real road routing + ETA | Real turn-by-turn road routes via public OSRM API (free, no key). Returns GeoJSON geometry + duration in seconds. Routes per transport mode (driving/cycling/foot). Manager sees realistic ETAs, not straight-line estimates. |
+| 2026-03-22 | Pulse animation only on danger/background markers, not online | Animation = "look here." Pulsing green (all-good) is noise; pulsing red/amber draws attention exactly where operational action is needed. Implemented as box-shadow keyframes on the marker circle itself (avoids separate ring element and offset bugs). |
+| 2026-03-22 | Route-on-select pattern (routes hidden by default) | Showing all routes simultaneously creates visual chaos (overlapping polylines, destination pins everywhere). Showing route only for the selected courier is the pattern used by Waze, fleet management tools. |
+| 2026-03-22 | No transport icon on map marker | Markers show identity (initials) + status (color) only. Transport type is secondary info — it lives in the right panel list and the popup. Adding transport emoji/badge to the marker was visually cheap and cluttered. |
 | 2026-03-22 | Sparklines on KPI cards | Trend direction matters as much as the current number. SVG polyline, 40×20px, no axes — just direction signal. |
 | 2026-03-22 | Toast with left colored bar | Clean semantic variant pattern used by Vercel, Sonner. Better than icon-only or full-color bg. |
 | 2026-03-22 | Sage corner guides on delivery proof camera | The camera viewfinder needs affordance — L-shaped sage guides show exactly what area the courier should capture. Clear and functional. |
