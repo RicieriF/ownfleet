@@ -38,8 +38,21 @@ export interface Courier {
 
 export type CourierStatus = 'online' | 'background' | 'not_responding' | 'offline';
 
+export interface Shift {
+  id: string;
+  courier_id: string;
+  establishment_id: string;
+  started_at: string;
+  ended_at: string | null;
+  ended_by: 'courier' | 'manager' | 'auto' | null;
+  total_deliveries: number;
+  total_distance_km: number | null;
+}
+
 export interface CourierWithStatus extends Courier {
   status: CourierStatus;
+  /** true when courier has an active shift (ended_at IS NULL) */
+  on_shift: boolean;
   last_ping_at: string | null;
   last_lat: number | null;
   last_lng: number | null;

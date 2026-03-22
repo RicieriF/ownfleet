@@ -3,13 +3,21 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import {
+  ClipboardList,
+  Users,
+  Map,
+  BarChart2,
+  Settings,
+  LogOut,
+} from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Замовлення', icon: '📦' },
-  { href: '/couriers', label: 'Курʼєри', icon: '🛵' },
-  { href: '/map', label: 'Карта', icon: '🗺️' },
-  { href: '/analytics', label: 'Аналітика', icon: '📊' },
-  { href: '/settings', label: 'Налаштування', icon: '⚙️' },
+  { href: '/',           label: 'Замовлення',    icon: ClipboardList },
+  { href: '/couriers',   label: 'Курʼєри',       icon: Users },
+  { href: '/map',        label: 'Карта',          icon: Map },
+  { href: '/analytics',  label: 'Аналітика',     icon: BarChart2 },
+  { href: '/settings',   label: 'Налаштування',  icon: Settings },
 ] as const;
 
 export function Sidebar() {
@@ -23,35 +31,35 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-56 min-h-screen bg-gray-900 text-gray-100">
-      <div className="px-5 py-5 border-b border-gray-700">
-        <span className="text-lg font-bold tracking-tight">Weego CMI</span>
+    <aside className="flex flex-col w-56 min-h-screen bg-[var(--sf)] border-r border-[var(--br)]">
+      <div className="px-5 py-5 border-b border-[var(--br)]">
+        <span className="text-lg font-bold tracking-tight text-[var(--t1)]">Weego CMI</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map(({ href, label, icon }) => (
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+              'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
               pathname === href
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white',
+                ? 'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]'
+                : 'text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--t1)] border border-transparent',
             )}
           >
-            <span>{icon}</span>
+            <Icon size={16} strokeWidth={1.75} />
             {label}
           </Link>
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-gray-700">
+      <div className="px-3 py-4 border-t border-[var(--br)]">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+          className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm text-[var(--t4)] hover:bg-[var(--s2)] hover:text-[var(--bad)] transition-colors border border-transparent"
         >
-          <span>🚪</span>
+          <LogOut size={16} strokeWidth={1.75} />
           Вийти
         </button>
       </div>

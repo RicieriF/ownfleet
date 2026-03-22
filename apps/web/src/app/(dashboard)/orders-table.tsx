@@ -9,21 +9,21 @@ import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: 'Очікує',
-  assigned: 'Призначено',
+  pending:     'Очікує',
+  assigned:    'Призначено',
   in_progress: 'У дорозі',
-  completed: 'Виконано',
-  cancelled: 'Скасовано',
-  failed: 'Провалено',
+  completed:   'Виконано',
+  cancelled:   'Скасовано',
+  failed:      'Провалено',
 };
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  assigned: 'bg-blue-100 text-blue-800',
-  in_progress: 'bg-indigo-100 text-indigo-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-gray-100 text-gray-600',
-  failed: 'bg-red-100 text-red-800',
+  pending:     'bg-[rgba(245,158,11,0.12)] text-[var(--warn)]  border border-[rgba(245,158,11,0.25)]',
+  assigned:    'bg-[var(--acm-m)]          text-[var(--acm)]   border border-[var(--acm-b)]',
+  in_progress: 'bg-[var(--acm-m)]          text-[var(--acm)]   border border-[var(--acm-b)]',
+  completed:   'bg-[rgba(34,197,94,0.12)]  text-[var(--ok)]    border border-[rgba(34,197,94,0.25)]',
+  cancelled:   'bg-[var(--s2)]             text-[var(--t4)]    border border-[var(--br)]',
+  failed:      'bg-[rgba(239,68,68,0.12)]  text-[var(--bad)]   border border-[rgba(239,68,68,0.25)]',
 };
 
 interface Props {
@@ -69,58 +69,63 @@ export function OrdersTable({ orders, couriers }: Props) {
   return (
     <>
       {actionError && (
-        <div className="mb-4 px-4 py-2 bg-red-50 text-red-700 text-sm rounded-lg">
+        <div className="mb-4 px-4 py-2 bg-[rgba(239,68,68,0.1)] text-[var(--bad)] text-sm rounded-md border border-[rgba(239,68,68,0.25)]">
           {actionError}
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden card-shine">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="border-b border-[var(--br)]">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Адреса</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Статус</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Курʼєр</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Час</th>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Дії</th>
+              {['Адреса', 'Статус', 'Курʼєр', 'Час', 'Дії'].map((h) => (
+                <th
+                  key={h}
+                  className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-[var(--br)]">
             {orders.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
                   Активних замовлень немає
                 </td>
               </tr>
             )}
             {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">
+              <tr key={order.id} className="hover:bg-[var(--s2)] transition-colors">
+                <td className="px-3 py-2.5 font-medium text-[var(--t1)] max-w-xs truncate">
                   {order.address}
                   {order.notes && (
-                    <span className="ml-2 text-xs text-gray-400">({order.notes})</span>
+                    <span className="ml-2 text-xs text-[var(--t4)]">({order.notes})</span>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2.5">
                   <span
                     className={cn(
-                      'px-2 py-0.5 rounded-full text-xs font-medium',
+                      'px-2 py-0.5 rounded text-xs font-medium',
                       STATUS_COLORS[order.status],
                     )}
                   >
                     {STATUS_LABELS[order.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-gray-600">
-                  {order.delivery?.courier?.name ?? <span className="text-gray-400">—</span>}
+                <td className="px-3 py-2.5 text-[var(--t2)]">
+                  {order.delivery?.courier?.name ?? (
+                    <span className="text-[var(--t4)]">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">
+                <td className="px-3 py-2.5 text-[var(--t4)] text-xs mono">
                   {formatDistanceToNow(new Date(order.created_at), {
                     addSuffix: true,
                     locale: uk,
                   })}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2.5">
                   <div className="flex gap-2">
                     {order.status === 'pending' && (
                       <button
@@ -129,7 +134,7 @@ export function OrdersTable({ orders, couriers }: Props) {
                           setSelectedCourierId('');
                           setActionError('');
                         }}
-                        className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        className="px-2.5 py-1 text-xs bg-[var(--acm)] text-[#09090b] font-medium rounded-[6px] hover:bg-[var(--acm-h)] transition-colors disabled:opacity-40"
                         disabled={isPending}
                       >
                         Призначити
@@ -138,7 +143,7 @@ export function OrdersTable({ orders, couriers }: Props) {
                     {(order.status === 'pending' || order.status === 'assigned') && (
                       <button
                         onClick={() => handleCancel(order.id)}
-                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        className="px-2.5 py-1 text-xs bg-[var(--s2)] text-[var(--t3)] rounded-[6px] hover:bg-[var(--s3)] hover:text-[var(--t1)] transition-colors disabled:opacity-40"
                         disabled={isPending}
                       >
                         Скасувати
@@ -154,45 +159,48 @@ export function OrdersTable({ orders, couriers }: Props) {
 
       {/* Assign modal */}
       {assignModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Призначити курʼєра</h2>
-            <p className="text-sm text-gray-500 mb-4 truncate">{assignModalOrder.address}</p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-[4px]"
+          onClick={(e) => e.target === e.currentTarget && setAssignModalOrder(null)}
+        >
+          <div className="bg-[var(--sf)] rounded-lg border border-[var(--br2)] shadow-[var(--shadow-lg)] p-6 w-full max-w-sm card-shine">
+            <h2 className="text-base font-semibold text-[var(--t1)] mb-1">Призначити курʼєра</h2>
+            <p className="text-sm text-[var(--t3)] mb-4 truncate">{assignModalOrder.address}</p>
 
             {activeCouriers.length === 0 ? (
-              <p className="text-sm text-amber-600 mb-4">
-                Немає доступних курʼєрів онлайн
+              <p className="text-sm text-[var(--warn)] mb-4">
+                Немає курʼєрів на зміні
               </p>
             ) : (
               <select
                 value={selectedCourierId}
                 onChange={(e) => setSelectedCourierId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] mb-4 focus:outline-none focus:ring-1 focus:ring-[var(--acm)] focus:border-[var(--acm)] transition-colors"
               >
                 <option value="">Оберіть курʼєра</option>
                 {activeCouriers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} — {c.status === 'online' ? '🟢 Онлайн' : '🟡 Фон'}
+                    {c.name} — {c.status === 'online' ? 'На зміні' : 'Фон'}
                   </option>
                 ))}
               </select>
             )}
 
             {actionError && (
-              <p className="text-sm text-red-600 mb-3">{actionError}</p>
+              <p className="text-sm text-[var(--bad)] mb-3">{actionError}</p>
             )}
 
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setAssignModalOrder(null)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-4 py-2 text-sm text-[var(--t3)] hover:text-[var(--t1)] transition-colors"
               >
                 Відмінити
               </button>
               <button
                 onClick={handleAssign}
-                disabled={!selectedCourierId}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+                disabled={!selectedCourierId || isPending}
+                className="px-4 py-2 text-sm bg-[var(--acm)] text-[#09090b] font-medium rounded-[6px] hover:bg-[var(--acm-h)] disabled:opacity-40 transition-colors"
               >
                 Призначити
               </button>

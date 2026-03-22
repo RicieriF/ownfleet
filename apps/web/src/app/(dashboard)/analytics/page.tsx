@@ -11,10 +11,10 @@ async function fetchAnalytics() {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] px-5 py-4 card-shine">
+      <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{label}</p>
+      <p className="text-3xl font-bold text-[var(--t1)] mt-1.5 mono">{value}</p>
+      {sub && <p className="text-xs text-[var(--t4)] mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -28,14 +28,11 @@ export default async function AnalyticsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Аналітика</h1>
+      <h1 className="text-2xl font-bold text-[var(--t1)] mb-6">Аналітика</h1>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          label="Доставок за 30 днів"
-          value={summary.total_deliveries}
-        />
+        <StatCard label="Доставок за 30 днів" value={summary.total_deliveries} />
         <StatCard
           label="Виконано"
           value={`${completionPct}%`}
@@ -54,35 +51,35 @@ export default async function AnalyticsPage() {
       </div>
 
       {/* Per-courier table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-900">По курʼєрах</h2>
+      <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden card-shine">
+        <div className="px-5 py-3.5 border-b border-[var(--br)]">
+          <h2 className="text-sm font-semibold text-[var(--t1)]">По курʼєрах</h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="border-b border-[var(--br)]">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-gray-500">Курʼєр</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500">Всього</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500">Виконано</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500">Провалено</th>
-              <th className="px-4 py-3 text-right font-medium text-gray-500">Сер. час</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Курʼєр</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Всього</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Виконано</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Провалено</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Сер. час</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-[var(--br)]">
             {perCourier.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
                   Немає даних
                 </td>
               </tr>
             )}
             {perCourier.map((row) => (
-              <tr key={row.courier_id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{row.courier_name}</td>
-                <td className="px-4 py-3 text-right text-gray-700">{row.total}</td>
-                <td className="px-4 py-3 text-right text-green-700">{row.completed}</td>
-                <td className="px-4 py-3 text-right text-red-600">{row.failed}</td>
-                <td className="px-4 py-3 text-right text-gray-600">
+              <tr key={row.courier_id} className="hover:bg-[var(--s2)] transition-colors">
+                <td className="px-3 py-2.5 font-medium text-[var(--t1)]">{row.courier_name}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">{row.total}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--ok)] mono">{row.completed}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--bad)] mono">{row.failed}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--t3)] mono">
                   {row.avg_minutes != null ? `${Math.round(row.avg_minutes)} хв` : '—'}
                 </td>
               </tr>

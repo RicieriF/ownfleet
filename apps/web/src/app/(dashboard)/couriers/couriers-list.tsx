@@ -8,11 +8,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { apiPost } from '@/lib/api-client';
 
-const STATUS_CONFIG: Record<CourierStatus, { dot: string; label: string }> = {
-  online: { dot: 'bg-green-500', label: 'Онлайн' },
-  background: { dot: 'bg-yellow-400', label: 'Фон' },
-  not_responding: { dot: 'bg-red-500', label: 'Не відповідає' },
-  offline: { dot: 'bg-gray-400', label: 'Офлайн' },
+const STATUS_CONFIG: Record<CourierStatus, { dot: string; label: string; labelColor: string }> = {
+  online:         { dot: 'bg-[var(--ok)]',   label: 'На зміні',      labelColor: 'text-[var(--ok)]' },
+  background:     { dot: 'bg-[var(--warn)]',  label: 'Фон',           labelColor: 'text-[var(--warn)]' },
+  not_responding: { dot: 'bg-[var(--bad)]',   label: 'Не відповідає', labelColor: 'text-[var(--bad)]' },
+  offline:        { dot: 'bg-[var(--t4)]',    label: 'Офлайн',        labelColor: 'text-[var(--t4)]' },
 };
 
 interface Props {
@@ -26,7 +26,6 @@ export function CouriersList({ couriers: initial }: Props) {
   useEffect(() => {
     const socket = getSocket();
 
-    // Update last_ping_at and position when a courier pings
     socket.on('courier:moved', (event: CourierMovedEvent) => {
       setCouriers((prev) =>
         prev.map((c) =>
@@ -53,76 +52,62 @@ export function CouriersList({ couriers: initial }: Props) {
     try {
       await apiPost(`/api/v1/couriers/${courierId}/remind`);
     } catch {
-      // Ignore — fire-and-forget reminder
+      // fire-and-forget
     } finally {
       setRemindLoading(null);
     }
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {couriers.map((courier) => {
         const config = STATUS_CONFIG[courier.status];
         return (
           <div
             key={courier.id}
-            className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center gap-4"
+            className="bg-[var(--sf)] rounded-lg border border-[var(--br)] px-4 py-3 flex items-center gap-4 card-shine"
           >
-            {/* Status dot */}
-            <div className="relative">
-              <div className={cn('w-3 h-3 rounded-full', config.dot)} />
-              {courier.status === 'online' && (
-                <div
-                  className={cn(
-                    'absolute inset-0 w-3 h-3 rounded-full animate-ping opacity-60',
-                    config.dot,
-                  )}
-                />
+            {/* Status dot — pulse only on danger/background per design system */}
+            <div className="relative flex-shrink-0">
+              <div className={cn('w-2.5 h-2.5 rounded-full', config.dot)} />
+              {courier.status === 'not_responding' && (
+                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-[var(--bad)] animate-ping opacity-50" />
+              )}
+              {courier.status === 'background' && (
+                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-[var(--warn)] animate-pulse opacity-40" />
               )}
             </div>
 
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900">{courier.name}</span>
-                <span className="text-xs text-gray-500">{courier.phone}</span>
+                <span className="font-medium text-[var(--t1)]">{courier.name}</span>
+                <span className="text-xs text-[var(--t4)] mono">{courier.phone}</span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span
-                  className={cn(
-                    'text-xs font-medium',
-                    courier.status === 'online'
-                      ? 'text-green-600'
-                      : courier.status === 'background'
-                        ? 'text-yellow-600'
-                        : courier.status === 'not_responding'
-                          ? 'text-red-600'
-                          : 'text-gray-500',
-                  )}
-                >
+                <span className={cn('text-xs font-medium', config.labelColor)}>
                   {config.label}
                 </span>
                 {courier.last_ping_at && (
-                  <span className="text-xs text-gray-400">
-                    •{' '}
-                    {formatDistanceToNow(new Date(courier.last_ping_at), {
-                      addSuffix: true,
-                      locale: uk,
-                    })}
+                  <span className="text-xs text-[var(--t4)] mono">
+                    · {formatDistanceToNow(new Date(courier.last_ping_at), {
+                        addSuffix: true,
+                        locale: uk,
+                      })}
                   </span>
                 )}
                 {!courier.active && (
-                  <span className="text-xs text-gray-400 italic">неактивний</span>
+                  <span className="text-xs text-[var(--t4)] italic">неактивний</span>
                 )}
               </div>
             </div>
 
-            {/* Remind button for not_responding couriers */}
+            {/* Remind button — only for not_responding */}
             {courier.status === 'not_responding' && (
               <button
                 onClick={() => handleRemind(courier.id)}
                 disabled={remindLoading === courier.id}
-                className="px-3 py-1.5 text-xs bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
+                className="px-3 py-1.5 text-xs bg-[rgba(239,68,68,0.1)] text-[var(--bad)] border border-[rgba(239,68,68,0.25)] rounded-[6px] hover:bg-[rgba(239,68,68,0.2)] transition-colors disabled:opacity-50"
               >
                 {remindLoading === courier.id ? 'Надсилання...' : 'Нагадати'}
               </button>
@@ -139,6 +124,5 @@ function computeStatus(lastPingAt: string | null, courier: CourierWithStatus): C
   const diffSec = (Date.now() - new Date(lastPingAt).getTime()) / 1000;
   if (diffSec < 30) return 'online';
   if (diffSec < 300) return 'background';
-  // Keep not_responding only if courier was not_responding before — simplified rule
   return courier.status === 'not_responding' ? 'not_responding' : 'offline';
 }

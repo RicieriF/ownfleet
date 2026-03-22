@@ -38,16 +38,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+      <div className="w-full max-w-sm bg-[var(--sf)] rounded-lg border border-[var(--br)] p-8 card-shine">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Weego CMI</h1>
-          <p className="text-sm text-gray-500 mt-1">Увійдіть до свого облікового запису</p>
+          <h1 className="text-2xl font-bold text-[var(--t1)]">Weego CMI</h1>
+          <p className="text-sm text-[var(--t3)] mt-1">Увійдіть до свого облікового запису</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-[var(--t2)] mb-1">
               Email
             </label>
             <input
@@ -57,13 +57,13 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:ring-1 focus:ring-[var(--acm)] focus:border-[var(--acm)] transition-colors"
               placeholder="manager@restaurant.ua"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-[var(--t2)] mb-1">
               Пароль
             </label>
             <input
@@ -73,19 +73,21 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:ring-1 focus:ring-[var(--acm)] focus:border-[var(--acm)] transition-colors"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+            <p className="text-sm text-[var(--bad)] bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.25)] px-3 py-2 rounded-md">
+              {error}
+            </p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors"
+            className="w-full py-2 px-4 bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[#09090b] text-sm font-semibold rounded-[6px] transition-colors"
           >
             {loading ? 'Вхід...' : 'Увійти'}
           </button>
