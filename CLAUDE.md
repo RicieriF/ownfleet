@@ -47,7 +47,8 @@ B2B SaaS платформа для управління власними кур�
 |--------|-----------------|
 | `AuthModule` | JWT login/refresh/logout, tenant isolation |
 | `EstablishmentsModule` | CRUD закладів, settings, PlanAccessGuard |
-| `CouriersModule` | Управління курʼєрами, FCM tokens, статус онлайн |
+| `CouriersModule` | Управління курʼєрами, FCM tokens |
+| `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, нагадування |
 | `OrdersModule` | Замовлення, state machine, призначення курʼєра |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
@@ -69,6 +70,14 @@ establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, s
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
 couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
                  battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count)
+shifts          (id, courier_id, establishment_id,
+                 started_at TIMESTAMPTZ NOT NULL,     -- курʼєр натиснув "Вийти на зміну"
+                 ended_at TIMESTAMPTZ NULL,           -- NULL = зміна активна
+                 ended_by TEXT CHECK IN ('courier','manager','auto'),
+                 total_deliveries INT DEFAULT 0,
+                 total_distance_km NUMERIC(8,2))
+                -- Курʼєр "на зміні" ↔ shifts.ended_at IS NULL
+                -- Авто-закриття: cron кожні 30хв, закриває зміни > 16 годин без GPS-пінгу
 orders          (id, establishment_id, external_id, address, lat, lng, status, source, created_at)
                 UNIQUE(external_id, establishment_id)
 deliveries      (id, order_id, courier_id, status, assigned_at, assignment_timeout_at,
@@ -100,7 +109,46 @@ assigned → in_progress → completed
                 ↘ failed
 ```
 
+**Shifts:**
+```
+active (ended_at IS NULL) → ended (ended_at SET, ended_by = courier|manager|auto)
+```
+- Курʼєр може мати тільки одну активну зміну одночасно
+- `POST /api/v1/shifts/start` — курʼєр ініціює (тільки з мобільного додатку)
+- `POST /api/v1/shifts/end` — курʼєр або менеджер завершує
+- Cron кожні 30 хв: авто-закриття змін > 16 годин без GPS-пінгу (`ended_by = 'auto'`)
+- Курʼєр може отримувати доставки ТІЛЬКИ якщо є активна зміна
+
 Переходи тільки через явні методи state machine. Жодних прямих `UPDATE SET status=...` в обхід guards.
+
+---
+
+## Система змін (Shifts) — бізнес-логіка
+
+**Термінологія:** "На зміні" — НЕ "онлайн". Курʼєр є на зміні коли він прийшов працювати. "Онлайн" — технічний стан GPS-підключення, ніколи не показується в UI менеджера.
+
+**Ініціатор зміни:** Курʼєр (self-service). Менеджер НЕ підтверджує кожен вихід — це зайве тертя для малого закладу. Менеджер може примусово завершити зміну.
+
+**Флоу виходу на зміну (мобільний додаток):**
+1. Курʼєр відкриває додаток → бачить великий CTA "Вийти на зміну"
+2. Тап → `POST /api/v1/shifts/start` → GPS-трекінг активується
+3. Дашборд менеджера отримує WS-подію `shift:started` → курʼєр зʼявляється в списку "На зміні"
+4. Мобільний: показує таймер зміни, persistent notification "Зміна активна"
+
+**Флоу завершення зміни:**
+- Курʼєр: меню → "Завершити зміну" → confirmation dialog (захист від випадкового тапу)
+- Менеджер: може завершити з дашборду (кнопка в майбутньому розділі Курʼєри)
+- Auto: cron закриває зміни > 16 годин без GPS-пінгу (`ended_by = 'auto'`), надсилає Telegram менеджеру
+
+**Обмеження:**
+- Курʼєр НЕ може отримати доставку без активної зміни (`Guard: ShiftActiveGuard`)
+- Одна активна зміна на курʼєра одночасно (`UNIQUE` constraint на `courier_id` де `ended_at IS NULL`)
+
+**Дашборд — що показує менеджер:**
+- KPI: `X/N На зміні` (замість "онлайн")
+- Підпис: `X в дорозі · Y вільних · Z не вийшли`
+- "Не вийшли" = активні курʼєри закладу без поточної зміни
+- Нагадування: кнопка [Нагадати] → Telegram push курʼєру
 
 ---
 
