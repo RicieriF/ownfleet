@@ -63,7 +63,9 @@ B2B SaaS платформа для управління власними кур�
 ## Схема БД (скорочено)
 
 ```sql
-establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB)
+establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB,
+                 auto_dispatch BOOLEAN DEFAULT false,   -- false = тільки менеджер призначає; true = менеджер призначає + курʼєр може взяти сам
+                 delivery_sla_minutes INT NULL)          -- null = без таймера; N = SLA доставки в хвилинах
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
 couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
                  battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count)

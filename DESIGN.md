@@ -26,7 +26,7 @@
 ```html
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 ```
 
 ```css
@@ -438,15 +438,25 @@ Small stat cards above the courier list or in a row below topbar:
 - Background: `--surface` with top border `--border`
 - Height: 83px (includes safe area on iOS)
 
-### Delivery Proof Screen
+### Deliveries Screen (Home Tab)
 
-Camera viewfinder full-screen with:
-- Corner guides rendered in sage (#6aaa84) — 24px L-shaped brackets at each corner
-- GPS accuracy indicator (bottom center): `GPS ±8м · 47.8345°N 33.2180°E` — JetBrains Mono, Caption size, `--text-3`
-- Geo-match confirmation (when within 300m): sage pill "GPS підтверджено (±42м)"
-- Two action buttons below viewfinder:
-  - Primary: "Зробити фото і підтвердити" — sage button, full width
-  - Secondary ghost: "Підтвердити без фото" — `--text-4`, only if geo_match=true
+Two modes controlled by `establishments.auto_dispatch` setting:
+
+**Mode A — Тільки менеджер (`auto_dispatch: false`, default):**
+- Courier sees ONLY orders the manager explicitly assigned to them
+- Section "Призначено менеджером (N)"
+- CTA: "Розпочати доставку →" (sage ghost style — start, not accept)
+- No order pool, no self-pick — courier waits for manager to assign
+- Empty state: "Очікуємо наступне від менеджера"
+
+**Mode B — Менеджер + курʼєр (`auto_dispatch: true`):**
+- Manager can still assign orders to specific couriers (same as Mode A)
+- Additionally, courier sees a pool of unassigned orders they can pick themselves
+- Section "Доступні замовлення (N)" — unassigned pool
+- Order card CTA: "Прийняти замовлення" (sage filled button)
+- Courier can only have ONE active delivery at a time regardless of mode
+
+Completed deliveries always shown below: "Виконано сьогодні (N)" — minimal rows with order# + address + time.
 
 ### Active Delivery Screen
 
@@ -454,7 +464,7 @@ Block-style card layout — each section is a distinct `--surface` card with `--
 
 **Block 1 — Map card:**
 - Leaflet map, 230px height, CartoDB Dark Matter tiles (same as manager map)
-- Footer row inside the card: left = "Маршрут · X км · ~N хв" (`--text-4`, Caption), right = "Відкрити в навігаторі →" (`--acm`, 12px/700) — taps open the navigation bottom sheet
+- Footer row inside the card: left = "X км · ~N хв" (13px/600, `--text-2` — no "Маршрут" prefix, context is self-evident from the map), right = "Відкрити в навігаторі →" (`--acm`, 12px/700) — taps open the navigation bottom sheet
 - Route: sage dashed polyline, courier marker (green circle + initials), destination marker (order # circle)
 
 **Block 2 — Customer card:**
@@ -462,7 +472,22 @@ Block-style card layout — each section is a distinct `--surface` card with `--
 - Divider, then full address (13px/600, `--text-2`) with apartment/floor/intercom on line below (12px, `--text-4`)
 - Comment block (if present): amber-tinted bg `rgba(245,158,11,.06)`, amber border `rgba(245,158,11,.15)`, 💬 icon, amber text — visually distinct so courier doesn't miss it
 
-**Block 3 — Actions (no card bg):**
+**Delivery timer (top right of nav header, only if `delivery_sla_minutes` is set):**
+- Shows remaining time as countdown: "залишилось 42 хв" — courier sees remaining time directly, no mental math
+- Single unified pill: 12px/700, Manrope, amber color — label and number are the same size/weight/font. No split layout.
+- Amber pill: `rgba(245,158,11,.1)` bg, `rgba(245,158,11,.2)` border, 6px radius
+- When ≤ 10 хв remaining: switch to danger red (`--bad`) — critical urgency
+- Hidden entirely when `delivery_sla_minutes = null`
+- Never show "SLA" — courier-facing language must be plain Ukrainian
+
+**Block 3 — Payment card:**
+- Header: "СПОСІБ ОПЛАТИ" (11px/600, uppercase, `--text-4`, `letter-spacing:.05em`) — same pattern as all block-head titles
+- Payment method row: credit card SVG icon (`--text-2`) + method text (14px/600, `--text-1`)
+- Possible values: "Готівка", "Термінал (картою)", "Вже оплачено онлайн"
+- Terminal warning (shown ONLY for terminal payment): red-tinted card `rgba(239,68,68,.08)` bg, `rgba(239,68,68,.2)` border, 6px radius, warning SVG icon + "Не забудьте взяти термінал" (13px/700, `#fca5a5`)
+- No warning for cash or online payment
+
+**Block 4 — Actions (no card bg):**
 - Primary: "Підтвердити доставку →" — sage button, full width, 16px/800
 - Secondary ghost: "Звʼязатись з менеджером" — `--border-2` border, `--text-3`, with phone icon
 
@@ -477,6 +502,74 @@ Block-style card layout — each section is a distinct `--surface` card with `--
 - Always present: phone call (phone number is required during onboarding)
 - Optional (if configured): Telegram username, Viber number
 - Each row: colored icon bg + label + contact detail + chevron
+
+### Delivery Proof Screen
+
+Triggered from "Підтвердити доставку →" on Active Delivery screen — NOT a tab bar item. Full-screen flow.
+
+**Header:** Back arrow only (no ✕ close button — one navigation action, not two).
+
+**Block 1 — GPS hero card:**
+- Leaflet map, 200px height, zoom 17, CartoDB Dark Matter tiles — shows courier position + accuracy circle
+- Accuracy circle: `rgba(34,197,94,0.08)` fill, `rgba(34,197,94,0.4)` stroke, radius = actual GPS accuracy in meters
+- Courier marker: green filled circle with initials + green glow ring `rgba(34,197,94,0.2)`
+- Destination marker: sage outline circle with house number
+- Footer row (inside card): `"GPS активний · точність ±Nm"` (pulsing sage dot + text) + coordinates in JetBrains Mono right-aligned
+- Geo-match row (below footer): two states —
+  - **Success:** green circle icon + "GPS підтверджено" (13px/700, `--success`) + "Ви знаходитесь біля адреси доставки" (11px, `--text-4`) + "±Nм від адреси" (JetBrains Mono, 13px/700, `--success`) right-aligned
+  - **Fail:** red circle icon + "GPS не підтверджено" (13px/700, `--danger`) + "Ви далеко від адреси доставки" (11px, `--text-4`) + "±Nм від адреси" (JetBrains Mono, 13px/700, `--danger`) right-aligned
+- The two ±N values are clearly labeled differently: one is GPS signal accuracy (footer), the other is distance to delivery address (geo-match row)
+- **Geo-match NEVER blocks delivery confirmation** — GPS spoofing by ZSU is real in Ukraine (military operations disrupt civilian GPS in certain areas). Couriers must always be able to complete delivery regardless of geo-match result.
+- **Fail state — optional note block** (shown below GPS hero card when geo-match fails):
+  - Red-tinted card `rgba(239,68,68,.06)` bg, `rgba(239,68,68,.15)` border, 8px radius
+  - Header: pencil icon + "ПРИЧИНА" (uppercase, 11px/600, `--text-4`) + "необовʼязково" (10px, `--text-4`) right-aligned
+  - Textarea: transparent bg, `Manrope` 13px, `--text-2`, placeholder: "Наприклад: клієнт попросив доставити в інше місце, перешкоди GPS сигналу..."
+  - Field is optional — courier can submit without filling it. It exists for their protection in case the manager questions the geo-mismatch.
+- Address recap: "АДРЕСА ДОСТАВКИ" label (uppercase, 11px, `--text-4`) + full address (14px/600, `--text-2`)
+
+**Block 2 — Photo option (secondary, optional):**
+- Row layout: camera icon + label/subtitle + "Зробити фото" button (ghost)
+- Label: "Фото підтвердження" (13px/600, `--text-2`)
+- Subtitle: "Якщо залишаєте без особистої передачі" (11px, `--text-4`)
+- Photo is never required. GPS confirmation is the mandatory proof method in Ukraine (hand-to-hand delivery culture). Photo is supplementary evidence for non-contact scenarios.
+
+**CTA:** "Завершити доставку" — sage button, full width, 16px/800. NOT "Підтвердити отримання" (receiver's perspective — wrong).
+
+**Tab bar:** "Маршрут" tab — shows Active Delivery screen when delivery is active; shows empty state ("Немає активної доставки. Маршрут зʼявиться після прийняття замовлення.") when no delivery is active.
+
+### Statistics Screen
+
+Tab bar item "Статистика". Period selector (Тиждень / Місяць) top right, pill-style toggles.
+
+**Hero summary card** — full-width card with three equal columns (separated by `--border` vertical lines):
+- Value: JetBrains Mono, 24px/700, `--text-1`
+- Label: 11px/600, `--text-4` (e.g. "доставок", "км", "хв середній")
+- Trend: 11px/600, green (`--success`) for improvement, red (`--danger`) for decline. Format: "↑ +4 від минулого" / "↓ -2 від минулого" — always Ukrainian, never "vs" or English abbreviations.
+
+**"Останні доставки" card** — last 3–5 deliveries, clickable rows → Delivery Detail screen:
+- Status dot (8px circle, `--success` for completed) + order number in JetBrains Mono + address + chevron (›)
+- Sub-row: time (JetBrains Mono) · duration (хв) · distance (км) — `font-family:'JetBrains Mono';font-size:11px;font-weight:500;color:--text-4`
+
+**"По днях" card** — one row per day in the selected period, clickable → Day Detail screen:
+- Sage dot + full day name in Ukrainian (Понеділок, Вівторок, Середа... — NOT abbreviations Пн, Вт, Ср)
+- Sub-row: N доставок · N км (JetBrains Mono, 11px/500, `--text-4`)
+- **Today row:** `border-left: 2px solid var(--acm)` + `padding-left: 12px` — sage left border is the only visual marker for "today". No inline badge, no "сьогодні" text in the row.
+- All rows have chevron (›) — they are all clickable
+
+**Day Detail screen** (sub-screen, back button → Statistics):
+- Header: day name (15px/700) + date below (12px, `--text-4`)
+- Mini summary card: same 3-column layout as hero, but 20px/700 numbers (slightly smaller)
+- Delivery list card: same pattern as "Останні доставки" but with start→end time in sub-row ("16:18 → 16:32")
+
+**Delivery Detail screen** (sub-screen, back button → Day Detail or Statistics):
+- Header: "Замовлення #NNNN" (order # in JetBrains Mono, `--text-3`) + date/duration/distance sub-row (12px, `--text-4`) + status badge right-aligned
+- Status badge: `det-status-ok` (green tint) "Доставлено" or `det-status-fail-gps` (amber tint) "GPS не збігся" — 11px/700, 4px radius
+- History map: Leaflet, 180px height, shows route from pickup to delivery point (dashed sage polyline)
+- Info card (detail rows — label + value):
+  - Labels: 11px/600, uppercase, `letter-spacing:.05em`, `--text-4`, fixed 72px width
+  - Values: 13px/600, `--text-2` for text; JetBrains Mono 13px/500 for timestamps, duration, distance
+  - Fields: Адреса, Прийнято, Доставлено, Тривалість, Відстань, Оплата, GPS пруф (✓ Підтверджено · ±Nм / ✗ Не збігся), Фото (зроблено / не зроблено)
+- Back navigation is context-aware: from Day Detail → back to Day Detail; from Statistics recent list → back to Statistics
 
 ### GPS Consent Screen
 
@@ -561,3 +654,13 @@ export default {
 | 2026-03-22 | Sage corner guides on delivery proof camera | The camera viewfinder needs affordance — L-shaped sage guides show exactly what area the courier should capture. Clear and functional. |
 | 2026-03-22 | Battery % color coding in courier list | Courier battery is operationally critical. Color coding (muted / amber / danger) lets manager spot at-risk couriers instantly without reading numbers. |
 | 2026-03-22 | UPPERCASE table headers | ALL CAPS `<th>` with Micro typography and increased letter-spacing — established pattern in data-heavy tools (Linear, Vercel). Increases scanability of column labels. |
+| 2026-03-22 | Two dispatch modes (auto_dispatch flag) | Mode A: тільки менеджер призначає (default). Mode B: менеджер призначає + курʼєр може взяти сам. Stored as `establishments.auto_dispatch BOOLEAN`. In both modes manager can assign; difference is whether couriers also see an unassigned order pool. |
+| 2026-03-22 | Optional delivery SLA timer | Some establishments want time-bound delivery SLA, others don't. `establishments.delivery_sla_minutes INT NULL` — null hides timer entirely; when set, courier sees amber pill "залишилось N хв" (countdown) in the active delivery header. Single unified pill (12px/700, Manrope, amber) — not split label+value, not deadline clock, never shows "SLA". |
+| 2026-03-22 | GPS-first proof, photo optional | In Ukraine, delivery is hand-to-hand — photo proof (US "leave-at-door" habit) is not the norm. GPS geo-match (mandatory, 300m check) is the primary proof. Photo is secondary, labeled "Якщо залишаєте без особистої передачі". CTA is "Завершити доставку" (courier's action), not "Підтвердити отримання" (receiver's perspective — wrong). |
+| 2026-03-22 | Proof screen: back arrow only, no ✕ | Having both ← and ✕ is redundant — two buttons doing the same thing. One navigation action, one button. |
+| 2026-03-22 | Маршрут tab empty state | Tab shows Active Delivery when delivery is active. When no delivery is active, shows "Немає активної доставки" empty state. Prevents showing a half-baked UI with no context. |
+| 2026-03-22 | Payment method as separate card block in Active Delivery | Payment info separated from customer block — courier must clearly see how they will be paid before arriving. Terminal payment triggers a red warning "Не забудьте взяти термінал" to avoid situations where courier arrives without the terminal. Cash/online payment show no warning. |
+| 2026-03-22 | GPS fail state doesn't block delivery + optional note field | ZSU GPS spoofing disrupts civilian GPS in certain areas of Ukraine. Geo-match failure cannot block courier from completing delivery. Optional "Причина" textarea on fail: courier can explain mismatches for manager review, but it's never required. |
+| 2026-03-22 | Statistics: full day names, today as sage left border, chevrons | Full names (Понеділок, Вівторок...) — abbreviations (Пн, Вт...) lose context when looking at a weekly list. Today row uses sage left border (2px) as sole marker — no inline badge, no "сьогодні" text (adds visual noise). All rows have chevrons — consistent clickability signal. |
+| 2026-03-22 | Statistics: trend as "від минулого", not "vs" | "від минулого" is plain Ukrainian. "vs" is English and jarring in an all-Ukrainian interface. |
+| 2026-03-22 | JetBrains Mono loaded with weights 400;500;600;700 | Earlier only 400;500 were loaded. Elements using font-weight:700 (hero stat numbers) and 600 were getting synthesized faux-bold — visually degraded. All four weights now loaded. |
