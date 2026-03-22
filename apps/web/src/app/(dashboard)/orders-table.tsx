@@ -38,9 +38,7 @@ export function OrdersTable({ orders, couriers }: Props) {
   const [selectedCourierId, setSelectedCourierId] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const activeCouriers = couriers.filter(
-    (c) => c.active && (c.status === 'online' || c.status === 'background'),
-  );
+  const activeCouriers = couriers.filter((c) => c.active && c.on_shift);
 
   async function handleAssign() {
     if (!assignModalOrder || !selectedCourierId) return;
