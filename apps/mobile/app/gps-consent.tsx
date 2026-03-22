@@ -111,7 +111,7 @@ export default function GpsConsentScreen() {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#09090b" />
               ) : (
                 <Text style={styles.btnAllowText}>Надати доступ до GPS</Text>
               )}
@@ -139,7 +139,7 @@ function ReasonRow({ icon, text }: { icon: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f172a' },
+  safe: { flex: 1, backgroundColor: '#09090b' },
   content: {
     flex: 1,
     paddingHorizontal: 24,
@@ -151,59 +151,63 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#fafafa',
     textAlign: 'center',
     letterSpacing: -0.5,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 15,
-    color: '#94a3b8',
+    color: '#a1a1aa',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
   },
   reasonsCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: '#18181b',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27272a',
     padding: 20,
     gap: 14,
     marginBottom: 20,
   },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   reasonIcon: { fontSize: 18, lineHeight: 24 },
-  reasonText: { fontSize: 14, color: '#cbd5e1', flex: 1, lineHeight: 22 },
+  reasonText: { fontSize: 14, color: '#d4d4d8', flex: 1, lineHeight: 22 },
   note: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#71717a',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 32,
   },
   deniedCard: {
-    backgroundColor: '#450a0a',
-    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.2)',
     padding: 16,
     marginBottom: 20,
     gap: 12,
   },
   deniedText: { fontSize: 14, color: '#fca5a5', lineHeight: 20 },
   settingsBtn: {
-    backgroundColor: '#7f1d1d',
-    borderRadius: 8,
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    borderRadius: 6,
     paddingVertical: 10,
     alignItems: 'center',
   },
   settingsBtnText: { color: '#fca5a5', fontSize: 14, fontWeight: '600' },
   actions: { gap: 12 },
   btnAllow: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 18,
+    backgroundColor: '#f4f4f5',
+    borderRadius: 6,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   btnDisabled: { opacity: 0.7 },
-  btnAllowText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnAllowText: { color: '#09090b', fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
   btnSkip: { paddingVertical: 14, alignItems: 'center' },
-  btnSkipText: { color: '#64748b', fontSize: 15 },
+  btnSkipText: { color: '#71717a', fontSize: 15 },
 });
