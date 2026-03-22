@@ -9,20 +9,23 @@ import { registerPushToken } from '@/services/notifications';
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
-  const { user, isLoaded } = useAuthStore();
+  const { user, isLoaded, gpsConsentDone } = useAuthStore();
 
   useEffect(() => {
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === 'onboarding';
+    const inGpsConsent = segments[0] === 'gps-consent';
 
     if (!user && !inAuthGroup && !inOnboarding) {
       router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
-      router.replace('/(app)');
+      router.replace(gpsConsentDone ? '/(app)' : '/gps-consent');
+    } else if (user && !gpsConsentDone && !inGpsConsent && !inOnboarding) {
+      router.replace('/gps-consent');
     }
-  }, [user, isLoaded, segments, router]);
+  }, [user, isLoaded, segments, router, gpsConsentDone]);
 
   return <>{children}</>;
 }
@@ -45,6 +48,7 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
             <Stack.Screen name="onboarding" />
+            <Stack.Screen name="gps-consent" />
           </Stack>
         </AuthGuard>
       </SafeAreaProvider>

@@ -5,21 +5,25 @@ import { CourierUser } from '../types';
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'courier_user';
+const GPS_CONSENT_KEY = 'gps_consent_done';
 
 interface AuthState {
   user: CourierUser | null;
   accessToken: string | null;
   isLoaded: boolean;
+  gpsConsentDone: boolean;
   setAuth: (user: CourierUser, accessToken: string, refreshToken: string) => Promise<void>;
   clearAuth: () => Promise<void>;
   loadFromStorage: () => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
+  setGpsConsentDone: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
   isLoaded: false,
+  gpsConsentDone: false,
 
   setAuth: async (user, accessToken, refreshToken) => {
     await Promise.all([
@@ -40,15 +44,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadFromStorage: async () => {
-    const [token, userJson] = await Promise.all([
+    const [token, userJson, gpsConsent] = await Promise.all([
       AsyncStorage.getItem(ACCESS_TOKEN_KEY),
       AsyncStorage.getItem(USER_KEY),
+      AsyncStorage.getItem(GPS_CONSENT_KEY),
     ]);
+    const gpsConsentDone = gpsConsent === '1';
     if (token && userJson) {
-      set({ user: JSON.parse(userJson), accessToken: token, isLoaded: true });
+      set({ user: JSON.parse(userJson), accessToken: token, isLoaded: true, gpsConsentDone });
     } else {
-      set({ isLoaded: true });
+      set({ isLoaded: true, gpsConsentDone });
     }
+  },
+
+  setGpsConsentDone: async () => {
+    await AsyncStorage.setItem(GPS_CONSENT_KEY, '1');
+    set({ gpsConsentDone: true });
   },
 
   refreshAccessToken: async () => {
