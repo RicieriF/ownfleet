@@ -450,10 +450,33 @@ Camera viewfinder full-screen with:
 
 ### Active Delivery Screen
 
-- Persistent notification bar at top: dark surface, order address, ETA
-- Mini-map (200px height): shows route and current position
-- Three action buttons in sequence (tap to advance state): Прийняв → В дорозі → Доставлено
-- Status button uses sage for the current/next action
+Block-style card layout — each section is a distinct `--surface` card with `--border` and 8px radius. No stepper, no progress indicator (courier already knows their state).
+
+**Block 1 — Map card:**
+- Leaflet map, 230px height, CartoDB Dark Matter tiles (same as manager map)
+- Footer row inside the card: left = "Маршрут · X км · ~N хв" (`--text-4`, Caption), right = "Відкрити в навігаторі →" (`--acm`, 12px/700) — taps open the navigation bottom sheet
+- Route: sage dashed polyline, courier marker (green circle + initials), destination marker (order # circle)
+
+**Block 2 — Customer card:**
+- Header row: customer name (15px/700, `--text-1`) + "Зателефонувати" button (sage tinted, small)
+- Divider, then full address (13px/600, `--text-2`) with apartment/floor/intercom on line below (12px, `--text-4`)
+- Comment block (if present): amber-tinted bg `rgba(245,158,11,.06)`, amber border `rgba(245,158,11,.15)`, 💬 icon, amber text — visually distinct so courier doesn't miss it
+
+**Block 3 — Actions (no card bg):**
+- Primary: "Підтвердити доставку →" — sage button, full width, 16px/800
+- Secondary ghost: "Звʼязатись з менеджером" — `--border-2` border, `--text-3`, with phone icon
+
+**Navigation bottom sheet** (triggered by "Відкрити в навігаторі"):
+- Shows installed navigation apps: Google Maps, Apple Maps, Waze, 2GIS, HERE WeGo (check via `canOpenURL()` on iOS)
+- On Android: use `geo:lat,lng` intent — OS shows system app picker with ALL installed navigation apps automatically (no hardcoded list needed)
+- Note displayed at sheet bottom explaining Android behavior
+- Standard bottom sheet: handle, dark overlay, "Скасувати" button
+
+**Manager contact bottom sheet** (triggered by "Звʼязатись з менеджером"):
+- Channels shown depend on what the establishment manager configured in their dashboard settings
+- Always present: phone call (phone number is required during onboarding)
+- Optional (if configured): Telegram username, Viber number
+- Each row: colored icon bg + label + contact detail + chevron
 
 ### GPS Consent Screen
 
