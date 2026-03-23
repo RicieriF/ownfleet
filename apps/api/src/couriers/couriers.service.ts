@@ -35,11 +35,15 @@ export class CouriersService {
 
     const courierIds = couriers.map((c) => c.id);
 
-    // Last ping per courier via DISTINCT ON (single query)
+    // Last ping per courier via DISTINCT ON (single query, includes lat/lng)
     const lastPings = await this.prisma.$queryRaw<
-      { courier_id: string; created_at: Date }[]
+      { courier_id: string; created_at: Date; lat: number | null; lng: number | null }[]
     >`
-      SELECT DISTINCT ON (courier_id) courier_id, created_at
+      SELECT DISTINCT ON (courier_id)
+        courier_id,
+        created_at,
+        ST_Y(location::geometry) AS lat,
+        ST_X(location::geometry) AS lng
       FROM location_pings
       WHERE courier_id = ANY(${courierIds}::text[])
       ORDER BY courier_id, created_at DESC
@@ -55,15 +59,33 @@ export class CouriersService {
     });
     const activeSet = new Set(activeDeliveries.map((d) => d.courier_id));
 
-    const pingMap = new Map(lastPings.map((p) => [p.courier_id, p.created_at]));
+    // Active shifts per courier
+    const activeShifts = await this.prisma.shift.findMany({
+      where: { courier_id: { in: courierIds }, ended_at: null },
+      select: { id: true, courier_id: true, started_at: true, planned_end_at: true },
+    });
+    const shiftMap = new Map(activeShifts.map((s) => [s.courier_id, s]));
+
+    const pingMap = new Map(lastPings.map((p) => [p.courier_id, p]));
 
     return couriers.map((c) => {
-      const pingAt = pingMap.get(c.id) ?? null;
+      const ping = pingMap.get(c.id) ?? null;
+      const activeShift = shiftMap.get(c.id) ?? null;
       const hasActiveDelivery = activeSet.has(c.id);
       return {
         ...c,
-        last_ping_at: pingAt,
-        online_status: resolveStatus(pingAt, hasActiveDelivery),
+        last_ping_at: ping?.created_at ?? null,
+        last_lat: ping?.lat ?? null,
+        last_lng: ping?.lng ?? null,
+        on_shift: activeShift !== null,
+        active_shift: activeShift
+          ? {
+              id: activeShift.id,
+              started_at: activeShift.started_at,
+              planned_end_at: activeShift.planned_end_at,
+            }
+          : null,
+        status: resolveStatus(ping?.created_at ?? null, hasActiveDelivery),
       };
     });
   }

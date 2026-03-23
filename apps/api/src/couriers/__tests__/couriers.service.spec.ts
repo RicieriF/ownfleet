@@ -24,6 +24,9 @@ const mockPrisma = {
   delivery: {
     findMany: jest.fn().mockResolvedValue([]),
   },
+  shift: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   $queryRaw: jest.fn().mockResolvedValue([]),
 };
 
@@ -41,6 +44,8 @@ describe('CouriersService', () => {
     service = module.get<CouriersService>(CouriersService);
     jest.clearAllMocks();
     mockPrisma.$queryRaw.mockResolvedValue([]);
+    mockPrisma.delivery.findMany.mockResolvedValue([]);
+    mockPrisma.shift.findMany.mockResolvedValue([]);
   });
 
   describe('multi-tenant isolation', () => {
