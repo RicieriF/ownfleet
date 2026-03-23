@@ -83,7 +83,7 @@ export async function startBackgroundLocationTask(): Promise<void> {
       ? {
           notificationTitle: 'Weego — доставка активна',
           notificationBody: 'GPS відстеження увімкнено',
-          notificationColor: '#2563eb',
+          notificationColor: '#6aaa84',
         }
       : undefined,
   });

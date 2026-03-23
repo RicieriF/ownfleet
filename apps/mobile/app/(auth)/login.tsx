@@ -78,7 +78,7 @@ export default function LoginScreen() {
               value={phone}
               onChangeText={setPhone}
               placeholder="+380XXXXXXXXX"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#71717a"
               keyboardType="phone-pad"
               autoCapitalize="none"
               autoCorrect={false}
@@ -90,7 +90,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#71717a"
               secureTextEntry
             />
 
@@ -116,24 +116,24 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f172a' },
+  safe: { flex: 1, backgroundColor: '#09090b' },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 40 },
   logo: { fontSize: 48, marginBottom: 12 },
-  title: { fontSize: 28, fontWeight: '700', color: '#f8fafc', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: '#94a3b8', marginTop: 4 },
-  form: { backgroundColor: '#1e293b', borderRadius: 16, padding: 24 },
-  label: { fontSize: 14, fontWeight: '500', color: '#cbd5e1', marginBottom: 8 },
+  title: { fontSize: 28, fontFamily: 'Manrope_700Bold', color: '#fafafa', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: '#a1a1aa', marginTop: 4 },
+  form: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
+  label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d4d4d8', marginBottom: 8 },
   input: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#09090b',
     borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 10,
+    borderColor: '#27272a',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#f8fafc',
+    color: '#fafafa',
   },
   error: {
     color: '#f87171',
@@ -144,12 +144,12 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   btn: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
+    backgroundColor: '#6aaa84',
+    borderRadius: 6,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
   },
-  btnDisabled: { backgroundColor: '#1d4ed8', opacity: 0.7 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
+  btnText: { color: '#fff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
 });

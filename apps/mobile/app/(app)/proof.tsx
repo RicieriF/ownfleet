@@ -20,6 +20,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -146,17 +147,20 @@ export default function ProofScreen() {
         <View style={styles.locationBox}>
           {locationLoading ? (
             <View style={styles.locationRow}>
-              <ActivityIndicator size="small" color="#2563eb" />
+              <ActivityIndicator size="small" color="#6aaa84" />
               <Text style={styles.locationText}>Отримуємо координати...</Text>
             </View>
           ) : locationAcquired ? (
             <View style={styles.locationRow}>
-              <Text style={styles.locationIcon}>📍</Text>
+              <Ionicons name="location" size={18} color="#6aaa84" />
               <Text style={styles.locationOk}>Геолокація отримана</Text>
             </View>
           ) : (
             <TouchableOpacity onPress={acquireLocation} style={styles.locationRetry}>
-              <Text style={styles.locationRetryText}>⚠️ Натисніть для отримання координат</Text>
+              <View style={styles.locationRow}>
+                <Ionicons name="warning-outline" size={18} color="#f59e0b" />
+                <Text style={styles.locationRetryText}>Натисніть для отримання координат</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -172,7 +176,7 @@ export default function ProofScreen() {
             </>
           ) : (
             <TouchableOpacity style={styles.photoBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
-              <Text style={styles.photoBtnIcon}>📷</Text>
+              <Ionicons name="camera-outline" size={36} color="#a1a1aa" style={{ marginBottom: 8 }} />
               <Text style={styles.photoBtnText}>Додати фото (необовʼязково)</Text>
             </TouchableOpacity>
           )}
@@ -191,7 +195,7 @@ export default function ProofScreen() {
           {submitting ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitBtnText}>✅ Підтвердити здачу</Text>
+            <Text style={styles.submitBtnText}>Підтвердити здачу</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -200,48 +204,46 @@ export default function ProofScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f172a' },
+  safe: { flex: 1, backgroundColor: '#09090b' },
   content: { padding: 24, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: '700', color: '#f1f5f9', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#64748b', lineHeight: 22, marginBottom: 28 },
+  title: { fontSize: 24, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
+  subtitle: { fontSize: 15, color: '#71717a', lineHeight: 22, marginBottom: 28 },
   locationBox: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#18181b',
+    borderRadius: 8,
     padding: 16,
     marginBottom: 20,
   },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  locationIcon: { fontSize: 18 },
-  locationText: { color: '#94a3b8', fontSize: 14 },
-  locationOk: { color: '#22c55e', fontSize: 14, fontWeight: '500' },
+  locationText: { color: '#a1a1aa', fontSize: 14 },
+  locationOk: { color: '#22c55e', fontSize: 14, fontFamily: 'Manrope_500Medium' },
   locationRetry: { alignItems: 'center' },
   locationRetryText: { color: '#f59e0b', fontSize: 14 },
   photoSection: { marginBottom: 24 },
   photoBtn: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: '#18181b',
+    borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#334155',
+    borderColor: '#27272a',
     borderStyle: 'dashed',
     padding: 32,
     alignItems: 'center',
   },
-  photoBtnIcon: { fontSize: 36, marginBottom: 8 },
-  photoBtnText: { color: '#94a3b8', fontSize: 15 },
+  photoBtnText: { color: '#a1a1aa', fontSize: 15 },
   photoPreview: {
     width: '100%',
     height: 220,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 12,
   },
   removePhoto: { alignItems: 'center' },
   removePhotoText: { color: '#ef4444', fontSize: 14 },
   submitBtn: {
-    backgroundColor: '#16a34a',
-    borderRadius: 14,
+    backgroundColor: '#6aaa84',
+    borderRadius: 6,
     paddingVertical: 20,
     alignItems: 'center',
   },
   submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  submitBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Manrope_700Bold' },
 });

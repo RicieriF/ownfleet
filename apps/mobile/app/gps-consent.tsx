@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   icon: { fontSize: 64 },
   title: {
     fontSize: 26,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: '#fafafa',
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -198,16 +198,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  settingsBtnText: { color: '#fca5a5', fontSize: 14, fontWeight: '600' },
+  settingsBtnText: { color: '#fca5a5', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
   actions: { gap: 12 },
   btnAllow: {
-    backgroundColor: '#f4f4f5',
+    backgroundColor: '#6aaa84',
     borderRadius: 6,
     paddingVertical: 16,
     alignItems: 'center',
   },
   btnDisabled: { opacity: 0.7 },
-  btnAllowText: { color: '#09090b', fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  btnAllowText: { color: '#fafafa', fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.2 },
   btnSkip: { paddingVertical: 14, alignItems: 'center' },
   btnSkipText: { color: '#71717a', fontSize: 15 },
 });

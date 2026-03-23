@@ -3,6 +3,13 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+} from '@expo-google-fonts/manrope';
 import { useAuthStore } from '@/store/auth';
 import { registerPushToken } from '@/services/notifications';
 
@@ -33,11 +40,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const { loadFromStorage } = useAuthStore();
 
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
+
   useEffect(() => {
     loadFromStorage();
     // Register FCM token (fire-and-forget — no await intentional)
     registerPushToken().catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hold splash until fonts are ready
+  if (!fontsLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

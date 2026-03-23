@@ -158,7 +158,7 @@ export default function MainScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator color="#2563eb" style={{ marginTop: 80 }} />
+        <ActivityIndicator color="#6aaa84" style={{ marginTop: 80 }} />
       </SafeAreaView>
     );
   }
@@ -220,11 +220,11 @@ function AssignedState({
   return (
     <View style={styles.card}>
       <View style={styles.statusBadge}>
-        <Text style={styles.statusText}>📦 Нова доставка</Text>
+        <Text style={styles.statusText}>Нова доставка</Text>
       </View>
       <Text style={styles.address}>{delivery.order.address}</Text>
       {delivery.order.notes ? (
-        <Text style={styles.notes}>💬 {delivery.order.notes}</Text>
+        <Text style={styles.notes}>{delivery.order.notes}</Text>
       ) : null}
       {delivery.order.external_id ? (
         <Text style={styles.externalId}>№ {delivery.order.external_id}</Text>
@@ -238,7 +238,7 @@ function AssignedState({
         {actionLoading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.btnText}>✅ Прийняти доставку</Text>
+          <Text style={styles.btnText}>Прийняти доставку</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -255,12 +255,12 @@ function InProgressState({
   return (
     <View style={styles.card}>
       <View style={[styles.statusBadge, styles.statusBadgeActive]}>
-        <Text style={styles.statusText}>🛵 Доставка активна</Text>
+        <Text style={styles.statusText}>Доставка активна</Text>
       </View>
       <Text style={styles.gpsLabel}>GPS відстеження увімкнено</Text>
       <Text style={styles.address}>{delivery.order.address}</Text>
       {delivery.order.notes ? (
-        <Text style={styles.notes}>💬 {delivery.order.notes}</Text>
+        <Text style={styles.notes}>{delivery.order.notes}</Text>
       ) : null}
       {delivery.order.external_id ? (
         <Text style={styles.externalId}>№ {delivery.order.external_id}</Text>
@@ -270,14 +270,14 @@ function InProgressState({
         onPress={onComplete}
         activeOpacity={0.8}
       >
-        <Text style={styles.btnText}>📸 Здати замовлення</Text>
+        <Text style={styles.btnText}>Здати замовлення</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f172a' },
+  safe: { flex: 1, backgroundColor: '#09090b' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -285,42 +285,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: '#27272a',
   },
-  headerName: { fontSize: 16, color: '#f1f5f9', fontWeight: '500' },
-  logoutBtn: { fontSize: 14, color: '#64748b' },
+  headerName: { fontSize: 16, color: '#fafafa', fontFamily: 'Manrope_500Medium' },
+  logoutBtn: { fontSize: 14, color: '#71717a' },
   content: { flex: 1, padding: 20, justifyContent: 'center' },
   idle: { alignItems: 'center', paddingHorizontal: 32 },
   idleEmoji: { fontSize: 56, marginBottom: 16 },
-  idleTitle: { fontSize: 22, fontWeight: '700', color: '#f1f5f9', marginBottom: 8 },
-  idleSub: { fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
+  idleSub: { fontSize: 15, color: '#71717a', textAlign: 'center', lineHeight: 22 },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 20,
+    backgroundColor: '#18181b',
+    borderRadius: 8,
     padding: 24,
   },
   statusBadge: {
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#6aaa84',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignSelf: 'flex-start',
     marginBottom: 16,
   },
-  statusBadgeActive: { backgroundColor: '#15803d' },
-  statusText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  statusBadgeActive: { backgroundColor: '#5c9973' },
+  statusText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   gpsLabel: { fontSize: 12, color: '#22c55e', marginBottom: 12 },
-  address: { fontSize: 20, fontWeight: '700', color: '#f1f5f9', lineHeight: 28, marginBottom: 8 },
-  notes: { fontSize: 14, color: '#94a3b8', marginBottom: 6 },
-  externalId: { fontSize: 13, color: '#64748b', marginBottom: 20 },
+  address: { fontSize: 20, fontFamily: 'Manrope_700Bold', color: '#fafafa', lineHeight: 28, marginBottom: 8 },
+  notes: { fontSize: 14, color: '#a1a1aa', marginBottom: 6 },
+  externalId: { fontSize: 13, color: '#71717a', marginBottom: 20 },
   btn: {
-    borderRadius: 12,
+    borderRadius: 6,
     paddingVertical: 18,
     alignItems: 'center',
     marginTop: 8,
   },
-  btnAccept: { backgroundColor: '#2563eb' },
-  btnComplete: { backgroundColor: '#16a34a' },
+  btnAccept: { backgroundColor: '#6aaa84' },
+  btnComplete: { backgroundColor: '#6aaa84' },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  btnText: { color: '#fff', fontSize: 17, fontFamily: 'Manrope_700Bold' },
 });
