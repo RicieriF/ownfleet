@@ -18,7 +18,7 @@ export interface Establishment {
   paid_until: string | null;
   onboarding_status: 'pending' | 'couriers_added' | 'first_order' | 'completed';
   settings: {
-    retention_days?: number;
+    retention_orders_days?: number;
     retention_pings_days?: number;
     [key: string]: unknown;
   } | null;
