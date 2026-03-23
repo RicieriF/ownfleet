@@ -124,6 +124,18 @@ export interface CourierAnalytics {
   avg_minutes: number | null;
 }
 
+// ── Onboarding ─────────────────────────────────────────────────────────────
+
+export interface InviteToken {
+  id: string;
+  courier_id: string;
+  token: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+  courier: { name: string };
+}
+
 // ── Webhooks ───────────────────────────────────────────────────────────────
 
 export interface Webhook {

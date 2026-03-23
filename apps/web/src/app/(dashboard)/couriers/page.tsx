@@ -1,10 +1,16 @@
 import { apiFetch } from '@/lib/api';
-import { CourierWithStatus } from '@/types';
+import { CourierWithStatus, InviteToken } from '@/types';
 import { CouriersList } from './couriers-list';
+import { InvitePanel } from './invite-panel';
 
 export default async function CouriersPage() {
-  const couriers = await apiFetch<CourierWithStatus[]>('/api/v1/couriers/status');
+  const [couriers, invites] = await Promise.all([
+    apiFetch<CourierWithStatus[]>('/api/v1/couriers/status'),
+    apiFetch<InviteToken[]>('/api/v1/onboarding/invites'),
+  ]);
+
   const onShift = couriers.filter((c) => c.on_shift).length;
+  const activeCouriers = couriers.filter((c) => c.active);
 
   return (
     <div>
@@ -15,6 +21,10 @@ export default async function CouriersPage() {
         </span>
       </div>
       <CouriersList couriers={couriers} />
+      <InvitePanel
+        couriers={activeCouriers.map((c) => ({ id: c.id, name: c.name }))}
+        initialInvites={invites}
+      />
     </div>
   );
 }
