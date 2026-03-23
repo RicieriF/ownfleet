@@ -16,6 +16,7 @@ import { IntegrationsModule } from './integrations/integrations.module.js';
 import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
+import { ShiftsModule } from './shifts/shifts.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -42,6 +43,7 @@ import { HealthController } from './health/health.controller.js';
     OnboardingModule,
     AnalyticsModule,
     WebhooksModule,
+    ShiftsModule,
   ],
   controllers: [HealthController],
   providers: [

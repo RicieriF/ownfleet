@@ -1,3 +1,15 @@
+export interface Shift {
+  id: string;
+  courier_id: string;
+  establishment_id: string;
+  started_at: string;
+  ended_at: string | null;
+  ended_by: 'courier' | 'manager' | 'auto' | null;
+  planned_end_at: string | null;
+  total_deliveries: number;
+  total_distance_km: string;
+}
+
 export interface CourierUser {
   id: string;
   establishment_id: string;

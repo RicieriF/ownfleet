@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ShiftsService } from '../shifts/shifts.service.js';
 import { OrderStatus } from '@prisma/client';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -15,7 +16,22 @@ const TERMINAL_STATUSES: OrderStatus[] = [
 export class RetentionService {
   private readonly logger = new Logger(RetentionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly shiftsService: ShiftsService,
+  ) {}
+
+  /**
+   * Runs every 30 minutes.
+   * Auto-closes shifts that have been active for 16+ hours without a GPS ping.
+   */
+  @Cron('0 */30 * * * *', { name: 'auto-close-stale-shifts', timeZone: 'UTC' })
+  async autoCloseStaleShifts(): Promise<void> {
+    const closed = await this.shiftsService.autoCloseStaleShifts();
+    if (closed > 0) {
+      this.logger.log(`Auto-close cron: closed ${closed} stale shift(s)`);
+    }
+  }
 
   /**
    * Runs daily at 03:00 UTC.

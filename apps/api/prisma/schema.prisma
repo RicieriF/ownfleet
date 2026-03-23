@@ -91,6 +91,7 @@ model Establishment {
 
   users          User[]
   couriers       Courier[]
+  shifts         Shift[]
   orders         Order[]
   integrations   Integration[]
   webhooks       Webhook[]
@@ -162,10 +163,36 @@ model Courier {
   deliveries     Delivery[]
   location_pings LocationPing[]
   invite_tokens  InviteToken[]
+  shifts         Shift[]
   user           User?
 
   @@index([establishment_id])
   @@map("couriers")
+}
+
+// ─────────────────────────────────────────
+// Shifts
+// ─────────────────────────────────────────
+
+model Shift {
+  id               String    @id @default(uuid())
+  courier_id       String
+  establishment_id String
+  started_at       DateTime  @default(now())
+  ended_at         DateTime?
+  ended_by         String?   // 'courier' | 'manager' | 'auto'
+  planned_end_at   DateTime?
+  total_deliveries Int       @default(0)
+  total_distance_km Decimal  @default(0) @db.Decimal(8, 2)
+  created_at       DateTime  @default(now())
+
+  courier       Courier       @relation(fields: [courier_id], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@index([courier_id])
+  @@index([establishment_id])
+  @@index([courier_id, ended_at])
+  @@map("shifts")
 }
 
 // ─────────────────────────────────────────

@@ -45,6 +45,7 @@ export interface Shift {
   started_at: string;
   ended_at: string | null;
   ended_by: 'courier' | 'manager' | 'auto' | null;
+  planned_end_at: string | null;
   total_deliveries: number;
   total_distance_km: number | null;
 }
@@ -53,6 +54,8 @@ export interface CourierWithStatus extends Courier {
   status: CourierStatus;
   /** true when courier has an active shift (ended_at IS NULL) */
   on_shift: boolean;
+  /** Populated when on_shift=true */
+  active_shift: Pick<Shift, 'id' | 'started_at' | 'planned_end_at'> | null;
   last_ping_at: string | null;
   last_lat: number | null;
   last_lng: number | null;
