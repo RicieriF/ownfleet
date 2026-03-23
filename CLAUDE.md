@@ -74,6 +74,7 @@ shifts          (id, courier_id, establishment_id,
                  started_at TIMESTAMPTZ NOT NULL,     -- курʼєр натиснув "Вийти на зміну"
                  ended_at TIMESTAMPTZ NULL,           -- NULL = зміна активна
                  ended_by TEXT CHECK IN ('courier','manager','auto'),
+                 planned_end_at TIMESTAMPTZ NULL,     -- опціональний дедлайн зміни (таймер у мобільному)
                  total_deliveries INT DEFAULT 0,
                  total_distance_km NUMERIC(8,2))
                 -- Курʼєр "на зміні" ↔ shifts.ended_at IS NULL
@@ -133,11 +134,11 @@ active (ended_at IS NULL) → ended (ended_at SET, ended_by = courier|manager|au
 1. Курʼєр відкриває додаток → бачить великий CTA "Вийти на зміну"
 2. Тап → `POST /api/v1/shifts/start` → GPS-трекінг активується
 3. Дашборд менеджера отримує WS-подію `shift:started` → курʼєр зʼявляється в списку "На зміні"
-4. Мобільний: показує таймер зміни, persistent notification "Зміна активна"
+4. Мобільний: показує таймер зміни в UI (без persistent notification — курʼєр відпочиває між доставками)
 
 **Флоу завершення зміни:**
 - Курʼєр: меню → "Завершити зміну" → confirmation dialog (захист від випадкового тапу)
-- Менеджер: може завершити з дашборду (кнопка в майбутньому розділі Курʼєри)
+- Менеджер: може завершити з дашборду (кнопка в розділі Курʼєри → InvitePanel → список активних курʼєрів)
 - Auto: cron закриває зміни > 16 годин без GPS-пінгу (`ended_by = 'auto'`), надсилає Telegram менеджеру
 
 **Обмеження:**
@@ -226,7 +227,8 @@ FCM push при `invalid_registration` → автоматично видалит
 
 - **Foreground service** (Android) + **background location** (iOS) — GPS працює у фоні без участі курʼєра
 - Пінг кожні **15 секунд** під час активної доставки
-- При старті доставки → показувати **persistent notification** у шторці (незакривне)
+- При старті доставки (`in_progress`) → показувати **persistent notification** у шторці (незакривне, тримає GPS живим)
+- При активній зміні без доставки → notification НЕ показується (курʼєр відпочиває)
 - Onboarding: запитувати `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` для Xiaomi/Samsung/Huawei
 
 ---
@@ -259,24 +261,50 @@ FCM push при `invalid_registration` → автоматично видалит
 
 ---
 
-## Порядок реалізації (дотримуватись)
+## Статус реалізації
 
+Всі заплановані компоненти реалізовані та закомічені в `main`.
+
+**API (NestJS) — ✅ 13/13 модулів:**
 ```
-1.  Prisma schema + migrations (всі таблиці одразу)
-2.  AuthModule (JWT + refresh tokens)
-3.  EstablishmentsModule + PlanAccessGuard
-4.  CouriersModule
-5.  OrdersModule (state machine)
-6.  TrackingModule (GPS пінги + Redis + WebSocket)
-7.  ProofOfDeliveryModule
-8.  NotificationsModule (FCM + Telegram)
-9.  RetentionModule (cron jobs)
-10. IntegrationsModule (Poster → iiko)
-11. OnboardingModule
-12. AnalyticsModule
-13. Manager Dashboard (Next.js) — після готового API
-14. Courier App (React Native) — після Dashboard
+✅  1. Prisma schema + migrations
+✅  2. AuthModule (JWT + refresh tokens)
+✅  3. EstablishmentsModule + PlanAccessGuard
+✅  4. CouriersModule
+✅  5. OrdersModule (state machine)
+✅  6. TrackingModule (GPS пінги + Redis + WebSocket)
+✅  7. ProofOfDeliveryModule
+✅  8. NotificationsModule (FCM + Telegram)
+✅  9. RetentionModule (cron jobs)
+✅ 10. IntegrationsModule (Poster webhook + iiko polling)
+✅ 11. OnboardingModule (invite tokens)
+✅ 12. AnalyticsModule
+✅ 13. WebhooksModule (outbound HMAC + Bull retry)
 ```
+
+**Web Dashboard (Next.js) — ✅ 7/7 сторінок:**
+```
+✅  /               — KPI + активні доставки + статус курʼєрів
+✅  /couriers       — список курʼєрів + invite panel
+✅  /map            — fullscreen Leaflet + OSRM routing
+✅  /analytics      — summary KPIs + per-courier breakdown
+✅  /integrations   — Poster + iiko config cards
+✅  /webhooks       — CRUD webhooks + HMAC secret
+✅  /settings       — дані закладу + retention config
+```
+
+**Mobile App (React Native + Expo) — ✅ реалізовано:**
+```
+✅  Авторизація (login screen + JWT + refresh)
+✅  Головний екран (4 стани: no shift → idle → assigned → in_progress)
+✅  Proof of delivery (гео + фото upload до R2)
+✅  GPS (background location + foreground ping 15с)
+✅  FCM push notifications
+✅  Onboarding по invite token
+✅  Zustand stores (auth + shift з AsyncStorage persistence)
+```
+
+**Тести — ✅ 180 тестів / 17 суїтів / all green**
 
 ---
 
