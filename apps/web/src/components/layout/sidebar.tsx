@@ -10,16 +10,18 @@ import {
   BarChart2,
   Settings,
   Webhook,
+  Plug,
   LogOut,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { href: '/',           label: 'Замовлення',    icon: ClipboardList },
-  { href: '/couriers',   label: 'Курʼєри',       icon: Users },
-  { href: '/map',        label: 'Карта',          icon: Map },
-  { href: '/analytics',  label: 'Аналітика',     icon: BarChart2 },
-  { href: '/webhooks',   label: 'Webhooks',      icon: Webhook },
-  { href: '/settings',   label: 'Налаштування',  icon: Settings },
+  { href: '/',              label: 'Замовлення',    icon: ClipboardList },
+  { href: '/couriers',      label: 'Курʼєри',       icon: Users },
+  { href: '/map',           label: 'Карта',          icon: Map },
+  { href: '/analytics',     label: 'Аналітика',     icon: BarChart2 },
+  { href: '/integrations',  label: 'Інтеграції',    icon: Plug },
+  { href: '/webhooks',      label: 'Webhooks',      icon: Webhook },
+  { href: '/settings',      label: 'Налаштування',  icon: Settings },
 ] as const;
 
 export function Sidebar() {
