@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
+import { ShiftActiveGuard } from '../shifts/guards/shift-active.guard.js';
 import { ProofOfDeliveryService } from './proof-of-delivery.service.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
@@ -24,6 +25,7 @@ export class ProofOfDeliveryController {
 
   @Patch(':id/start')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ShiftActiveGuard)
   start(@Param('id') id: string, @Req() req: any) {
     return this.service.startDelivery(id, req.user as AuthenticatedUser);
   }

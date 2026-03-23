@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TrackingGateway } from '../tracking/tracking.gateway';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { UpdatePlannedEndDto } from './dto/update-planned-end.dto';
 import { JwtPayload } from '../auth/auth.types';
@@ -14,7 +15,10 @@ import { JwtPayload } from '../auth/auth.types';
 export class ShiftsService {
   private readonly logger = new Logger(ShiftsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: TrackingGateway,
+  ) {}
 
   // ── Courier: start shift ──────────────────────────────────────────────────
 
@@ -39,6 +43,12 @@ export class ShiftsService {
     });
 
     this.logger.log(`Shift started: courier=${user.courier_id} shift=${shift.id}`);
+    this.gateway.broadcastToEstablishment(user.establishment_id, 'shift:started', {
+      shift_id: shift.id,
+      courier_id: shift.courier_id,
+      started_at: shift.started_at,
+      planned_end_at: shift.planned_end_at,
+    });
     return shift;
   }
 
@@ -62,6 +72,12 @@ export class ShiftsService {
     });
 
     this.logger.log(`Shift ended by courier: shift=${shift.id}`);
+    this.gateway.broadcastToEstablishment(updated.establishment_id, 'shift:ended', {
+      shift_id: updated.id,
+      courier_id: updated.courier_id,
+      ended_by: 'courier',
+      ended_at: updated.ended_at,
+    });
     return updated;
   }
 
@@ -91,6 +107,12 @@ export class ShiftsService {
     });
 
     this.logger.log(`Shift ended by manager: shift=${shiftId}`);
+    this.gateway.broadcastToEstablishment(updated.establishment_id, 'shift:ended', {
+      shift_id: updated.id,
+      courier_id: updated.courier_id,
+      ended_by: 'manager',
+      ended_at: updated.ended_at,
+    });
     return updated;
   }
 
@@ -137,8 +159,10 @@ export class ShiftsService {
   async autoCloseStaleShifts(): Promise<number> {
     const cutoff = new Date(Date.now() - 16 * 60 * 60 * 1000);
 
-    const staleShifts = await this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT s.id
+    const staleShifts = await this.prisma.$queryRaw<
+      { id: string; courier_id: string; establishment_id: string }[]
+    >`
+      SELECT s.id, s.courier_id, s.establishment_id
       FROM shifts s
       WHERE s.ended_at IS NULL
         AND s.started_at < ${cutoff}
@@ -151,10 +175,20 @@ export class ShiftsService {
 
     if (staleShifts.length === 0) return 0;
 
+    const endedAt = new Date();
     await this.prisma.shift.updateMany({
       where: { id: { in: staleShifts.map((s) => s.id) } },
-      data: { ended_at: new Date(), ended_by: 'auto' },
+      data: { ended_at: endedAt, ended_by: 'auto' },
     });
+
+    for (const s of staleShifts) {
+      this.gateway.broadcastToEstablishment(s.establishment_id, 'shift:ended', {
+        shift_id: s.id,
+        courier_id: s.courier_id,
+        ended_by: 'auto',
+        ended_at: endedAt,
+      });
+    }
 
     this.logger.log(`Auto-closed ${staleShifts.length} stale shift(s)`);
     return staleShifts.length;

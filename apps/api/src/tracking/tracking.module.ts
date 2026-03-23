@@ -38,6 +38,6 @@ import { REDIS_CLIENT, REDIS_SUBSCRIBER } from './redis.provider.js';
       inject: [ConfigService],
     },
   ],
-  exports: [TrackingService],
+  exports: [TrackingService, TrackingGateway],
 })
 export class TrackingModule {}

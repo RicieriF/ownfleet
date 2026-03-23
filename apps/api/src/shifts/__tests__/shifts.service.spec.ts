@@ -2,7 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ShiftsService } from '../shifts.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TrackingGateway } from '../../tracking/tracking.gateway';
 import { JwtPayload } from '../../auth/auth.types';
+
+const mockGateway = {
+  broadcastToEstablishment: jest.fn(),
+};
 
 const mockPrisma = {
   shift: {
@@ -38,6 +43,7 @@ describe('ShiftsService', () => {
       providers: [
         ShiftsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: TrackingGateway, useValue: mockGateway },
       ],
     }).compile();
 
@@ -168,7 +174,10 @@ describe('ShiftsService', () => {
     });
 
     it('closes stale shifts and returns count', async () => {
-      mockPrisma.$queryRaw.mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { id: 's1', courier_id: 'c1', establishment_id: 'est-1' },
+        { id: 's2', courier_id: 'c2', establishment_id: 'est-1' },
+      ]);
       mockPrisma.shift.updateMany.mockResolvedValue({ count: 2 });
 
       const result = await service.autoCloseStaleShifts();

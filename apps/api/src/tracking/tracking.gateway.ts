@@ -106,4 +106,11 @@ export class TrackingGateway
   handleDisconnect(socket: Socket): void {
     this.logger.log(`WS disconnected: ${socket.id}`);
   }
+
+  // ── Public API for other services to broadcast establishment-scoped events ─
+
+  broadcastToEstablishment(establishmentId: string, event: string, data: unknown): void {
+    const room = `est:${establishmentId}`;
+    this.server.to(room).emit(event, data);
+  }
 }
