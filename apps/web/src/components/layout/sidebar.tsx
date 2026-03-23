@@ -9,6 +9,7 @@ import {
   Map,
   BarChart2,
   Settings,
+  Webhook,
   LogOut,
 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/couriers',   label: 'Курʼєри',       icon: Users },
   { href: '/map',        label: 'Карта',          icon: Map },
   { href: '/analytics',  label: 'Аналітика',     icon: BarChart2 },
+  { href: '/webhooks',   label: 'Webhooks',      icon: Webhook },
   { href: '/settings',   label: 'Налаштування',  icon: Settings },
 ] as const;
 
