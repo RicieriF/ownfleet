@@ -10,7 +10,7 @@ const mockInitializeApp = jest.fn(() => ({ messaging: mockMessaging }));
 
 jest.mock('firebase-admin', () => ({
   credential: { cert: jest.fn() },
-  initializeApp: (...args: unknown[]) => mockInitializeApp(...args),
+  initializeApp: (..._args: unknown[]) => mockInitializeApp(),
   app: {},
 }));
 
