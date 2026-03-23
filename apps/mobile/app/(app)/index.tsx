@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
+import { useShiftStore } from '@/store/shift';
 import { apiGet, apiPost, apiPatch } from '@/api/client';
 import { ActiveDelivery, Shift } from '@/types';
 import {
@@ -90,7 +91,7 @@ const DURATION_PRESETS = [
 export default function MainScreen() {
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
-  const [shift, setShift] = useState<Shift | null>(null);
+  const { shift, setShift, clearShift, hydrateFromStorage } = useShiftStore();
   const [delivery, setDelivery] = useState<ActiveDelivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -109,7 +110,7 @@ export default function MainScreen() {
         apiGet<Shift | null>('/api/v1/shifts/my'),
         apiGet<ActiveDelivery | null>('/api/v1/deliveries/active'),
       ]);
-      setShift(shiftData);
+      await setShift(shiftData);
       setDelivery(deliveryData);
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
@@ -118,7 +119,7 @@ export default function MainScreen() {
     } finally {
       setLoading(false);
     }
-  }, [clearAuth]);
+  }, [clearAuth, setShift]);
 
   const scheduleNextPoll = useCallback(() => {
     pollTimerRef.current = setTimeout(async () => {
@@ -128,7 +129,9 @@ export default function MainScreen() {
   }, [fetchState]);
 
   useEffect(() => {
-    fetchState().then(scheduleNextPoll);
+    // Hydrate cached shift first so UI shows correct state immediately,
+    // then fetch fresh data from API.
+    hydrateFromStorage().then(() => fetchState()).then(scheduleNextPoll);
     requestBatteryOptimizationExemption().catch(() => {});
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -180,7 +183,7 @@ export default function MainScreen() {
       const newShift = await apiPost<Shift>('/api/v1/shifts/start', {
         planned_end_at: plannedEndAt ?? null,
       });
-      setShift(newShift);
+      await setShift(newShift);
     } catch {
       Alert.alert('Помилка', 'Не вдалося вийти на зміну. Спробуйте ще раз.');
     } finally {
@@ -200,7 +203,7 @@ export default function MainScreen() {
           onPress: async () => {
             try {
               await apiPost('/api/v1/shifts/end', {});
-              setShift(null);
+              await clearShift();
               setDelivery(null);
             } catch {
               Alert.alert('Помилка', 'Не вдалося завершити зміну.');
