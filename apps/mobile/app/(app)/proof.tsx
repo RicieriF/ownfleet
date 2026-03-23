@@ -245,5 +245,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Manrope_700Bold' },
+  submitBtnText: { color: '#09090b', fontSize: 18, fontFamily: 'Manrope_700Bold' },
 });

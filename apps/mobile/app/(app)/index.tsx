@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 8,
   },
-  startBtnText: { color: '#fff', fontSize: 17, fontFamily: 'Manrope_700Bold' },
+  startBtnText: { color: '#09090b', fontSize: 17, fontFamily: 'Manrope_700Bold' },
 
   // IdleState
   idle: { alignItems: 'center', paddingHorizontal: 32 },
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   statusBadgeActive: { backgroundColor: '#5c9973' },
-  statusText: { color: '#fff', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
+  statusText: { color: '#09090b', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
   gpsLabel: { fontSize: 12, color: '#22c55e', marginBottom: 12 },
   address: {
     fontSize: 20,
@@ -573,5 +573,5 @@ const styles = StyleSheet.create({
   btnAccept: { backgroundColor: '#6aaa84' },
   btnComplete: { backgroundColor: '#6aaa84' },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontSize: 17, fontFamily: 'Manrope_700Bold' },
+  btnText: { color: '#09090b', fontSize: 17, fontFamily: 'Manrope_700Bold' },
 });

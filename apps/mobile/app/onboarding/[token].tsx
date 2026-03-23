@@ -180,5 +180,5 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
-  btnText: { color: '#fff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  btnText: { color: '#09090b', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
 });

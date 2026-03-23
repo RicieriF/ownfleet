@@ -65,7 +65,7 @@ export default function GpsConsentScreen() {
       <View style={styles.content}>
         {/* Icon */}
         <View style={styles.iconWrap}>
-          <Text style={styles.icon}>📍</Text>
+          <Ionicons name="location" size={64} color="#6aaa84" />
         </View>
 
         {/* Title & description */}
@@ -155,7 +155,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrap: { alignItems: 'center', marginBottom: 20 },
-  icon: { fontSize: 64 },
   title: {
     fontSize: 26,
     fontFamily: 'Manrope_700Bold',
@@ -214,7 +213,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnDisabled: { opacity: 0.7 },
-  btnAllowText: { color: '#fafafa', fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.2 },
+  btnAllowText: { color: '#09090b', fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.2 },
   btnSkip: { paddingVertical: 14, alignItems: 'center' },
   btnSkipText: { color: '#71717a', fontSize: 15 },
 });

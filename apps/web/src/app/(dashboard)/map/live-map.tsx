@@ -1,5 +1,6 @@
 'use client';
 
+import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
 import { CourierWithStatus, CourierMovedEvent } from '@/types';
 import { getSocket } from '@/lib/socket';
@@ -50,15 +51,12 @@ export function LiveMap({ couriers }: Props) {
   useEffect(() => {
     if (!mapRef.current || leafletMapRef.current) return;
 
+    // Hoist socket outside .then() so cleanup can call socket.off()
+    const socket = getSocket();
+    let mounted = true;
+
     import('leaflet').then((L) => {
-      // Fix default icon paths (Next.js asset handling)
-      // @ts-expect-error Leaflet internal
-      delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
+      if (!mounted || !mapRef.current) return;
 
       const map = L.map(mapRef.current!).setView([50.45, 30.52], 12);
       leafletMapRef.current = map;
@@ -87,7 +85,6 @@ export function LiveMap({ couriers }: Props) {
         markersRef.current.set(courier.id, { marker, name: courier.name });
       });
 
-      const socket = getSocket();
       socket.on('courier:moved', (event: CourierMovedEvent) => {
         const entry = markersRef.current.get(event.courier_id);
         if (entry) {
@@ -103,13 +100,12 @@ export function LiveMap({ couriers }: Props) {
           markersRef.current.set(event.courier_id, { marker, name: event.courier_id });
         }
       });
-
-      return () => {
-        socket.off('courier:moved');
-      };
     });
 
     return () => {
+      mounted = false;
+      socket.off('courier:moved');
+      markersRef.current.clear();
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
@@ -119,8 +115,6 @@ export function LiveMap({ couriers }: Props) {
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-css-tags */}
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossOrigin="" />
       <style>{`
         .leaflet-popup-content-wrapper {
           background: #18181b;

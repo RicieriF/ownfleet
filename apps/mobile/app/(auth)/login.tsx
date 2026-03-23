@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ export default function LoginScreen() {
   const { setAuth } = useAuthStore();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const passwordRef = useRef<TextInput>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -72,26 +73,34 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Номер телефону</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
               value={phone}
               onChangeText={setPhone}
-              placeholder="+380XXXXXXXXX"
+              placeholder="courier@example.com"
               placeholderTextColor="#71717a"
-              keyboardType="phone-pad"
+              keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              blurOnSubmit={false}
             />
 
             <Text style={[styles.label, { marginTop: 16 }]}>Пароль</Text>
             <TextInput
+              ref={passwordRef}
               style={styles.input}
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
               placeholderTextColor="#71717a"
               secureTextEntry
+              autoComplete="password"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
             />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -151,5 +160,5 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
-  btnText: { color: '#fff', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  btnText: { color: '#09090b', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
 });
