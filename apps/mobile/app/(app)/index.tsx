@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   gpsLabel: { fontSize: 12, color: '#22c55e', marginBottom: 12 },
   address: { fontSize: 20, fontFamily: 'Manrope_700Bold', color: '#fafafa', lineHeight: 28, marginBottom: 8 },
   notes: { fontSize: 14, color: '#a1a1aa', marginBottom: 6 },
-  externalId: { fontSize: 13, color: '#71717a', marginBottom: 20 },
+  externalId: { fontSize: 13, color: '#71717a', marginBottom: 20, fontFamily: 'JetBrainsMono_400Regular' },
   btn: {
     borderRadius: 6,
     paddingVertical: 18,

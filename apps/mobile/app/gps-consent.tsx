@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { requestLocationPermissions } from '@/services/location';
 import { requestBatteryOptimizationExemption } from '@/services/battery';
@@ -75,10 +76,10 @@ export default function GpsConsentScreen() {
 
         {/* Why section */}
         <View style={styles.reasonsCard}>
-          <ReasonRow icon="✅" text="Підтвердження факту доставки (геопруф)" />
-          <ReasonRow icon="🗺️" text="Менеджер бачить де ви знаходитесь" />
-          <ReasonRow icon="⏱️" text="Статистика ефективності маршрутів" />
-          <ReasonRow icon="🔒" text="Дані не передаються третім особам" />
+          <ReasonRow icon="check" text="Підтвердження факту доставки (геопруф)" />
+          <ReasonRow icon="map"   text="Менеджер бачить де ви знаходитесь" />
+          <ReasonRow icon="time"  text="Статистика ефективності маршрутів" />
+          <ReasonRow icon="lock"  text="Дані не передаються третім особам" />
         </View>
 
         {/* Note about background */}
@@ -129,10 +130,17 @@ export default function GpsConsentScreen() {
   );
 }
 
-function ReasonRow({ icon, text }: { icon: string; text: string }) {
+const REASON_ICONS = {
+  check: 'checkmark-circle-outline',
+  map:   'map-outline',
+  time:  'time-outline',
+  lock:  'lock-closed-outline',
+} as const;
+
+function ReasonRow({ icon, text }: { icon: keyof typeof REASON_ICONS; text: string }) {
   return (
     <View style={styles.reasonRow}>
-      <Text style={styles.reasonIcon}>{icon}</Text>
+      <Ionicons name={REASON_ICONS[icon]} size={18} color="#6aaa84" />
       <Text style={styles.reasonText}>{text}</Text>
     </View>
   );
@@ -173,7 +181,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  reasonIcon: { fontSize: 18, lineHeight: 24 },
   reasonText: { fontSize: 14, color: '#d4d4d8', flex: 1, lineHeight: 22 },
   note: {
     fontSize: 13,
