@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RetentionService } from '../retention.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { ShiftsService } from '../../shifts/shifts.service.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
 const mockOrder = { deleteMany: jest.fn() };
@@ -13,6 +14,10 @@ const mockPrisma = {
   $executeRaw: jest.fn(),
 };
 
+const mockShiftsService = {
+  autoCloseStaleShifts: jest.fn().mockResolvedValue(0),
+};
+
 describe('RetentionService', () => {
   let service: RetentionService;
 
@@ -21,6 +26,7 @@ describe('RetentionService', () => {
       providers: [
         RetentionService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: ShiftsService, useValue: mockShiftsService },
       ],
     }).compile();
 
