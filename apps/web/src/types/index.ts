@@ -106,13 +106,21 @@ export interface Delivery {
 // ── Analytics ──────────────────────────────────────────────────────────────
 
 export interface AnalyticsSummary {
-  period_days: number;
-  total_deliveries: number;
-  completed: number;
-  failed: number;
-  cancelled: number;
-  completion_rate: number;
-  avg_delivery_minutes: number | null;
+  period: { from: string; to: string };
+  totals: {
+    total: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    in_progress: number;
+    pending: number;
+    assigned: number;
+  };
+  metrics: {
+    avg_delivery_minutes: number | null;
+    completion_rate: number | null;
+    geo_match_rate: number | null;
+  };
 }
 
 export interface CourierAnalytics {
@@ -121,7 +129,8 @@ export interface CourierAnalytics {
   total: number;
   completed: number;
   failed: number;
-  avg_minutes: number | null;
+  avg_delivery_minutes: number | null;
+  completion_rate: number | null;
 }
 
 // ── Onboarding ─────────────────────────────────────────────────────────────

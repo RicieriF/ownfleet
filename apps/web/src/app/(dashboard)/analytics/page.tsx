@@ -22,9 +22,12 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 export default async function AnalyticsPage() {
   const { summary, perCourier } = await fetchAnalytics();
 
-  const completionPct = Math.round(summary.completion_rate * 100);
+  const { totals, metrics } = summary;
+  const completionPct = metrics.completion_rate != null ? `${metrics.completion_rate}%` : '—';
   const avgMin =
-    summary.avg_delivery_minutes != null ? `${Math.round(summary.avg_delivery_minutes)} хв` : '—';
+    metrics.avg_delivery_minutes != null
+      ? `${Math.round(metrics.avg_delivery_minutes)} хв`
+      : '—';
 
   return (
     <div>
@@ -32,21 +35,21 @@ export default async function AnalyticsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Доставок за 30 днів" value={summary.total_deliveries} />
+        <StatCard label="Доставок за 30 днів" value={totals.total} />
         <StatCard
           label="Виконано"
-          value={`${completionPct}%`}
-          sub={`${summary.completed} з ${summary.total_deliveries}`}
+          value={completionPct}
+          sub={`${totals.completed} з ${totals.total}`}
         />
         <StatCard
           label="Середній час"
           value={avgMin}
-          sub="від призначення до завершення"
+          sub="від старту до завершення"
         />
         <StatCard
           label="Провалено / Скасовано"
-          value={summary.failed + summary.cancelled}
-          sub={`${summary.failed} провалено, ${summary.cancelled} скасовано`}
+          value={totals.failed + totals.cancelled}
+          sub={`${totals.failed} провалено · ${totals.cancelled} скасовано`}
         />
       </div>
 
@@ -63,13 +66,14 @@ export default async function AnalyticsPage() {
               <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Виконано</th>
               <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Провалено</th>
               <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Сер. час</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">% успіху</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--br)]">
             {perCourier.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
-                  Немає даних
+                <td colSpan={6} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
+                  Немає даних за обраний період
                 </td>
               </tr>
             )}
@@ -80,7 +84,12 @@ export default async function AnalyticsPage() {
                 <td className="px-3 py-2.5 text-right text-[var(--ok)] mono">{row.completed}</td>
                 <td className="px-3 py-2.5 text-right text-[var(--bad)] mono">{row.failed}</td>
                 <td className="px-3 py-2.5 text-right text-[var(--t3)] mono">
-                  {row.avg_minutes != null ? `${Math.round(row.avg_minutes)} хв` : '—'}
+                  {row.avg_delivery_minutes != null
+                    ? `${Math.round(row.avg_delivery_minutes)} хв`
+                    : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">
+                  {row.completion_rate != null ? `${row.completion_rate}%` : '—'}
                 </td>
               </tr>
             ))}
