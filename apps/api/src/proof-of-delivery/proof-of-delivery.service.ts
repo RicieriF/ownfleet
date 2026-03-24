@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -57,6 +58,7 @@ export class ProofOfDeliveryService {
             address: true,
             lat: true,
             lng: true,
+            notes: true,
             status: true,
             external_id: true,
           },
@@ -69,6 +71,11 @@ export class ProofOfDeliveryService {
 
   async getUploadUrl(deliveryId: string, user: AuthenticatedUser): Promise<{ upload_url: string; photo_key: string }> {
     const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Only active deliveries may receive uploads
+    if (delivery.status !== DeliveryStatus.assigned && delivery.status !== DeliveryStatus.in_progress) {
+      throw new BadRequestException('Upload URL can only be issued for active deliveries');
+    }
 
     // Couriers may only get upload URLs for their own active delivery
     if (user.courier_id && delivery.courier_id !== user.courier_id) {
@@ -93,17 +100,37 @@ export class ProofOfDeliveryService {
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.delivery.update({
-        where: { id: deliveryId },
+      // Atomic conditional update — prevents double-start race condition.
+      // If another request already transitioned this delivery, affected rows = 0.
+      const updated = await tx.delivery.updateMany({
+        where: { id: deliveryId, status: DeliveryStatus.assigned },
         data: { status: DeliveryStatus.in_progress, started_at: now },
       });
+      if (updated.count === 0) {
+        throw new ConflictException('Delivery was already started by another request');
+      }
       await tx.order.update({
         where: { id: delivery.order_id },
         data: { status: OrderStatus.in_progress },
       });
     });
 
-    return { status: DeliveryStatus.in_progress, started_at: now };
+    // Return full delivery object so mobile can render InProgressState immediately
+    return this.prisma.delivery.findUniqueOrThrow({
+      where: { id: deliveryId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            address: true,
+            lat: true,
+            lng: true,
+            notes: true,
+            external_id: true,
+          },
+        },
+      },
+    });
   }
 
   async completeDelivery(
@@ -111,6 +138,11 @@ export class ProofOfDeliveryService {
     dto: CompleteDeliveryDto,
     user: AuthenticatedUser,
   ) {
+    // Only couriers may submit proof of delivery — managers use forceCloseDelivery
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only couriers can complete deliveries with proof');
+    }
+
     const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
     assertDeliveryTransition(delivery.status, DeliveryStatus.completed);
 
@@ -121,7 +153,8 @@ export class ProofOfDeliveryService {
     });
 
     const now = new Date();
-    const capturedAt = dto.captured_at ? new Date(dto.captured_at) : now;
+    // captured_at is always set server-side — client clock is untrusted
+    const capturedAt = now;
 
     // ── Geo flags ──────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,7 +190,17 @@ export class ProofOfDeliveryService {
 
     // ── Persist proof + update delivery/order atomically ──────────────────
     // delivery_proofs is NEVER deleted — no cascade, intentional
+    // Atomic conditional update prevents double-completion race condition.
     await this.prisma.$transaction(async (tx) => {
+      // Guard: only complete if still in_progress — prevents duplicate proof rows
+      const updated = await tx.delivery.updateMany({
+        where: { id: deliveryId, status: DeliveryStatus.in_progress },
+        data: { status: DeliveryStatus.completed, completed_at: now },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Delivery was already completed by another request');
+      }
+
       await tx.deliveryProof.create({
         data: {
           delivery_id: deliveryId,
@@ -170,11 +213,6 @@ export class ProofOfDeliveryService {
           accuracy: dto.accuracy ?? null,
           geo_flags: geoFlags,
         },
-      });
-
-      await tx.delivery.update({
-        where: { id: deliveryId },
-        data: { status: DeliveryStatus.completed, completed_at: now },
       });
 
       await tx.order.update({
@@ -193,6 +231,75 @@ export class ProofOfDeliveryService {
       .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed', err));
 
     return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
+  }
+
+  /**
+   * Manager/owner emergency close: completes delivery without geo proof.
+   * Use when courier's phone died or other operational emergency.
+   * Creates a delivery_proof with force_closed=true for full audit trail.
+   */
+  async forceCloseDelivery(deliveryId: string, user: AuthenticatedUser) {
+    if (user.role !== 'owner' && user.role !== 'manager') {
+      throw new ForbiddenException('Only managers and owners can force-close deliveries');
+    }
+
+    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Allow force-close from assigned or in_progress (courier may not have started)
+    if (
+      delivery.status !== DeliveryStatus.assigned &&
+      delivery.status !== DeliveryStatus.in_progress
+    ) {
+      throw new BadRequestException(
+        `Cannot force-close a delivery with status: ${delivery.status}`,
+      );
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.delivery.updateMany({
+        where: {
+          id: deliveryId,
+          status: { in: [DeliveryStatus.assigned, DeliveryStatus.in_progress] },
+        },
+        data: { status: DeliveryStatus.completed, completed_at: now },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Delivery was already closed by another request');
+      }
+
+      // Create proof for audit trail — force_closed marks it as manager-initiated
+      await tx.deliveryProof.create({
+        data: {
+          delivery_id: deliveryId,
+          lat: 0,
+          lng: 0,
+          captured_at: now,
+          order_closed_at: delivery.order_closed_at,
+          photo_key: null,
+          geo_match: false,
+          accuracy: null,
+          geo_flags: { force_closed: true, closed_by: user.id },
+        },
+      });
+
+      await tx.order.update({
+        where: { id: delivery.order_id },
+        data: { status: OrderStatus.completed },
+      });
+    });
+
+    this.webhooks
+      .dispatch(user.establishment_id, 'delivery.completed', {
+        delivery_id: deliveryId,
+        order_id: delivery.order_id,
+        geo_match: false,
+        force_closed: true,
+      })
+      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed (force-close)', err));
+
+    return { status: DeliveryStatus.completed, force_closed: true };
   }
 
   async failDelivery(deliveryId: string, user: AuthenticatedUser) {

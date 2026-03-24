@@ -4,9 +4,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { Plan } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateEstablishmentDto } from './dto/create-establishment.dto.js';
 import { UpdateSettingsDto } from './dto/update-settings.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
@@ -15,28 +13,6 @@ export class EstablishmentsService {
   private readonly logger = new Logger(EstablishmentsService.name);
 
   constructor(private readonly prisma: PrismaService) {}
-
-  async create(dto: CreateEstablishmentDto, userId: string) {
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-
-    // Atomic: both ops succeed or both roll back — no orphaned establishments
-    return this.prisma.$transaction(async (tx) => {
-      const establishment = await tx.establishment.create({
-        data: {
-          name: dto.name,
-          plan: Plan.starter,
-          trial_ends_at: trialEndsAt,
-        },
-      });
-
-      await tx.user.update({
-        where: { id: userId },
-        data: { establishment_id: establishment.id },
-      });
-
-      return establishment;
-    });
-  }
 
   async findOne(user: AuthenticatedUser) {
     const est = await this.prisma.establishment.findUnique({

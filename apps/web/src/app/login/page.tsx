@@ -87,7 +87,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[#09090b] text-sm font-semibold rounded-[6px] transition-colors"
+            className="w-full py-2 px-4 bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--bg)] text-sm font-semibold rounded-[6px] transition-colors"
           >
             {loading ? 'Вхід...' : 'Увійти'}
           </button>

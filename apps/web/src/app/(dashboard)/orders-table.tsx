@@ -132,7 +132,7 @@ export function OrdersTable({ orders, couriers }: Props) {
                           setSelectedCourierId('');
                           setActionError('');
                         }}
-                        className="px-2.5 py-1 text-xs bg-[var(--acm)] text-[#09090b] font-medium rounded-[6px] hover:bg-[var(--acm-h)] transition-colors disabled:opacity-40"
+                        className="px-2.5 py-1 text-xs bg-[var(--acm)] text-[var(--bg)] font-medium rounded-[6px] hover:bg-[var(--acm-h)] transition-colors disabled:opacity-40"
                         disabled={isPending}
                       >
                         Призначити
@@ -198,7 +198,7 @@ export function OrdersTable({ orders, couriers }: Props) {
               <button
                 onClick={handleAssign}
                 disabled={!selectedCourierId || isPending}
-                className="px-4 py-2 text-sm bg-[var(--acm)] text-[#09090b] font-medium rounded-[6px] hover:bg-[var(--acm-h)] disabled:opacity-40 transition-colors"
+                className="px-4 py-2 text-sm bg-[var(--acm)] text-[var(--bg)] font-medium rounded-[6px] hover:bg-[var(--acm-h)] disabled:opacity-40 transition-colors"
               >
                 Призначити
               </button>

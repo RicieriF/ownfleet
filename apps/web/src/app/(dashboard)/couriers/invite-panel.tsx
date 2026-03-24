@@ -119,7 +119,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
               padding: '6px 10px',
               borderRadius: '6px',
             }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px #6aaa84')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           >
             <option value="">Оберіть курʼєра...</option>
@@ -132,7 +132,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
           onClick={handleCreate}
           disabled={!selectedCourierId || isPending}
           className="text-sm font-medium rounded transition-opacity disabled:opacity-40"
-          style={{ background: '#6aaa84', color: '#09090b', padding: '6px 16px', borderRadius: '6px' }}
+          style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
         >
           {isPending ? 'Створюємо…' : 'Створити токен'}
         </button>
@@ -221,7 +221,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
                       <button
                         onClick={() => handleCopy(invite.token)}
                         className="text-xs px-2 py-1 rounded"
-                        style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t3)', borderRadius: '4px' }}
+                        style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t3)', borderRadius: '6px' }}
                         title="Скопіювати токен"
                       >
                         Копія
@@ -230,7 +230,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
                         onClick={() => handleRevoke(invite.id)}
                         disabled={isPending}
                         className="text-xs px-2 py-1 rounded disabled:opacity-40"
-                        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '4px' }}
+                        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
                         title="Скасувати запрошення"
                       >
                         Скасувати

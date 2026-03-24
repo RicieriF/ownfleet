@@ -13,7 +13,7 @@ export class TrackingController {
 
   @Post('ping')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Throttle({ default: { ttl: 60_000, limit: 300 } }) // 300 pings / min per IP (covers ~20 couriers at 15s interval)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } }) // 10 pings / min per courier (15s interval = 4/min, 10 gives headroom)
   async ping(@Body() dto: PingDto, @Req() req: any): Promise<void> {
     await this.service.handlePing(dto, req.user as AuthenticatedUser);
   }

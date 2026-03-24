@@ -81,6 +81,7 @@ enum BillingEventType {
 model Establishment {
   id                String           @id @default(uuid())
   name              String
+  slug              String           @unique
   plan              Plan             @default(starter)
   trial_ends_at     DateTime?
   paid_until        DateTime?
@@ -154,6 +155,7 @@ model Courier {
   active                      Boolean         @default(true)
   battery_optimization_exempt Boolean         @default(false)
   device_brand                String?
+  telegram_chat_id            String?
   last_reminder_sent_at       DateTime?
   reminder_count              Int             @default(0)
   created_at                  DateTime        @default(now())
@@ -244,6 +246,7 @@ model Delivery {
   proof   DeliveryProof?
 
   @@index([courier_id])
+  @@index([courier_id, status])
   @@index([status])
   @@map("deliveries")
 }
@@ -285,6 +288,7 @@ model LocationPing {
   courier Courier @relation(fields: [courier_id], references: [id], onDelete: Cascade)
 
   @@index([courier_id])
+  @@index([courier_id, created_at(sort: Desc)])
   @@index([created_at])
   @@map("location_pings")
 }

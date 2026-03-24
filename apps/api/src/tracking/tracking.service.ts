@@ -1,12 +1,23 @@
 import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRedis } from './redis.provider.js';
+import { InjectQueue } from '@nestjs/bull';
 import type { Redis } from 'ioredis';
+import type { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { PingDto } from './dto/ping.dto.js';
 
 const LOCATION_TTL_SEC = 5 * 60; // 5 min cache in Redis
 const PUBSUB_CHANNEL = 'courier_moved';
+
+export const PING_PERSIST_QUEUE = 'ping-persist';
+
+export interface PingJob {
+  courier_id: string;
+  lat: number;
+  lng: number;
+  battery: number | null;
+}
 
 export interface CourierMovedEvent {
   courier_id: string;
@@ -24,50 +35,49 @@ export class TrackingService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectRedis() private readonly redis: Redis,
+    @InjectQueue(PING_PERSIST_QUEUE) private readonly pingQueue: Queue<PingJob>,
   ) {}
 
   async handlePing(dto: PingDto, user: AuthenticatedUser): Promise<void> {
-    // Verify courier belongs to the authenticated establishment
-    const courier = await this.prisma.courier.findUnique({
-      where: { id: dto.courier_id },
-      select: { id: true, establishment_id: true },
-    });
-
-    if (!courier || courier.establishment_id !== user.establishment_id) {
-      throw new ForbiddenException('Courier does not belong to your establishment');
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can send pings');
     }
 
-    // Persist to DB using raw SQL for PostGIS geometry
-    await this.prisma.$executeRaw`
-      INSERT INTO location_pings (id, courier_id, location, battery, created_at)
-      VALUES (
-        gen_random_uuid(),
-        ${dto.courier_id}::uuid,
-        ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326),
-        ${dto.battery ?? null},
-        NOW()
-      )
-    `;
+    const courierId = user.courier_id;
 
     // Cache last known position in Redis (TTL 5 min)
-    const redisKey = `courier:location:${dto.courier_id}`;
-    await this.redis.setex(
-      redisKey,
-      LOCATION_TTL_SEC,
-      JSON.stringify({ lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null, ts: Date.now() }),
-    );
+    // Failure is non-fatal — DB is source of truth, cache miss is recovered next ping
+    const redisKey = `courier:location:${courierId}`;
+    try {
+      await this.redis.setex(
+        redisKey,
+        LOCATION_TTL_SEC,
+        JSON.stringify({ lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null, ts: Date.now() }),
+      );
+    } catch (err) {
+      this.logger.warn('Redis setex failed for ping cache — continuing', err);
+    }
 
     // Publish to Redis Pub/Sub → TrackingGateway fans out to WS room
+    // Fire-and-forget: Redis drop must not cause a 500 to the courier
     const event: CourierMovedEvent = {
-      courier_id: dto.courier_id,
-      establishment_id: courier.establishment_id,
+      courier_id: courierId,
+      establishment_id: user.establishment_id,
       lat: dto.lat,
       lng: dto.lng,
       battery: dto.battery ?? null,
       ts: Date.now(),
     };
 
-    await this.redis.publish(PUBSUB_CHANNEL, JSON.stringify(event));
+    this.redis.publish(PUBSUB_CHANNEL, JSON.stringify(event)).catch((err) =>
+      this.logger.warn('Redis publish failed for courier_moved event', err),
+    );
+
+    // Enqueue async DB persist — decouples HTTP response from Postgres write
+    await this.pingQueue.add(
+      { courier_id: courierId, lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null },
+      { removeOnComplete: 100, removeOnFail: 50 },
+    );
   }
 
   async getLastKnownPosition(
@@ -85,6 +95,23 @@ export class TrackingService {
 
     const raw = await this.redis.get(`courier:location:${courierId}`);
     if (!raw) return null;
-    return JSON.parse(raw) as { lat: number; lng: number; battery: number | null; ts: number };
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (
+        typeof parsed !== 'object' || parsed === null ||
+        typeof (parsed as Record<string, unknown>).lat !== 'number' ||
+        typeof (parsed as Record<string, unknown>).lng !== 'number' ||
+        typeof (parsed as Record<string, unknown>).ts !== 'number'
+      ) {
+        this.logger.warn(`Corrupted Redis location for courier ${courierId} — discarding`);
+        return null;
+      }
+      const p = parsed as { lat: number; lng: number; battery: unknown; ts: number };
+      return { lat: p.lat, lng: p.lng, battery: typeof p.battery === 'number' ? p.battery : null, ts: p.ts };
+    } catch {
+      this.logger.warn(`Failed to parse Redis location for courier ${courierId}`);
+      return null;
+    }
   }
 }

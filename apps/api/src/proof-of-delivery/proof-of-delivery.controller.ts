@@ -46,7 +46,15 @@ export class ProofOfDeliveryController {
 
   @Patch(':id/fail')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ShiftActiveGuard)
   fail(@Param('id') id: string, @Req() req: any) {
     return this.service.failDelivery(id, req.user as AuthenticatedUser);
+  }
+
+  /** Manager/owner: force-close a delivery without geo proof (e.g. courier phone died) */
+  @Post(':id/force-close')
+  @HttpCode(HttpStatus.OK)
+  forceClose(@Param('id') id: string, @Req() req: any) {
+    return this.service.forceCloseDelivery(id, req.user as AuthenticatedUser);
   }
 }

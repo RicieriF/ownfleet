@@ -36,7 +36,7 @@ function makeMarkerHtml(name: string, status: string): string {
     display:flex;align-items:center;justify-content:center;
     font-family:Manrope,system-ui,sans-serif;
     font-size:11px;font-weight:700;
-    color:#09090b;
+    color:var(--bg);
     user-select:none;
   ">${initials}</div>`;
 }
@@ -126,7 +126,7 @@ export function LiveMap({ couriers }: Props) {
         .leaflet-popup-tip { background: #18181b; }
         .leaflet-popup-content b { color: #fafafa; }
         .leaflet-control-attribution { background: rgba(9,9,11,.8) !important; color: #71717a !important; }
-        .leaflet-control-attribution a { color: #6aaa84 !important; }
+        .leaflet-control-attribution a { color: var(--acm) !important; }
         .leaflet-control-zoom a {
           background: #18181b !important;
           color: #a1a1aa !important;

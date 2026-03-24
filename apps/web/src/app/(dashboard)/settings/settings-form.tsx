@@ -86,7 +86,7 @@ function NumberInput({
           padding: '5px 8px',
         }}
         onFocus={(e) =>
-          (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px #6aaa84')
+          (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')
         }
         onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
       />
@@ -166,8 +166,8 @@ export function SettingsForm({ initialSettings }: Props) {
           disabled={isPending}
           className="text-sm font-medium rounded transition-opacity disabled:opacity-50"
           style={{
-            background: '#6aaa84',
-            color: '#09090b',
+            background: 'var(--acm)',
+            color: 'var(--bg)',
             padding: '6px 16px',
             borderRadius: '6px',
           }}

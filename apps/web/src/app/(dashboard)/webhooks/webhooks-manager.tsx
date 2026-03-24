@@ -51,7 +51,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
       <button
         onClick={() => setOpen(true)}
         className="text-sm font-medium rounded"
-        style={{ background: '#6aaa84', color: '#09090b', padding: '6px 16px', borderRadius: '6px' }}
+        style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
       >
         + Додати webhook
       </button>
@@ -78,7 +78,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
             placeholder="https://your-app.com/webhooks"
             className="w-full text-sm rounded outline-none"
             style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '6px 10px', borderRadius: '6px' }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px #6aaa84')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           />
         </div>
@@ -95,7 +95,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
             placeholder="your-hmac-secret"
             className="w-full text-sm rounded outline-none"
             style={{ fontFamily: 'var(--font-mono)', background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '6px 10px', borderRadius: '6px' }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px #6aaa84')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           />
         </div>
@@ -133,7 +133,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
           onClick={handleSubmit}
           disabled={isPending}
           className="text-sm font-medium rounded disabled:opacity-40"
-          style={{ background: '#6aaa84', color: '#09090b', padding: '6px 16px', borderRadius: '6px' }}
+          style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
         >
           {isPending ? 'Зберігаємо…' : 'Зберегти'}
         </button>
@@ -203,7 +203,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
           border: webhook.active ? '1px solid var(--acm-b)' : '1px solid var(--br)',
           background: webhook.active ? 'var(--acm-m)' : 'var(--s1)',
           color: webhook.active ? 'var(--acm)' : 'var(--t4)',
-          borderRadius: '4px',
+          borderRadius: '6px',
         }}
       >
         {webhook.active ? 'Активний' : 'Вимкнено'}
@@ -217,7 +217,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
         })}
         disabled={isPending}
         className="shrink-0 text-xs px-2 py-1 rounded disabled:opacity-40"
-        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '4px' }}
+        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
       >
         Видалити
       </button>

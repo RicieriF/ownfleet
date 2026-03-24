@@ -1,13 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
-import { TrackingService } from '../tracking.service.js';
+import { getQueueToken } from '@nestjs/bull';
+import { TrackingService, PING_PERSIST_QUEUE } from '../tracking.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../redis.provider.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
 
-const userA: any = { id: 'u1', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+// Courier-linked user (has courier_id in JWT)
+const courierUser: any = { id: 'u1', establishment_id: EST_A, role: 'manager', is_platform_admin: false, courier_id: 'c1' };
+// Manager user (no courier_id)
+const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
 
 const courierA = { id: 'c1', establishment_id: EST_A };
 const courierB = { id: 'c2', establishment_id: EST_B };
@@ -23,6 +27,10 @@ const mockRedis = {
   get: jest.fn(),
 };
 
+const mockPingQueue = {
+  add: jest.fn().mockResolvedValue({}),
+};
+
 describe('TrackingService', () => {
   let service: TrackingService;
 
@@ -32,6 +40,7 @@ describe('TrackingService', () => {
         TrackingService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: REDIS_CLIENT, useValue: mockRedis },
+        { provide: getQueueToken(PING_PERSIST_QUEUE), useValue: mockPingQueue },
       ],
     }).compile();
     service = module.get<TrackingService>(TrackingService);
@@ -39,40 +48,37 @@ describe('TrackingService', () => {
     mockPrisma.$executeRaw.mockResolvedValue(1);
     mockRedis.setex.mockResolvedValue('OK');
     mockRedis.publish.mockResolvedValue(1);
+    mockPingQueue.add.mockResolvedValue({});
   });
 
   describe('handlePing', () => {
-    const validPing = { courier_id: 'c1', lat: 50.45, lng: 30.52, battery: 80 };
+    const validPing = { lat: 50.45, lng: 30.52, battery: 80 };
 
-    it('rejects ping for courier from another establishment', async () => {
-      mockPrisma.courier.findUnique.mockResolvedValue(courierB);
-      await expect(service.handlePing(validPing, userA)).rejects.toThrow(ForbiddenException);
+    it('rejects ping from non-courier (manager) account', async () => {
+      await expect(service.handlePing(validPing, managerUser)).rejects.toThrow(ForbiddenException);
     });
 
-    it('rejects ping for non-existent courier', async () => {
-      mockPrisma.courier.findUnique.mockResolvedValue(null);
-      await expect(service.handlePing(validPing, userA)).rejects.toThrow(ForbiddenException);
-    });
-
-    it('stores ping in DB via PostGIS raw SQL', async () => {
-      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
-      await service.handlePing(validPing, userA);
-      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+    it('enqueues ping for async DB persist via Bull', async () => {
+      await service.handlePing(validPing, courierUser);
+      expect(mockPingQueue.add).toHaveBeenCalledWith(
+        { courier_id: courierUser.courier_id, lat: 50.45, lng: 30.52, battery: 80 },
+        expect.objectContaining({ removeOnComplete: 100, removeOnFail: 50 }),
+      );
+      // DB write is NOT called synchronously — it happens in the processor
+      expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
     });
 
     it('caches last position in Redis with TTL 300s', async () => {
-      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
-      await service.handlePing(validPing, userA);
+      await service.handlePing(validPing, courierUser);
       expect(mockRedis.setex).toHaveBeenCalledWith(
-        `courier:location:${validPing.courier_id}`,
+        `courier:location:${courierUser.courier_id}`,
         300,
         expect.stringContaining('"lat":50.45'),
       );
     });
 
     it('publishes courier_moved event to Redis pub/sub', async () => {
-      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
-      await service.handlePing(validPing, userA);
+      await service.handlePing(validPing, courierUser);
       expect(mockRedis.publish).toHaveBeenCalledWith(
         'courier_moved',
         expect.stringContaining('"establishment_id":"est-a"'),

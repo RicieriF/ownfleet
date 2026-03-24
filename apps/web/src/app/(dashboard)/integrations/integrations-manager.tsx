@@ -145,7 +145,7 @@ function IntegrationCard({
                 border: existing.active ? '1px solid var(--acm-b)' : '1px solid var(--br)',
                 background: existing.active ? 'var(--acm-m)' : 'var(--s1)',
                 color: existing.active ? 'var(--acm)' : 'var(--t4)',
-                borderRadius: '4px',
+                borderRadius: '6px',
               }}
             >
               {existing.active ? 'Активна' : 'Вимкнено'}
@@ -193,7 +193,7 @@ function IntegrationCard({
                   padding: '6px 10px',
                   borderRadius: '6px',
                 }}
-                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px #6aaa84')}
+                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
                 onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
               />
             </div>
@@ -208,7 +208,7 @@ function IntegrationCard({
                 onClick={handleSave}
                 disabled={isPending}
                 className="text-sm font-medium rounded disabled:opacity-40"
-                style={{ background: '#6aaa84', color: '#09090b', padding: '6px 16px', borderRadius: '6px' }}
+                style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
               >
                 {isPending ? 'Зберігаємо…' : 'Зберегти'}
               </button>
@@ -221,7 +221,7 @@ function IntegrationCard({
                 onClick={handleDelete}
                 disabled={isPending}
                 className="text-xs px-2.5 py-1 rounded disabled:opacity-40"
-                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '4px' }}
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
               >
                 Відключити
               </button>

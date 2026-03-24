@@ -16,7 +16,6 @@ import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { CouriersService } from './couriers.service.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
-import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
@@ -74,13 +73,4 @@ export class CouriersController {
     return this.service.remindCourier(id, req.user as AuthenticatedUser);
   }
 
-  @Post(':id/device-token')
-  @HttpCode(HttpStatus.OK)
-  registerDeviceToken(
-    @Param('id') id: string,
-    @Body() dto: RegisterDeviceTokenDto,
-    @Req() req: any,
-  ) {
-    return this.service.registerDeviceToken(id, dto, req.user as AuthenticatedUser);
-  }
 }

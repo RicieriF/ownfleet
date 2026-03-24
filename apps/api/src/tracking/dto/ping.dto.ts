@@ -1,10 +1,6 @@
-import { IsNumber, IsString, IsNotEmpty, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsNumber, IsOptional, IsInt, Min, Max } from 'class-validator';
 
 export class PingDto {
-  @IsString()
-  @IsNotEmpty()
-  courier_id: string;
-
   @IsNumber()
   @Min(-90) @Max(90)
   lat: number;

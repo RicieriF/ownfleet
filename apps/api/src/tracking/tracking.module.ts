@@ -1,10 +1,12 @@
 import { Module, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { BullModule } from '@nestjs/bull';
 import Redis from 'ioredis';
 import { TrackingController } from './tracking.controller.js';
-import { TrackingService } from './tracking.service.js';
+import { TrackingService, PING_PERSIST_QUEUE } from './tracking.service.js';
 import { TrackingGateway } from './tracking.gateway.js';
+import { PingPersistProcessor } from './processors/ping-persist.processor.js';
 import { EstablishmentsModule } from '../establishments/establishments.module.js';
 import { REDIS_CLIENT, REDIS_SUBSCRIBER } from './redis.provider.js';
 
@@ -12,11 +14,13 @@ import { REDIS_CLIENT, REDIS_SUBSCRIBER } from './redis.provider.js';
   imports: [
     EstablishmentsModule,
     JwtModule.register({}),
+    BullModule.registerQueue({ name: PING_PERSIST_QUEUE }),
   ],
   controllers: [TrackingController],
   providers: [
     TrackingService,
     TrackingGateway,
+    PingPersistProcessor,
     {
       provide: REDIS_CLIENT,
       useFactory: (config: ConfigService) => {

@@ -8,7 +8,6 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
-import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 
@@ -120,26 +119,6 @@ export class CouriersService {
     await this.assertBelongs(id, user.establishment_id);
 
     return this.prisma.courier.delete({ where: { id } });
-  }
-
-  async registerDeviceToken(
-    courierId: string,
-    dto: RegisterDeviceTokenDto,
-    user: AuthenticatedUser,
-  ) {
-    // Called by the courier app after login — user.id is the courier's linked user
-    // or by manager on behalf. We verify courier belongs to establishment.
-    await this.assertBelongs(courierId, user.establishment_id);
-
-    return this.prisma.courier.update({
-      where: { id: courierId },
-      data: {
-        device_token: dto.token,
-        device_platform: dto.platform,
-        device_brand: dto.brand,
-      },
-      select: { id: true },
-    });
   }
 
   /** Courier self-registers their own FCM token (PATCH /me/device-token) */

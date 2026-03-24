@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserAwareThrottlerGuard } from './common/guards/user-aware-throttler.guard.js';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -17,12 +18,13 @@ import { OnboardingModule } from './onboarding/onboarding.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { ShiftsModule } from './shifts/shifts.module.js';
+import { PlatformModule } from './platform/platform.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // Global rate limiting: 120 req / 60 s per IP (overridable per-route with @Throttle)
+    // Global rate limiting: 120 req / 60 s per user ID (authenticated) or IP (unauthenticated)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -44,11 +46,12 @@ import { HealthController } from './health/health.controller.js';
     AnalyticsModule,
     WebhooksModule,
     ShiftsModule,
+    PlatformModule,
   ],
   controllers: [HealthController],
   providers: [
-    // Apply ThrottlerGuard globally — all HTTP routes inherit the default limits
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Apply UserAwareThrottlerGuard globally — keys on user ID for authenticated routes, IP for unauthenticated
+    { provide: APP_GUARD, useClass: UserAwareThrottlerGuard },
   ],
 })
 export class AppModule {}
