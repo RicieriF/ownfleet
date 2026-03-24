@@ -327,6 +327,7 @@ JWT_ACCESS_SECRET    (rotate 90 days)
 JWT_REFRESH_SECRET   (rotate 180 days)
 FIREBASE_SERVICE_ACCOUNT_JSON
 TELEGRAM_BOT_TOKEN
+TELEGRAM_WEBHOOK_SECRET  (required when bot is active — webhook rejects all requests if unset)
 S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET
 BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY
 WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)

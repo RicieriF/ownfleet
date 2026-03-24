@@ -3,6 +3,7 @@ import { NotFoundException, ForbiddenException, BadRequestException, ConflictExc
 import { ProofOfDeliveryService } from '../proof-of-delivery.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
+import { TelegramService } from '../../telegram/telegram.service.js';
 import { ConfigService } from '@nestjs/config';
 
 const EST_A = 'est-a';
@@ -35,6 +36,11 @@ const mockPrisma = {
 
 const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
 
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
+  notifyCourier: jest.fn().mockResolvedValue(undefined),
+};
+
 const mockConfig = {
   get: jest.fn().mockReturnValue('http://localhost'),
   getOrThrow: jest.fn().mockReturnValue('test-value'),
@@ -49,6 +55,7 @@ describe('ProofOfDeliveryService', () => {
         ProofOfDeliveryService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WebhooksService, useValue: mockWebhooksService },
+        { provide: TelegramService, useValue: mockTelegramService },
         { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
@@ -237,6 +244,47 @@ describe('ProofOfDeliveryService', () => {
       expect(mockTx.deliveryProof.create).toHaveBeenCalledTimes(1);
       // Proof is created via CREATE only — no delete or update called on proof
       expect(mockTx.deliveryProof).not.toHaveProperty('delete');
+    });
+  });
+
+  describe('Telegram notifications', () => {
+    it('completeDelivery() fires delivery_completed to establishment managers', async () => {
+      mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.45, lng: 30.52 });
+      mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
+
+      await service.completeDelivery('d1', { lat: 50.45, lng: 30.52 }, userA);
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        EST_A,
+        expect.any(String),
+        'delivery_completed',
+      );
+    });
+
+    it('forceCloseDelivery() fires delivery_force_closed to establishment managers', async () => {
+      const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+      mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
+
+      await service.forceCloseDelivery('d1', managerUser);
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        EST_A,
+        expect.any(String),
+        'delivery_force_closed',
+      );
+    });
+
+    it('failDelivery() fires delivery_failed to establishment managers', async () => {
+      mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
+
+      await service.failDelivery('d1', userA);
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        EST_A,
+        expect.any(String),
+        'delivery_failed',
+      );
     });
   });
 });

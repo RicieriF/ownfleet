@@ -19,6 +19,7 @@ import { AnalyticsModule } from './analytics/analytics.module.js';
 import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { ShiftsModule } from './shifts/shifts.module.js';
 import { PlatformModule } from './platform/platform.module.js';
+import { TelegramModule } from './telegram/telegram.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -47,6 +48,7 @@ import { HealthController } from './health/health.controller.js';
     WebhooksModule,
     ShiftsModule,
     PlatformModule,
+    TelegramModule,
   ],
   controllers: [HealthController],
   providers: [

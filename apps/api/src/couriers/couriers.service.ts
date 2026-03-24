@@ -10,6 +10,7 @@ import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
 
 // Thresholds for online status (in ms)
 const ONLINE_MS = 30_000;        // < 30s  → online
@@ -22,6 +23,7 @@ export class CouriersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly telegram: TelegramService,
   ) {}
 
   async findAll(user: AuthenticatedUser) {
@@ -158,6 +160,12 @@ export class CouriersService {
         data: { type: 'reminder' },
       })
       .catch((err) => this.logger.warn(`FCM remind failed for ${courierId}`, err));
+
+    this.telegram.notifyCourier(
+      courierId,
+      `📢 Нагадування від менеджера: перевірте застосунок — є активне замовлення`,
+      'manager_reminder',
+    ).catch(() => {});
 
     this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);
     return { reminded: true, courier_name: courier.name };

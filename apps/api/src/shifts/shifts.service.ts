@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
+import { TelegramService } from '../telegram/telegram.service.js';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { UpdatePlannedEndDto } from './dto/update-planned-end.dto';
 import { JwtPayload } from '../auth/auth.types';
@@ -18,6 +19,7 @@ export class ShiftsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: TrackingGateway,
+    private readonly telegram: TelegramService,
   ) {}
 
   // ── Courier: start shift ──────────────────────────────────────────────────
@@ -40,6 +42,7 @@ export class ShiftsService {
         establishment_id: user.establishment_id,
         planned_end_at: dto.planned_end_at ? new Date(dto.planned_end_at) : null,
       },
+      include: { courier: { select: { name: true } } },
     });
 
     this.logger.log(`Shift started: courier=${user.courier_id} shift=${shift.id}`);
@@ -49,6 +52,11 @@ export class ShiftsService {
       started_at: shift.started_at,
       planned_end_at: shift.planned_end_at,
     });
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `🟢 ${shift.courier.name} вийшов на зміну`,
+      'courier_shift_started',
+    ).catch(() => {});
     return shift;
   }
 
@@ -61,6 +69,7 @@ export class ShiftsService {
 
     const shift = await this.prisma.shift.findFirst({
       where: { courier_id: user.courier_id, ended_at: null },
+      include: { courier: { select: { name: true } } },
     });
     if (!shift) {
       throw new NotFoundException('No active shift found');
@@ -78,6 +87,11 @@ export class ShiftsService {
       ended_by: 'courier',
       ended_at: updated.ended_at,
     });
+    this.telegram.notifyEstablishmentManagers(
+      updated.establishment_id,
+      `⚫ ${shift.courier.name} завершив зміну`,
+      'courier_shift_ended',
+    ).catch(() => {});
     return updated;
   }
 
@@ -97,6 +111,7 @@ export class ShiftsService {
   async endShiftByManager(shiftId: string, user: JwtPayload) {
     const shift = await this.prisma.shift.findFirst({
       where: { id: shiftId, establishment_id: user.establishment_id },
+      include: { courier: { select: { name: true } } },
     });
     if (!shift) throw new NotFoundException('Shift not found');
     if (shift.ended_at) throw new ConflictException('Shift is already ended');
@@ -113,6 +128,11 @@ export class ShiftsService {
       ended_by: 'manager',
       ended_at: updated.ended_at,
     });
+    this.telegram.notifyEstablishmentManagers(
+      updated.establishment_id,
+      `⚫ ${shift.courier.name} — зміну завершено менеджером`,
+      'courier_shift_ended',
+    ).catch(() => {});
     return updated;
   }
 
@@ -181,6 +201,13 @@ export class ShiftsService {
       data: { ended_at: endedAt, ended_by: 'auto' },
     });
 
+    const courierIds = staleShifts.map((s) => s.courier_id);
+    const couriers = await this.prisma.courier.findMany({
+      where: { id: { in: courierIds } },
+      select: { id: true, name: true },
+    });
+    const courierNameMap = new Map(couriers.map((c) => [c.id, c.name]));
+
     for (const s of staleShifts) {
       this.gateway.broadcastToEstablishment(s.establishment_id, 'shift:ended', {
         shift_id: s.id,
@@ -188,6 +215,12 @@ export class ShiftsService {
         ended_by: 'auto',
         ended_at: endedAt,
       });
+      const courierName = courierNameMap.get(s.courier_id) ?? s.courier_id;
+      this.telegram.notifyEstablishmentManagers(
+        s.establishment_id,
+        `🕐 Зміну ${courierName} закрито автоматично (> 16 год без GPS-пінгу)`,
+        'courier_shift_auto_closed',
+      ).catch(() => {});
     }
 
     this.logger.log(`Auto-closed ${staleShifts.length} stale shift(s)`);

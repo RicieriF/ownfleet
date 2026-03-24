@@ -51,6 +51,9 @@ export const apiPatch = <T>(path: string, body?: unknown) =>
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+export const apiDelete = <T>(path: string) =>
+  apiFetch<T>(path, { method: 'DELETE' });
+
 export const apiPostForm = async <T>(path: string, form: FormData): Promise<T> => {
   const { accessToken, refreshAccessToken, clearAuth } = useAuthStore.getState();
 

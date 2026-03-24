@@ -3,6 +3,12 @@ import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CouriersService } from '../couriers.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
+import { TelegramService } from '../../telegram/telegram.service.js';
+
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
+  notifyCourier: jest.fn().mockResolvedValue(undefined),
+};
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -39,6 +45,7 @@ describe('CouriersService', () => {
         CouriersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: { sendPush: jest.fn().mockResolvedValue(undefined) } },
+        { provide: TelegramService, useValue: mockTelegramService },
       ],
     }).compile();
     service = module.get<CouriersService>(CouriersService);
@@ -116,6 +123,21 @@ describe('CouriersService', () => {
     it('clears device_token without throwing on DB error', async () => {
       mockPrisma.courier.update.mockRejectedValue(new Error('DB error'));
       await expect(service.clearDeviceToken('c1')).resolves.not.toThrow();
+    });
+  });
+
+  describe('Telegram notifications', () => {
+    it('remindCourier() fires manager_reminder to the courier via Telegram', async () => {
+      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
+      mockPrisma.courier.update.mockResolvedValue(courierA);
+
+      await service.remindCourier('c1', managerA);
+
+      expect(mockTelegramService.notifyCourier).toHaveBeenCalledWith(
+        'c1',
+        expect.any(String),
+        'manager_reminder',
+      );
     });
   });
 });

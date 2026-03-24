@@ -120,6 +120,10 @@ model User {
   // Optional link to a courier — set when a courier accepts an invite and creates an account
   courier_id String? @unique
 
+  // Telegram bot integration (optional)
+  telegram_chat_id String? @unique
+  telegram_prefs   Json?   @default("{}")
+
   establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   refresh_tokens RefreshToken[]
   courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull)
@@ -155,7 +159,8 @@ model Courier {
   active                      Boolean         @default(true)
   battery_optimization_exempt Boolean         @default(false)
   device_brand                String?
-  telegram_chat_id            String?
+  telegram_chat_id            String?   @unique
+  telegram_prefs              Json?     @default("{}")
   last_reminder_sent_at       DateTime?
   reminder_count              Int             @default(0)
   created_at                  DateTime        @default(now())

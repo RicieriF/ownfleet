@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api';
 import { Establishment } from '@/types';
 import { SettingsForm } from './settings-form';
+import { TelegramSettings } from './telegram-settings';
 
 const PLAN_LABELS: Record<string, string> = {
   pilot:    'Pilot',
@@ -62,8 +63,16 @@ function billingStatus(est: Establishment): React.ReactNode {
   return <span style={{ color: 'var(--bad)' }}>Підписка закінчилась</span>;
 }
 
+interface TelegramStatus {
+  connected: boolean;
+  prefs: Record<string, boolean>;
+}
+
 export default async function SettingsPage() {
-  const establishment = await apiFetch<Establishment>('/api/v1/establishments/me');
+  const [establishment, telegramStatus] = await Promise.all([
+    apiFetch<Establishment>('/api/v1/establishments/me'),
+    apiFetch<TelegramStatus>('/api/v1/telegram/status').catch(() => ({ connected: false, prefs: {} })),
+  ]);
 
   return (
     <div className="max-w-2xl">
@@ -100,6 +109,9 @@ export default async function SettingsPage() {
 
       {/* Retention settings — client form */}
       <SettingsForm initialSettings={establishment.settings as Record<string, number> | null} />
+
+      {/* Telegram notifications */}
+      <TelegramSettings initialStatus={telegramStatus} />
     </div>
   );
 }

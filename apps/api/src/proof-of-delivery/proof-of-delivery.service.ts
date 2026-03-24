@@ -11,6 +11,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
@@ -28,6 +29,7 @@ export class ProofOfDeliveryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhooks: WebhooksService,
+    private readonly telegram: TelegramService,
     private readonly config: ConfigService,
   ) {
     this.s3 = new S3Client({
@@ -230,6 +232,12 @@ export class ProofOfDeliveryService {
       })
       .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed', err));
 
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `✅ Доставку завершено ${geoMatch ? '(геопозиція OK)' : '(геопозиція не співпала)'}`,
+      'delivery_completed',
+    ).catch(() => {});
+
     return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
   }
 
@@ -299,6 +307,12 @@ export class ProofOfDeliveryService {
       })
       .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed (force-close)', err));
 
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `⚠️ Доставку закрито вручну менеджером`,
+      'delivery_force_closed',
+    ).catch(() => {});
+
     return { status: DeliveryStatus.completed, force_closed: true };
   }
 
@@ -323,6 +337,12 @@ export class ProofOfDeliveryService {
         order_id: delivery.order_id,
       })
       .catch((err) => this.logger.warn('webhook dispatch failed for delivery.failed', err));
+
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `❌ Доставку провалено`,
+      'delivery_failed',
+    ).catch(() => {});
 
     return { status: DeliveryStatus.failed };
   }

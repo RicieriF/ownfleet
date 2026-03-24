@@ -276,6 +276,13 @@ export default function MainScreen() {
               <Text style={styles.endShiftText}>Завершити зміну</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/profile')}
+            hitSlop={8}
+            style={{ marginRight: 4 }}
+          >
+            <Ionicons name="person-circle-outline" size={26} color="#71717a" />
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout}>
             <Text style={styles.logoutBtn}>Вийти</Text>
           </TouchableOpacity>

@@ -3,6 +3,7 @@ import { NotFoundException, ForbiddenException, BadRequestException } from '@nes
 import { OrdersService } from '../orders.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
+import { TelegramService } from '../../telegram/telegram.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -34,6 +35,11 @@ const mockPrisma = {
   $transaction: jest.fn((cb: any) => cb(mockTx)),
 };
 
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
+  notifyCourier: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('OrdersService', () => {
   let service: OrdersService;
 
@@ -44,6 +50,7 @@ describe('OrdersService', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WebhooksService, useValue: mockWebhooksService },
+        { provide: TelegramService, useValue: mockTelegramService },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);
@@ -142,6 +149,47 @@ describe('OrdersService', () => {
       await expect(
         service.assign('o1', { courier_id: 'c2' }, manager),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('Telegram notifications', () => {
+    it('create() fires order_created to establishment managers', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(null);
+      mockPrisma.order.create.mockResolvedValue(pendingOrder);
+
+      await service.create({ address: 'вул. Хрещатик 1' }, manager);
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        EST_A,
+        expect.any(String),
+        'order_created',
+      );
+    });
+
+    it('assign() fires delivery_assigned to establishment managers', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
+      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
+
+      await service.assign('o1', { courier_id: 'c1' }, manager);
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        EST_A,
+        expect.any(String),
+        'delivery_assigned',
+      );
+    });
+
+    it('assign() fires delivery_assigned to the courier', async () => {
+      mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
+      mockPrisma.courier.findUnique.mockResolvedValue(courierA);
+
+      await service.assign('o1', { courier_id: 'c1' }, manager);
+
+      expect(mockTelegramService.notifyCourier).toHaveBeenCalledWith(
+        'c1',
+        expect.any(String),
+        'delivery_assigned',
+      );
     });
   });
 });

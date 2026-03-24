@@ -8,6 +8,7 @@ import {
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
@@ -22,6 +23,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhooks: WebhooksService,
+    private readonly telegram: TelegramService,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -74,6 +76,11 @@ export class OrdersService {
       this.webhooks.dispatch(user.establishment_id, 'order.created', { order_id: order.id }).catch(
         (err) => this.logger.warn('webhook dispatch failed for order.created', err),
       );
+      this.telegram.notifyEstablishmentManagers(
+        user.establishment_id,
+        `📦 Нове замовлення: ${order.address}`,
+        'order_created',
+      ).catch(() => {});
       return order;
     } catch (err) {
       // Race condition: two concurrent requests for the same external_id both passed
@@ -108,7 +115,7 @@ export class OrdersService {
       throw new NotFoundException('Courier not found in your establishment');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id },
         data: { status: OrderStatus.assigned },
@@ -130,6 +137,19 @@ export class OrdersService {
 
       return updated;
     });
+
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
+      'delivery_assigned',
+    ).catch(() => {});
+    this.telegram.notifyCourier(
+      dto.courier_id,
+      `📦 Вам призначено доставку: ${order.address}`,
+      'delivery_assigned',
+    ).catch(() => {});
+
+    return result;
   }
 
   async cancel(id: string, user: AuthenticatedUser) {
