@@ -30,6 +30,7 @@ const mockPrisma = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   },
 };
 
@@ -359,7 +360,7 @@ describe('EtaService', () => {
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(0);
-      expect(mockPrisma.delivery.update).not.toHaveBeenCalled();
+      expect(mockPrisma.delivery.updateMany).not.toHaveBeenCalled();
     });
 
     it('returns 0 when delivery is not yet past the configured delay', async () => {
@@ -388,7 +389,7 @@ describe('EtaService', () => {
         address: 'вул. Лесі Українки, 5',
       });
       mockPrisma.delivery.findMany.mockResolvedValue([delivery]);
-      mockPrisma.delivery.update.mockResolvedValue({});
+      mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.checkOverdueDeliveries();
 
@@ -403,8 +404,8 @@ describe('EtaService', () => {
         expect.stringContaining('вул. Лесі Українки, 5'),
         'delivery_assigned',
       );
-      expect(mockPrisma.delivery.update).toHaveBeenCalledWith({
-        where: { id: 'delivery-1' },
+      expect(mockPrisma.delivery.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['delivery-1'] } },
         data: { eta_overdue_alerted_at: expect.any(Date) },
       });
     });
@@ -423,14 +424,13 @@ describe('EtaService', () => {
         etaAlertDelayMinutes: 10,
       });
       mockPrisma.delivery.findMany.mockResolvedValue([overdueDelivery, notYetOverdueDelivery]);
-      mockPrisma.delivery.update.mockResolvedValue({});
+      mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(1);
-      expect(mockPrisma.delivery.update).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.delivery.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'delivery-overdue' } }),
+      expect(mockPrisma.delivery.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['delivery-overdue'] } } }),
       );
     });
 
@@ -448,7 +448,7 @@ describe('EtaService', () => {
         eta_alert_delay_minutes: null as unknown as number,
       };
       mockPrisma.delivery.findMany.mockResolvedValue([delivery]);
-      mockPrisma.delivery.update.mockResolvedValue({});
+      mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.checkOverdueDeliveries();
 
@@ -462,14 +462,14 @@ describe('EtaService', () => {
         etaAlertDelayMinutes: 5,
       });
       mockPrisma.delivery.findMany.mockResolvedValue([delivery]);
-      mockPrisma.delivery.update.mockResolvedValue({});
+      mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
       mockTelegram.notifyEstablishmentManagers.mockRejectedValue(new Error('Telegram down'));
 
       // Should not throw
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(1);
-      expect(mockPrisma.delivery.update).toHaveBeenCalled();
+      expect(mockPrisma.delivery.updateMany).toHaveBeenCalled();
     });
 
     it('queries only in_progress deliveries without prior alert', async () => {

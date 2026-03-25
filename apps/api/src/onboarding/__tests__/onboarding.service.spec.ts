@@ -24,7 +24,7 @@ const baseInvite = {
   courier: { id: 'c1', name: 'Іван', phone: '+380501234567' },
 };
 
-const mockCourier = { findUnique: jest.fn() };
+const mockCourier = { findUnique: jest.fn(), update: jest.fn() };
 const mockInviteToken = {
   create: jest.fn(),
   findUnique: jest.fn(),
@@ -50,6 +50,7 @@ const mockPrisma = {
   establishment: mockEstablishment,
   user: mockUser,
   refreshToken: mockRefreshToken,
+  $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 };
 
 const mockJwt = { sign: jest.fn().mockReturnValue('mock-access-token') };
@@ -81,6 +82,7 @@ describe('OnboardingService', () => {
     mockInviteToken.updateMany.mockResolvedValue({ count: 1 });
     mockInviteToken.findUnique.mockResolvedValue(baseInvite);
     mockInviteToken.delete.mockResolvedValue({});
+    mockCourier.update.mockResolvedValue({});
     mockUser.findUnique.mockResolvedValue(null); // no existing user
     mockUser.create.mockResolvedValue({
       id: 'new-user-1',
@@ -156,6 +158,21 @@ describe('OnboardingService', () => {
         expect.objectContaining({ data: { used_at: expect.any(Date) } }),
       );
       expect(mockUser.create).toHaveBeenCalled();
+    });
+
+    it('persists transport_mode on courier in the same transaction', async () => {
+      mockInviteToken.updateMany.mockResolvedValue({ count: 1 });
+      mockInviteToken.findUnique.mockResolvedValue(baseInvite);
+      mockUser.findUnique.mockResolvedValue(null);
+
+      await service.acceptInvite(baseInvite.token, 'password123', 'moto_electric');
+
+      expect(mockCourier.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { transport_mode: 'moto_electric' },
+      });
+      // Both user.create and courier.update must go through $transaction
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 
     it('throws NotFoundException for unknown token', async () => {

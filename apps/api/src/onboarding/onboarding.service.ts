@@ -142,25 +142,27 @@ export class OnboardingService {
     // Use phone as email for courier accounts (phone is the login identifier)
     const email = courier.phone ?? `courier-${courier.id}@weego.internal`;
 
-    const user = await this.prisma.user.create({
-      data: {
-        establishment_id: invite!.establishment_id,
-        role: UserRole.dispatcher, // lowest-privilege role for couriers
-        email,
-        password_hash: passwordHash,
-        courier_id: courier.id,
-      },
-    });
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.create({
+        data: {
+          establishment_id: invite!.establishment_id,
+          role: UserRole.dispatcher, // lowest-privilege role for couriers
+          email,
+          password_hash: passwordHash,
+          courier_id: courier.id,
+        },
+      }),
+      ...(transportMode
+        ? [
+            this.prisma.courier.update({
+              where: { id: courier.id },
+              data: { transport_mode: transportMode },
+            }),
+          ]
+        : []),
+    ]);
 
     this.logger.log(`Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`);
-
-    // Persist transport mode if provided
-    if (transportMode) {
-      await this.prisma.courier.update({
-        where: { id: courier.id },
-        data: { transport_mode: transportMode },
-      });
-    }
 
     // Issue tokens so the courier is immediately logged in after accepting invite
     const payload: JwtPayload = {
