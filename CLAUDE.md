@@ -65,6 +65,7 @@ B2B SaaS платформа для управління власними кур�
 
 ```sql
 establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB,
+                 timezone TEXT NOT NULL DEFAULT 'Europe/Kyiv',  -- IANA timezone; допустимі: Europe/Kyiv|Warsaw|Prague|Berlin|Riga; CHECK constraint в БД
                  auto_dispatch BOOLEAN DEFAULT false,   -- false = тільки менеджер призначає; true = менеджер призначає + курʼєр може взяти сам
                  delivery_sla_minutes INT NULL)          -- null = без таймера; N = SLA доставки в хвилинах
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
@@ -163,6 +164,7 @@ active (ended_at IS NULL) → ended (ended_at SET, ended_by = courier|manager|au
 - **Bull** — всі retry-черги через Bull, не in-memory
 - **Idempotency** — `INSERT ... ON CONFLICT (external_id, establishment_id) DO NOTHING` для POS замовлень
 - Жодних `console.log` — тільки NestJS `Logger`
+- **Timezone** — час у Telegram-повідомленнях завжди форматується з `establishment.timezone` (IANA). Список дозволених зон: `ALLOWED_TIMEZONES` в `establishments/dto/update-settings.dto.ts`. Фронтенд-константа `TIMEZONE_OPTIONS` в `settings-form.tsx` має залишатись синхронізованою з нею.
 
 ---
 
@@ -290,7 +292,7 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  /analytics      — summary KPIs + per-courier breakdown
 ✅  /integrations   — Poster + iiko config cards
 ✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + retention config
+✅  /settings       — дані закладу + timezone + retention config
 ```
 
 **Mobile App (React Native + Expo) — ✅ реалізовано:**
@@ -304,13 +306,13 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 255 тестів / 19 суїтів / all green**
+**Тести — ✅ 256 тестів / 19 суїтів / all green**
 
 ---
 
 ## Що НЕ чіпати без обговорення
 
-- `database/migrations/` — тільки через `prisma migrate dev`
+- `database/migrations/` — тільки через `prisma migrate dev`. Якщо міграція містить `CREATE INDEX CONCURRENTLY` або інші команди, що не підтримуються в транзакції shadow DB — використовувати ручний флоу: створити директорію вручну, написати SQL, застосувати через `npx prisma db execute --file ...`, зареєструвати через `npx prisma migrate resolve --applied <name>`. НЕ запускати `prisma db pull` — він перезаписує schema.prisma.
 - State machine transitions в `OrdersModule` та `ProofOfDeliveryModule`
 - `PlanAccessGuard` логіка — зміна може зламати білінг
 - `delivery_proofs` retention — ця таблиця захищена навмисно
