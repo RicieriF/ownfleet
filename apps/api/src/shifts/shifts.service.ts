@@ -247,6 +247,9 @@ export class ShiftsService {
           courier: {
             select: { telegram_chat_id: true, telegram_prefs: true },
           },
+          establishment: {
+            select: { timezone: true },
+          },
         },
       });
 
@@ -265,6 +268,22 @@ export class ShiftsService {
         if (msUntilEnd <= 0) continue;          // shift already past planned end
         if (msUntilEnd > thresholdMs) continue; // not yet within warning window
 
+        // Format message before consuming Redis key — if formatting throws (e.g. bad timezone),
+        // we don't want to burn the dedup key and silence the notification for the full TTL.
+        const minutesLeft = Math.round(msUntilEnd / 60000);
+        let endTime: string;
+        try {
+          endTime = shift.planned_end_at.toLocaleTimeString('uk-UA', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: shift.establishment.timezone,
+          });
+        } catch (err) {
+          this.logger.warn(`Invalid timezone for shift ${shift.id}: ${shift.establishment.timezone}`, err);
+          continue;
+        }
+        const text = `⏰ Зміна завершується через ${minutesLeft} хв (о ${endTime})`;
+
         // Minimum TTL of 5 min prevents 1-second key expiry causing duplicate sends
         const ttlSeconds = Math.max(300, Math.ceil(msUntilEnd / 1000));
         const isNew = await this.telegram.setNxWithTtl(
@@ -272,15 +291,6 @@ export class ShiftsService {
           ttlSeconds,
         );
         if (!isNew) continue; // already notified for this shift
-
-        const minutesLeft = Math.round(msUntilEnd / 60000);
-        // TODO: use establishment timezone once establishments.timezone field is added
-        const endTime = shift.planned_end_at.toLocaleTimeString('uk-UA', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'UTC',
-        });
-        const text = `⏰ Зміна завершується через ${minutesLeft} хв (о ${endTime})`;
 
         this.telegram
           .sendMessage(shift.courier.telegram_chat_id!, text)

@@ -87,6 +87,7 @@ model Establishment {
   paid_until        DateTime?
   onboarding_status OnboardingStatus @default(pending)
   settings          Json             @default("{}")
+  timezone          String           @default("Europe/Kyiv")
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt
 

@@ -7,10 +7,12 @@ interface SettingsPayload {
   retention_orders_days?: number;
   retention_pings_days?: number;
   courier_not_responding_min?: number;
+  timezone?: string;
 }
 
 interface Props {
   initialSettings: SettingsPayload | null;
+  initialTimezone: string;
 }
 
 function SectionCard({ title, description, children }: {
@@ -98,7 +100,16 @@ function NumberInput({
 
 const NOT_RESPONDING_OPTIONS = [10, 15, 30, 60] as const;
 
-export function SettingsForm({ initialSettings }: Props) {
+// Must stay in sync with ALLOWED_TIMEZONES in apps/api/src/establishments/dto/update-settings.dto.ts
+const TIMEZONE_OPTIONS = [
+  { value: 'Europe/Kyiv',   label: 'Київ (UTC+2/+3)' },
+  { value: 'Europe/Warsaw', label: 'Варшава (UTC+1/+2)' },
+  { value: 'Europe/Prague', label: 'Прага (UTC+1/+2)' },
+  { value: 'Europe/Berlin', label: 'Берлін (UTC+1/+2)' },
+  { value: 'Europe/Riga',   label: 'Рига (UTC+2/+3)' },
+] as const;
+
+export function SettingsForm({ initialSettings, initialTimezone }: Props) {
   const [retentionOrders, setRetentionOrders] = useState(
     initialSettings?.retention_orders_days ?? 14,
   );
@@ -108,6 +119,7 @@ export function SettingsForm({ initialSettings }: Props) {
   const [courierNotRespondingMin, setCourierNotRespondingMin] = useState(
     initialSettings?.courier_not_responding_min ?? 15,
   );
+  const [timezone, setTimezone] = useState(initialTimezone);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -121,6 +133,7 @@ export function SettingsForm({ initialSettings }: Props) {
           retention_orders_days: retentionOrders,
           retention_pings_days: retentionPings,
           courier_not_responding_min: courierNotRespondingMin,
+          timezone,
         });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
@@ -131,6 +144,34 @@ export function SettingsForm({ initialSettings }: Props) {
   }
 
   return (
+    <>
+    <SectionCard title="Часовий пояс" description="Використовується для відображення часу в Telegram-сповіщеннях">
+      <select
+        value={timezone}
+        onChange={(e) => setTimezone(e.target.value)}
+        className="w-full text-sm rounded outline-none transition-all"
+        style={{
+          fontFamily: 'var(--font-sans)',
+          background: 'var(--s1)',
+          border: '1px solid var(--br)',
+          color: 'var(--t1)',
+          padding: '7px 10px',
+          borderRadius: '6px',
+          cursor: 'pointer',
+        }}
+        onFocus={(e) =>
+          (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')
+        }
+        onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
+      >
+        {TIMEZONE_OPTIONS.map((tz) => (
+          <option key={tz.value} value={tz.value}>
+            {tz.label}
+          </option>
+        ))}
+      </select>
+    </SectionCard>
+
     <SectionCard
       title="Зберігання даних"
       description="Старі записи автоматично видаляються. Докази доставки зберігаються назавжди."
@@ -217,5 +258,6 @@ export function SettingsForm({ initialSettings }: Props) {
         </button>
       </div>
     </SectionCard>
+    </>
   );
 }

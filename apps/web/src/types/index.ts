@@ -23,6 +23,7 @@ export interface Establishment {
     courier_not_responding_min?: number;
     [key: string]: unknown;
   } | null;
+  timezone?: string;
 }
 
 // ── Couriers ───────────────────────────────────────────────────────────────

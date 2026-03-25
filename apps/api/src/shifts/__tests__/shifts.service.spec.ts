@@ -292,6 +292,7 @@ describe('ShiftsService', () => {
       planned_end_at: Date | null;
       telegram_chat_id?: string | null;
       prefs?: Record<string, unknown>;
+      timezone?: string;
     }) {
       return {
         id: 'shift-s1',
@@ -299,6 +300,9 @@ describe('ShiftsService', () => {
         courier: {
           telegram_chat_id: 'telegram_chat_id' in overrides ? overrides.telegram_chat_id : chatId,
           telegram_prefs: overrides.prefs ?? { shift_ending_soon: true },
+        },
+        establishment: {
+          timezone: overrides.timezone ?? 'Europe/Kyiv',
         },
       };
     }
@@ -416,6 +420,27 @@ describe('ShiftsService', () => {
 
       expect(await service.checkShiftEndingSoon()).toBe(0);
       expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('uses establishment timezone when formatting end time in message', async () => {
+      const plannedEnd = new Date(Date.now() + 20 * 60 * 1000);
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: plannedEnd,
+          prefs: { shift_ending_soon: true },
+          timezone: 'Europe/Warsaw',
+        }),
+      ]);
+
+      await service.checkShiftEndingSoon();
+
+      const [[, message]] = mockTelegramService.sendMessage.mock.calls;
+      const expectedTime = plannedEnd.toLocaleTimeString('uk-UA', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Warsaw',
+      });
+      expect(message).toContain(expectedTime);
     });
   });
 

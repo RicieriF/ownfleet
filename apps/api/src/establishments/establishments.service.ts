@@ -26,13 +26,15 @@ export class EstablishmentsService {
   async getSettings(user: AuthenticatedUser) {
     const est = await this.prisma.establishment.findUniqueOrThrow({
       where: { id: user.establishment_id },
-      select: { settings: true },
+      select: { settings: true, timezone: true },
     });
-    return est.settings;
+    return est;
   }
 
   async updateSettings(user: AuthenticatedUser, dto: UpdateSettingsDto) {
     this.assertManagerOrOwner(user);
+
+    const { timezone, ...settingsFields } = dto;
 
     const est = await this.prisma.establishment.findUniqueOrThrow({
       where: { id: user.establishment_id },
@@ -40,12 +42,15 @@ export class EstablishmentsService {
     });
 
     const currentSettings = (est.settings ?? {}) as Record<string, unknown>;
-    const merged = { ...currentSettings, ...dto };
+    const merged = { ...currentSettings, ...settingsFields };
 
     return this.prisma.establishment.update({
       where: { id: user.establishment_id },
-      data: { settings: merged },
-      select: { settings: true },
+      data: {
+        settings: merged,
+        ...(timezone !== undefined && { timezone }),
+      },
+      select: { settings: true, timezone: true },
     });
   }
 

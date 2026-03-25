@@ -1,4 +1,12 @@
-import { IsInt, IsOptional, Min, Max } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Min, Max } from 'class-validator';
+
+export const ALLOWED_TIMEZONES = [
+  'Europe/Kyiv',
+  'Europe/Warsaw',
+  'Europe/Prague',
+  'Europe/Berlin',
+  'Europe/Riga',
+] as const;
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -18,4 +26,8 @@ export class UpdateSettingsDto {
   @Min(10)
   @Max(60)
   courier_not_responding_min?: number;
+
+  @IsOptional()
+  @IsIn(ALLOWED_TIMEZONES)
+  timezone?: string;
 }
