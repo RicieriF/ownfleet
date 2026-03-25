@@ -13,6 +13,7 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { assertOrderTransition } from './order-state-machine.js';
+import { EtaService } from '../eta/eta.service.js';
 
 const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 
@@ -24,6 +25,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly webhooks: WebhooksService,
     private readonly telegram: TelegramService,
+    private readonly eta: EtaService,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -115,6 +117,31 @@ export class OrdersService {
       throw new NotFoundException('Courier not found in your establishment');
     }
 
+    // Fetch establishment coords + timezone for ETA calculation (fire before transaction)
+    const establishment = await this.prisma.establishment.findUniqueOrThrow({
+      where: { id: user.establishment_id },
+      select: { lat: true, lng: true, timezone: true },
+    });
+
+    // Calculate ETA if all coordinates are available and courier has transport mode set
+    let etaSeconds: number | null = null;
+    if (
+      establishment.lat !== null &&
+      establishment.lng !== null &&
+      order.lat !== null &&
+      order.lng !== null &&
+      courier.transport_mode !== null
+    ) {
+      etaSeconds = await this.eta.calculateEta({
+        establishmentLat: establishment.lat,
+        establishmentLng: establishment.lng,
+        orderLat: order.lat,
+        orderLng: order.lng,
+        transportMode: courier.transport_mode,
+        timezone: establishment.timezone,
+      });
+    }
+
     const result = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.order.update({
         where: { id },
@@ -127,6 +154,7 @@ export class OrdersService {
           courier_id: dto.courier_id,
           status: 'assigned',
           assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
         },
       }).catch((err) => {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {

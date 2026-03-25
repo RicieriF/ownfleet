@@ -4,6 +4,7 @@ import { OrdersService } from '../orders.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
+import { EtaService } from '../../eta/eta.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -16,12 +17,14 @@ const orderEstB = { id: 'o2', establishment_id: EST_B, status: 'pending', extern
 const assignedOrder = { id: 'o3', establishment_id: EST_A, status: 'assigned', external_id: null };
 const completedOrder = { id: 'o4', establishment_id: EST_A, status: 'completed', external_id: null };
 
-const courierA = { id: 'c1', establishment_id: EST_A, name: 'Ivan' };
+const courierA = { id: 'c1', establishment_id: EST_A, name: 'Ivan', transport_mode: 'moto_electric' };
 
 const mockTx = {
   order: { update: jest.fn().mockResolvedValue(assignedOrder) },
   delivery: { create: jest.fn().mockResolvedValue({}) },
 };
+
+const mockEstablishment = { lat: 50.45, lng: 30.52, timezone: 'Europe/Kyiv' };
 
 const mockPrisma = {
   order: {
@@ -32,6 +35,7 @@ const mockPrisma = {
     update: jest.fn(),
   },
   courier: { findUnique: jest.fn() },
+  establishment: { findUniqueOrThrow: jest.fn().mockResolvedValue(mockEstablishment) },
   $transaction: jest.fn((cb: any) => cb(mockTx)),
 };
 
@@ -45,12 +49,14 @@ describe('OrdersService', () => {
 
   beforeEach(async () => {
     const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
+    const mockEtaService = { calculateEta: jest.fn().mockResolvedValue(900) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WebhooksService, useValue: mockWebhooksService },
         { provide: TelegramService, useValue: mockTelegramService },
+        { provide: EtaService, useValue: mockEtaService },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);

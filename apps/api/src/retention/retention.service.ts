@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ShiftsService } from '../shifts/shifts.service.js';
+import { EtaService } from '../eta/eta.service.js';
 import { OrderStatus } from '@prisma/client';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -19,6 +20,7 @@ export class RetentionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly shiftsService: ShiftsService,
+    private readonly etaService: EtaService,
   ) {}
 
   /**
@@ -55,6 +57,19 @@ export class RetentionService {
     const sent = await this.shiftsService.checkCourierNotResponding();
     if (sent > 0) {
       this.logger.log(`Courier not responding: sent ${sent} notification(s)`);
+    }
+  }
+
+  /**
+   * Runs every 5 minutes.
+   * Alerts managers via Telegram when a delivery has exceeded its ETA
+   * beyond the establishment's configured delay threshold.
+   */
+  @Cron('0 */5 * * * *', { name: 'eta-overdue-alert', timeZone: 'UTC' })
+  async checkEtaOverdue(): Promise<void> {
+    const sent = await this.etaService.checkOverdueDeliveries();
+    if (sent > 0) {
+      this.logger.log(`ETA overdue: sent ${sent} alert(s)`);
     }
   }
 

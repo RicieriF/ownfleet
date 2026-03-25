@@ -102,7 +102,7 @@ export class OnboardingService {
 
   // ── Courier (public): accept invite ────────────────────────────────────
 
-  async acceptInvite(token: string, password: string, transportMode?: TransportMode) {
+  async acceptInvite(token: string, password: string, transportMode: TransportMode) {
     const now = new Date();
 
     // Atomic claim: only succeeds if token exists, unused, and not expired.
@@ -152,14 +152,10 @@ export class OnboardingService {
           courier_id: courier.id,
         },
       }),
-      ...(transportMode
-        ? [
-            this.prisma.courier.update({
-              where: { id: courier.id },
-              data: { transport_mode: transportMode },
-            }),
-          ]
-        : []),
+      this.prisma.courier.update({
+        where: { id: courier.id },
+        data: { transport_mode: transportMode },
+      }),
     ]);
 
     this.logger.log(`Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`);

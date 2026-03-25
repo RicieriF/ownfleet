@@ -109,8 +109,11 @@ export default async function SettingsPage() {
 
       {/* Retention settings — client form */}
       <SettingsForm
-        initialSettings={establishment.settings as Record<string, number> | null}
+        initialSettings={establishment.settings as Record<string, unknown> | null}
         initialTimezone={establishment.timezone ?? 'Europe/Kyiv'}
+        initialSlaMinutes={establishment.delivery_sla_minutes ?? null}
+        initialLat={establishment.lat ?? null}
+        initialLng={establishment.lng ?? null}
       />
 
       {/* Telegram notifications */}

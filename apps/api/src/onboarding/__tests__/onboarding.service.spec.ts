@@ -147,7 +147,7 @@ describe('OnboardingService', () => {
       mockInviteToken.findUnique.mockResolvedValue(baseInvite);
       mockUser.findUnique.mockResolvedValue(null);
 
-      const result = await service.acceptInvite(baseInvite.token, 'password123');
+      const result = await service.acceptInvite(baseInvite.token, 'password123', 'car');
 
       expect(result.access_token).toBe('mock-access-token');
       expect(result.refresh_token).toBeDefined();
@@ -158,6 +158,10 @@ describe('OnboardingService', () => {
         expect.objectContaining({ data: { used_at: expect.any(Date) } }),
       );
       expect(mockUser.create).toHaveBeenCalled();
+      expect(mockCourier.update).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        data: { transport_mode: 'car' },
+      });
     });
 
     it('persists transport_mode on courier in the same transaction', async () => {
@@ -179,7 +183,7 @@ describe('OnboardingService', () => {
       mockInviteToken.updateMany.mockResolvedValue({ count: 0 });
       mockInviteToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.acceptInvite('bad-token', 'password123')).rejects.toThrow(NotFoundException);
+      await expect(service.acceptInvite('bad-token', 'password123', 'car')).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when token already used', async () => {
@@ -189,7 +193,7 @@ describe('OnboardingService', () => {
         used_at: new Date(Date.now() - 3600_000),
       });
 
-      await expect(service.acceptInvite(baseInvite.token, 'password123')).rejects.toThrow(BadRequestException);
+      await expect(service.acceptInvite(baseInvite.token, 'password123', 'car')).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when token is expired', async () => {
@@ -200,7 +204,7 @@ describe('OnboardingService', () => {
         used_at: null,
       });
 
-      await expect(service.acceptInvite(baseInvite.token, 'password123')).rejects.toThrow(BadRequestException);
+      await expect(service.acceptInvite(baseInvite.token, 'password123', 'car')).rejects.toThrow(BadRequestException);
     });
   });
 

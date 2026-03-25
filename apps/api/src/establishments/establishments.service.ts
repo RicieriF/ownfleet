@@ -34,7 +34,8 @@ export class EstablishmentsService {
   async updateSettings(user: AuthenticatedUser, dto: UpdateSettingsDto) {
     this.assertManagerOrOwner(user);
 
-    const { timezone, ...settingsFields } = dto;
+    // Extract separate columns; the rest go into JSONB settings
+    const { timezone, delivery_sla_minutes, lat, lng, ...settingsFields } = dto;
 
     const est = await this.prisma.establishment.findUniqueOrThrow({
       where: { id: user.establishment_id },
@@ -49,8 +50,17 @@ export class EstablishmentsService {
       data: {
         settings: merged,
         ...(timezone !== undefined && { timezone }),
+        ...(delivery_sla_minutes !== undefined && { delivery_sla_minutes }),
+        ...(lat !== undefined && { lat }),
+        ...(lng !== undefined && { lng }),
       },
-      select: { settings: true, timezone: true },
+      select: {
+        settings: true,
+        timezone: true,
+        delivery_sla_minutes: true,
+        lat: true,
+        lng: true,
+      },
     });
   }
 

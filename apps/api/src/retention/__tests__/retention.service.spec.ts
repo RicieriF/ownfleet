@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RetentionService } from '../retention.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ShiftsService } from '../../shifts/shifts.service.js';
+import { EtaService } from '../../eta/eta.service.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
 const mockOrder = { deleteMany: jest.fn() };
@@ -22,11 +23,13 @@ describe('RetentionService', () => {
   let service: RetentionService;
 
   beforeEach(async () => {
+    const mockEtaService = { checkOverdueDeliveries: jest.fn().mockResolvedValue(0) };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RetentionService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ShiftsService, useValue: mockShiftsService },
+        { provide: EtaService, useValue: mockEtaService },
       ],
     }).compile();
 

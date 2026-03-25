@@ -21,9 +21,15 @@ export interface Establishment {
     retention_orders_days?: number;
     retention_pings_days?: number;
     courier_not_responding_min?: number;
+    show_sla_on_dashboard?: boolean;
+    eta_alert_enabled?: boolean;
+    eta_alert_delay_minutes?: number;
     [key: string]: unknown;
   } | null;
   timezone?: string;
+  delivery_sla_minutes?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 // ── Couriers ───────────────────────────────────────────────────────────────
@@ -102,6 +108,8 @@ export interface Delivery {
   assignment_timeout_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  eta_seconds: number | null;
+  eta_started_at: string | null;
   courier: { id: string; name: string } | null;
 }
 

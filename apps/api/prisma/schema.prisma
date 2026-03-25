@@ -74,6 +74,14 @@ enum BillingEventType {
   access_revoked
 }
 
+enum TransportMode {
+  car
+  moto_gas
+  moto_electric
+  bicycle
+  walking
+}
+
 // ─────────────────────────────────────────
 // Establishments (tenants)
 // ─────────────────────────────────────────
@@ -88,6 +96,10 @@ model Establishment {
   onboarding_status OnboardingStatus @default(pending)
   settings          Json             @default("{}")
   timezone          String           @default("Europe/Kyiv")
+  auto_dispatch     Boolean          @default(false)
+  delivery_sla_minutes Int?
+  lat               Float?
+  lng               Float?
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt
 
@@ -164,6 +176,7 @@ model Courier {
   telegram_prefs              Json?     @default("{}")
   last_reminder_sent_at       DateTime?
   reminder_count              Int             @default(0)
+  transport_mode              TransportMode?
   created_at                  DateTime        @default(now())
   updated_at                  DateTime        @updatedAt
 
@@ -244,6 +257,9 @@ model Delivery {
   started_at            DateTime?
   completed_at          DateTime?
   order_closed_at       DateTime?
+  eta_seconds           Int?
+  eta_started_at        DateTime?
+  eta_overdue_alerted_at DateTime?
   created_at            DateTime       @default(now())
   updated_at            DateTime       @updatedAt
 

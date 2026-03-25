@@ -1,12 +1,43 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Order, OrderStatus, CourierWithStatus } from '@/types';
 import { apiPost, apiPatch } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
+
+function EtaTimer({ etaSeconds, etaStartedAt }: { etaSeconds: number; etaStartedAt: string }) {
+  const [remaining, setRemaining] = useState<number>(() => {
+    const elapsed = (Date.now() - new Date(etaStartedAt).getTime()) / 1000;
+    return Math.round(etaSeconds - elapsed);
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - new Date(etaStartedAt).getTime()) / 1000;
+      setRemaining(Math.round(etaSeconds - elapsed));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [etaSeconds, etaStartedAt]);
+
+  const pct = remaining / etaSeconds;
+  const color = remaining <= 0 ? 'var(--bad)' : pct <= 0.2 ? 'var(--warn)' : 'var(--ok)';
+
+  const abs = Math.abs(remaining);
+  const m = Math.floor(abs / 60);
+  const s = abs % 60;
+  const label = remaining <= 0
+    ? `+${m}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`;
+
+  return (
+    <span style={{ fontFamily: 'var(--font-mono)', color, fontSize: '12px', fontWeight: 600 }}>
+      {label}
+    </span>
+  );
+}
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending:     'Очікує',
@@ -118,10 +149,17 @@ export function OrdersTable({ orders, couriers }: Props) {
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-[var(--t4)] text-xs mono">
-                  {formatDistanceToNow(new Date(order.created_at), {
-                    addSuffix: true,
-                    locale: uk,
-                  })}
+                  {order.delivery?.eta_seconds && order.delivery?.eta_started_at ? (
+                    <EtaTimer
+                      etaSeconds={order.delivery.eta_seconds}
+                      etaStartedAt={order.delivery.eta_started_at}
+                    />
+                  ) : (
+                    formatDistanceToNow(new Date(order.created_at), {
+                      addSuffix: true,
+                      locale: uk,
+                    })
+                  )}
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-2">
