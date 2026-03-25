@@ -11,38 +11,14 @@
 **Скіл:** `fullstack-dev-skills:spec-miner`
 **Результат:** 54 ендпоінти реалізовані, більшість розбіжностей з архдоком — навмисні (state machine замість прямих update/delete, `/me` замість `/:id`).
 
-### 🔴 FINDING-01 — Відсутній механізм створення тенантів і первинних акаунтів
+### ✅ FINDING-01 — Відсутній механізм створення тенантів і первинних акаунтів
 
-**Прогалина:**
-В архітектурному документі був запланований `POST /api/v1/auth/register`, але він не реалізований. Зараз немає жодного способу створити новий заклад і перших користувачів (owner/manager) — ні через API, ні через UI. Система повністю замкнена для нових клієнтів.
+**Статус:** Закрито — реалізовано повністю.
 
-**Узгоджене рішення:**
-Реалізувати мінімальну **платформ-адмін панель** (окрема сторінка в `apps/web`, захищена `is_platform_admin = true`).
-
-**Флоу створення нового закладу:**
-1. Платформ-адмін вводить лише одне поле — **назву закладу** (наприклад: "Піца Рома")
-2. Система автоматично генерує:
-   - `owner-pica-roma@weego.app` + криптостійкий рандомний пароль
-   - `manager-pica-roma@weego.app` + криптостійкий рандомний пароль
-   - Slug генерується з назви: пробіли → дефіс, кирилиця → транслітерація, lowercase
-3. Після створення — екран з credentials обох акаунтів + кнопки [Скопіювати]
-4. Адмін передає credentials клієнту (Telegram/WhatsApp/як зручно)
-5. Клієнт може змінити логін і пароль у налаштуваннях в будь-який момент
-
-**Деталі паролів:**
-- Мінімум 16 символів
-- Обов'язково: великі + малі літери + цифри + спецсимволи
-- Генерується через `crypto.randomBytes` (не Math.random)
-- Зберігається як bcrypt hash (як всі інші паролі в системі)
-- Передається клієнту тільки один раз при створенні (потім лише reset)
-
-**Що потрібно реалізувати:**
-- API: `POST /api/v1/admin/establishments` (тільки для `is_platform_admin`)
-- API: `GET /api/v1/admin/establishments` — список всіх тенантів
-- Web: `/admin` сторінка (список закладів + форма створення)
-- Web: екран "Заклад створено" з credentials
-
-**Пріоритет:** 🔴 Критичний — без цього неможливо онбордити жодного клієнта
+**Реалізовано:**
+- `apps/api/src/platform/` — `PlatformModule` з `POST /api/v1/platform/establishments`, `GET /api/v1/platform/establishments`, `PATCH /api/v1/platform/establishments/:id/subscription`
+- `apps/web/src/app/platform/` — адмін-панель (`page.tsx`, `platform-panel.tsx`, `layout.tsx`)
+- `PlatformAdminGuard` — захист через `is_platform_admin`
 
 ---
 
@@ -54,34 +30,22 @@
 **Скіл:** `fullstack-dev-skills:code-reviewer`
 **Результат:** 9/10 правил PASS. 1 знахідка.
 
-### 🟡 FINDING-02 — Telegram notifications не підключені до production-коду
+### ✅ FINDING-02 — Telegram notifications не підключені до production-коду
 
-**Прогалина:**
-`NotificationsService.sendTelegram()` реалізований і правильно спроєктований (fire-and-forget), але жодного разу не викликається в production коді. За CLAUDE.md Telegram мав надсилатись у двох випадках:
-1. Авто-закриття зміни (cron) → сповіщення менеджеру: "Зміну курʼєра X автоматично закрито"
-2. Нагадування курʼєру → паралельно з FCM push
-
-**Де має бути виклик:**
-- `src/shifts/shifts.service.ts` → `autoCloseStaleShifts()` — після кожного авто-закриття надіслати Telegram менеджеру закладу
-- `src/couriers/couriers.service.ts` → `remind()` — паралельно з FCM (Telegram як резервний канал для курʼєрів без токену)
-
-**Пріоритет:** 🟡 Середній — функціонал не ламає систему, але менеджер не отримує важливих сповіщень про авто-закриті зміни
+**Статус:** Закрито — реалізовано повний TelegramModule з усіма сповіщеннями:
+- `autoCloseStaleShifts()` → Telegram менеджеру
+- `checkShiftEndingSoon()` → Telegram курʼєру (з таймзоною закладу)
+- `checkCourierNotResponding()` → Telegram менеджеру
+- Reconnect flow (відʼєднання/підʼєднання бота)
 
 ## Аудит #4 — Security
 **Дата:** 2026-03-24
 **Скіл:** `/cso` (Chief Security Officer — daily mode, 8/10 confidence gate, all phases)
 **Результат:** 0 критичних, 0 high, 2 medium. Загальна security posture — **добра**. Helm, HMAC, bcrypt, rate limiting — все на місці.
 
-### 🟡 FINDING-03 — iiko server_url без allowlist → authenticated SSRF
+### ✅ FINDING-03 — iiko server_url без allowlist → authenticated SSRF
 
-**Прогалина:**
-`UpsertIntegrationDto` приймає `config` як довільний `Record<string, unknown>` без валідації `server_url`. Автентифікований власник тенанта може задати `server_url = "http://169.254.169.254/..."` (AWS IMDS) або адресу внутрішнього сервісу. Cron-завдання iiko-polling зробить реальний HTTP-запит до цієї адреси.
-
-**Де виправити:**
-- `apps/api/src/integrations/dto/upsert-integration.dto.ts` — додати `@IsUrl({ protocols: ['https'] })` для `config.server_url` при `type === 'iiko'`
-- Або allowlist доменів iiko (`.iiko.it`, `.syrve.online`)
-
-**Пріоритет:** 🟡 Середній — потрібна автентифікація, але ризик реальний на cloud-інфраструктурі
+**Статус:** Закрито — `@IsUrl({ protocols: ['https'], require_tld: true })` додано до `upsert-integration.dto.ts`.
 
 ### 🔵 INFO — devDependency CVEs (не production)
 
@@ -96,26 +60,20 @@
 **Скіл:** `interface-design:audit`
 **Результат:** 7 сторінок з violation-ами, 6 — чисті. 1 реальний баг (`--s1`), решта — дрібний drift.
 
-### 🔴 FINDING-04 — CSS-змінна `--s1` використовується але не визначена
+### ✅ FINDING-04 — CSS-змінна `--s1` використовується але не визначена
 
-**Прогалина:**
-`var(--s1)` використовується як фоновий колір у 10 місцях (invite-panel, settings-form, settings/page, integrations-manager, webhooks-manager), але в `globals.css` ця змінна **не визначена**. Замість неї — `--sf` (zinc-900, cards/panels). Елементи з `var(--s1)` рендеряться без фону (прозорі або успадковані).
-
-**Де виправити:**
-Додати в `globals.css` аліас `--s1: var(--sf);` або замінити `--s1` → `--sf` у всіх 10 файлах.
-
-**Файли:**
-- `apps/web/src/app/(dashboard)/couriers/invite-panel.tsx` (lines 23, 116, 224)
-- `apps/web/src/app/(dashboard)/settings/settings-form.tsx` (line 83)
-- `apps/web/src/app/(dashboard)/settings/page.tsx` (line 14)
-- `apps/web/src/app/(dashboard)/integrations/integrations-manager.tsx` (lines 146, 158, 190)
-- `apps/web/src/app/(dashboard)/webhooks/webhooks-manager.tsx` (lines 80, 97)
-
-**Пріоритет:** 🔴 Критичний — візуальний баг, елементи без фону
+**Статус:** Закрито — `--s1: #18181b` додано в `globals.css` як аліас для `--sf`.
 
 ---
 
-### 🟡 FINDING-05 — Design system drift: hardcoded hex замість CSS-змінних
+### ✅ FINDING-05 — Design system drift: hardcoded hex замість CSS-змінних
+
+**Статус:** Закрито — жодного `#6aaa84` чи `#09090b` хардкодом у `.tsx` файлах не залишилось.
+
+---
+
+### (архів оригінального опису)
+### 🟡 (архів) FINDING-05 — Design system drift: hardcoded hex замість CSS-змінних
 
 **Прогалина:**
 Частина компонентів використовує hardcoded hex-значення замість CSS-змінних. Це не ламає UI прямо зараз (значення правильні), але при зміні теми або дизайн-токенів — не оновиться.
@@ -147,7 +105,13 @@
 **Скіл:** `fullstack-dev-skills:spec-miner`
 **Результат:** 12 ендпоінтів перевірено. 1 критичний баг, 1 missing field, 1 type mismatch.
 
-### 🔴 FINDING-06 — `PATCH /deliveries/:id/start` повертає неповний об'єкт → crash у мобільному
+### ✅ FINDING-06 — `PATCH /deliveries/:id/start` повертає неповний об'єкт → crash у мобільному
+
+**Статус:** Закрито — `startDelivery()` повертає повний об'єкт з `include: { order: { select: ... } }`.
+
+---
+
+### (архів оригінального опису)
 
 **Прогалина:**
 `ProofOfDeliveryService.startDelivery()` повертає `{ status: 'in_progress', started_at: Date }` — лише 2 поля. Мобільний додаток очікує повний `ActiveDelivery` об'єкт і відразу рендерить `InProgressState` з `delivery.order.address`. Оскільки `order` в отриманому об'єкті відсутній — React Native крашиться або показує порожній екран до наступного polling (10 секунд).
@@ -171,24 +135,9 @@ setDelivery(updated); // ← updated = { status, started_at } — без order!
 
 ---
 
-### 🟡 FINDING-07 — `GET /deliveries/active` не повертає `order.notes`
+### ✅ FINDING-07 — `GET /deliveries/active` не повертає `order.notes`
 
-**Прогалина:**
-`getActiveDelivery()` у select-запиті не включає поле `notes` з таблиці `orders`. Мобільний додаток відображає `delivery.order.notes` у картці доставки, але завжди отримує `undefined`.
-
-```typescript
-// API select (proof-of-delivery.service.ts:55):
-select: { id: true, address: true, lat: true, lng: true, status: true, external_id: true }
-// ← notes відсутній!
-
-// Mobile (index.tsx:400):
-{delivery.order.notes ? <Text>{delivery.order.notes}</Text> : null}
-// ← завжди null, навіть якщо є нотатка
-```
-
-**Де виправити:** Додати `notes: true` до select у `getActiveDelivery()`.
-
-**Пріоритет:** 🟡 Середній — менеджер бачить нотатки замовлення, а курʼєр — ні
+**Статус:** Закрито — `notes: true` додано до select у `proof-of-delivery.service.ts`.
 
 ---
 
@@ -216,81 +165,21 @@ select: { id: true, address: true, lat: true, lng: true, status: true, external_
 **Скіл:** `fullstack-dev-skills:postgres-pro`
 **Результат:** Схема в цілому якісна. 1 критичний баг (зламаний GPS), 2 відсутні composite indexes.
 
-### 🔴 FINDING-08 — GPS ping endpoint зламаний: `courier_id` не надсилається з мобільного
+### ✅ FINDING-08 — GPS ping endpoint зламаний: `courier_id` не надсилався з мобільного
 
-**Прогалина:**
-`PingDto` вимагає `courier_id: string` у тілі запиту (`@IsString() @IsNotEmpty()`). Але мобільний додаток надсилає тільки `{ lat, lng, battery }` — без `courier_id`. Кожен GPS-пінг з мобільного завершується `400 Bad Request` → GPS-трекінг повністю не працює в production.
-
-```typescript
-// apps/api/src/tracking/dto/ping.dto.ts — вимагає courier_id у body
-export class PingDto {
-  @IsString()
-  @IsNotEmpty()
-  courier_id: string; // ← required, but mobile never sends this!
-  ...
-}
-
-// apps/mobile/src/services/location.ts — надсилає без courier_id
-body: JSON.stringify({ lat, lng, battery }), // ← no courier_id
-```
-
-Додатково — це design issue: `courier_id` повинен читатися з JWT (`user.courier_id`), а не з body. Інакше будь-який авторизований курʼєр може надсилати пінги від імені іншого курʼєра (підміна courier_id).
-
-**Рішення:**
-1. Видалити `courier_id` з `PingDto` (мобільний не змінюємо — він вже правильний)
-2. У `handlePing()`: замінити `dto.courier_id` на `user.courier_id` (з JWT)
-3. Guard: перевіряти `user.courier_id` існує, інакше 403
-
-**Файли:**
-- `apps/api/src/tracking/dto/ping.dto.ts`
-- `apps/api/src/tracking/tracking.service.ts`
-
-**Пріоритет:** 🔴 Критичний — GPS-трекінг не працює з дня першого
+**Статус:** Закрито — `courier_id` прибрано з `PingDto`, тепер береться з JWT (`user.courier_id`).
 
 ---
 
-### 🟡 FINDING-09 — Відсутній composite index `(courier_id, status)` на `deliveries`
+### ✅ FINDING-09 — Відсутній composite index `(courier_id, status)` на `deliveries`
 
-**Прогалина:**
-`getActiveDelivery()` (hot path — кожні 10 секунд з кожного активного мобільного) виконує:
-```sql
-WHERE courier_id = ? AND status IN ('assigned', 'in_progress')
-```
-Є окремі `@@index([courier_id])` і `@@index([status])`. PostgreSQL вибере один з них і відфільтрує по другому. Composite index `(courier_id, status)` дозволить Index Scan по обох умовах одразу.
-
-```prisma
-// apps/api/prisma/schema.prisma — Delivery model
-@@index([courier_id])          // існує
-@@index([status])              // існує
-// @@index([courier_id, status])  ← ВІДСУТНІЙ
-```
-
-**Рішення:** Додати `@@index([courier_id, status])` до моделі `Delivery`.
-
-**Пріоритет:** 🟡 Середній — помітне при > 50 активних курʼєрах
+**Статус:** Закрито — `@@index([courier_id, status])` додано в Prisma schema.
 
 ---
 
-### 🟡 FINDING-10 — Відсутній composite index `(courier_id, created_at)` на `location_pings`
+### ✅ FINDING-10 — Відсутній composite index `(courier_id, created_at)` на `location_pings`
 
-**Прогалина:**
-Таблиця `location_pings` — найбільша в системі (пінг кожні 15с × всі курʼєри). Є окремі `@@index([courier_id])` і `@@index([created_at])`. Але три критичні запити потребують composite:
-
-1. **Dashboard** (`couriers.service.ts:49`) — `DISTINCT ON (courier_id) ... ORDER BY courier_id, created_at DESC` — без composite читає всі пінги per courier
-2. **Retention delete** (`retention.service.ts:104`) — `WHERE courier_id IN (...) AND created_at < cutoff` — видалення мільйонів рядків
-3. **Shifts cron** (`shifts.service.ts:170`) — `NOT EXISTS (... WHERE courier_id = ? AND created_at > cutoff)` — correlated subquery
-
-```prisma
-// apps/api/prisma/schema.prisma — LocationPing model
-@@index([courier_id])          // існує
-@@index([created_at])          // існує
-// @@index([courier_id, created_at])  ← ВІДСУТНІЙ
-```
-
-**Рішення:** Додати `@@index([courier_id, created_at])`.
-Примітка: Для `DISTINCT ON` з `ORDER BY courier_id, created_at DESC` — потрібен index з DESC на created_at (у Prisma: `@@index([courier_id, created_at(sort: Desc)])`).
-
-**Пріоритет:** 🟡 Середній — критично при > 1 тижні роботи (накопичення пінгів)
+**Статус:** Закрито — `@@index([courier_id, created_at(sort: Desc)])` додано в Prisma schema.
 
 ---
 
@@ -314,25 +203,9 @@ WHERE courier_id = ? AND status IN ('assigned', 'in_progress')
 **Скіл:** `fullstack-dev-skills:code-reviewer`
 **Результат:** Кодова база чиста. TODO/FIXME відсутні. Знайдено 1 medium issue, 4 minor / info.
 
-### 🟡 FINDING-11 — Дублюючий endpoint реєстрації device token з несумісним DTO
+### ✅ FINDING-11 — Дублюючий endpoint реєстрації device token з несумісним DTO
 
-**Прогалина:**
-Існують два ендпоінти для device token, але з різними назвами полів:
-
-```
-PATCH /api/v1/couriers/me/device-token   → UpdateDeviceTokenDto { device_token, device_platform, device_brand? }
-POST  /api/v1/couriers/:id/device-token  → RegisterDeviceTokenDto { token, platform, brand }  ← старий
-```
-
-Мобільний додаток використовує тільки `PATCH /me/device-token`. Другий ендпоінт (`POST /:id/device-token`) не викликається ніким (ні web, ні mobile). Два різних DTO для однієї дії — плутанина і ризик помилки при майбутній підтримці.
-
-**Файли:**
-- `apps/api/src/couriers/dto/register-device-token.dto.ts`
-- `apps/api/src/couriers/couriers.controller.ts:77-84`
-
-**Рішення:** Видалити `POST /:id/device-token` ендпоінт і `RegisterDeviceTokenDto`.
-
-**Пріоритет:** 🟡 Середній — мертвий код + плутанина при підтримці
+**Статус:** Закрито — `POST /:id/device-token` і `RegisterDeviceTokenDto` видалені.
 
 ---
 
@@ -391,4 +264,25 @@ CLAUDE.md архітектурна секція описує ці поля в `e
 ---
 
 ## Підсумок після всіх аудитів
-*Буде заповнено після аудиту #8*
+
+**Дата закриття серії:** 2026-03-25
+**Всього findings:** 11 (4 критичних 🔴, 5 середніх 🟡, 2 інформаційних 🔵)
+**Статус:** ✅ Всі 11 закриті
+
+| # | Finding | Пріоритет | Статус |
+|---|---------|-----------|--------|
+| 01 | Платформ-адмін панель (онбординг тенантів) | 🔴 | ✅ |
+| 02 | Telegram notifications не підключені | 🟡 | ✅ |
+| 03 | iiko server_url → SSRF | 🟡 | ✅ |
+| 04 | CSS `--s1` не визначена → елементи без фону | 🔴 | ✅ |
+| 05 | Hardcoded hex замість CSS-змінних | 🟡 | ✅ |
+| 06 | `startDelivery()` повертає неповний об'єкт → crash mobile | 🔴 | ✅ |
+| 07 | `order.notes` відсутній у відповіді активної доставки | 🟡 | ✅ |
+| 08 | GPS ping: `courier_id` в body → 400 на кожному пінгу | 🔴 | ✅ |
+| 09 | Composite index `(courier_id, status)` на deliveries | 🟡 | ✅ |
+| 10 | Composite index `(courier_id, created_at DESC)` на location_pings | 🟡 | ✅ |
+| 11 | Мертвий дублюючий endpoint device-token | 🟡 | ✅ |
+
+**Що залишається відкритим (не з аудит-серії):**
+- 🔵 INFO: `auto_dispatch` і `delivery_sla_minutes` згадуються в CLAUDE.md, але не реалізовані — запланована майбутня фіча
+- 🔵 INFO: Аудит #2 (TypeScript strict check) — проведено в окремій сесії, findings відсутні
