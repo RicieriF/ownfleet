@@ -12,4 +12,10 @@ export class UpdateSettingsDto {
   @Min(1)
   @Max(3)
   retention_pings_days?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(60)
+  courier_not_responding_min?: number;
 }

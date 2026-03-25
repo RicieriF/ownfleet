@@ -102,7 +102,7 @@ ALTER TABLE "couriers" ADD COLUMN "telegram_prefs" JSONB DEFAULT '{}';
 |------|------|-------------------|
 | `delivery_assigned` | Нова доставка призначена мені | `PATCH /orders/:id/assign` |
 | `manager_reminder` | Нагадування від менеджера | `CouriersService.remind()` |
-| `shift_ending_soon` | Зміна закінчується через 30 хв | Cron (якщо `planned_end_at` встановлено) |
+| `shift_ending_soon` | Зміна закінчується через N хв (10/15/30/60, default 30) | Cron кожні 5 хв (якщо `planned_end_at` встановлено) |
 
 ---
 
@@ -211,7 +211,7 @@ POST   /api/v1/telegram/webhook          → обробляє /start {code} ві
 │                                                         │
 │  ☑ Нова доставка призначена                             │
 │  ☑ Нагадування від менеджера                            │
-│  ☐ Зміна скоро закінчується                             │
+│  ☑ Зміна скоро закінчується (за 30 хв)                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -232,7 +232,7 @@ src/telegram/
 **TelegramService** інжектується в:
 - `OrdersService` — `order_created`, `delivery_assigned`
 - `ProofOfDeliveryService` — `delivery_completed`, `delivery_failed`, `delivery_force_closed`
-- `ShiftsService` — `courier_shift_started`, `courier_shift_ended`, `courier_shift_auto_closed`
+- `ShiftsService` — `courier_shift_started`, `courier_shift_ended`, `courier_shift_auto_closed`, `courier_not_responding`, `shift_ending_soon`
 - `CouriersService` — `manager_reminder`
 
 Завжди fire-and-forget: `.catch(err => logger.warn(...))`
@@ -276,41 +276,33 @@ Telegram дозволяє встановити secret token для webhook — �
 - Менеджер: `order_created=true`, `courier_shift_auto_closed=true`
 - Курʼєр: `delivery_assigned=true`, `manager_reminder=true`
 
-Note: `courier_not_responding` і `shift_ending_soon` визначені в типах, але НЕ в defaults — їх логіка ще не реалізована (див. секцію "Future Features" нижче).
+Повний список defaults (з `telegram.types.ts`):
+- Менеджер: `order_created=true`, `courier_shift_auto_closed=true`, `courier_not_responding=true`
+- Курʼєр: `delivery_assigned=true`, `manager_reminder=true`, `shift_ending_soon=true`
 
 ---
 
-## 13. Future Features (заплановані, ще не реалізовані)
+## 13. Cron-based Telegram нотифікації (реалізовано)
 
-### 13.1 `courier_not_responding` — Курʼєр не відповідає
+### 13.1 `courier_not_responding` — Курʼєр не відповідає ✅
 
 **Суть:** Якщо курʼєр має активну доставку (`delivery.status = 'in_progress'`) і GPS-пінг не надходить більше N хвилин — менеджер отримує Telegram-сповіщення.
 
-**Рішення:** Поріг N — **налаштування закладу в панелі менеджера** (не хардкод). Діапазон: 10–60 хв, default 15 хв.
+**Реалізація (`ShiftsService.checkCourierNotResponding()`):**
+- Порогове значення N береться з `establishments.settings.courier_not_responding_min` (default 15 хв)
+- Налаштовується в Settings дашборду: чіп-picker 10/15/30/60 хв
+- Batch GPS-запит: один `GROUP BY courier_id` замість N per-delivery запитів
+- Redis dedup: `SET NX EX` з ключем `telegram:courier_not_responding:{deliveryId}`, TTL = `thresholdMin * 2 * 60` сек
+- Cron кожні 5 хв (через `RetentionModule`)
 
-**Технічна реалізація:**
-- Додати `courier_not_responding_threshold_min INT DEFAULT 15` в `establishments.settings JSONB` або як окреме поле
-- Cron job (наприклад, кожні 5 хв): шукає active deliveries, де `last_ping > threshold` → fires `courier_not_responding` event
-- Throttle: не надсилати частіше ніж раз на `threshold` хвилин на одного курʼєра (Redis key з TTL)
-- UI: блок "Сповіщення" в Settings → поле "Порогове значення: X хвилин"
-
-**Залежності:** потребує поля threshold в схемі + cron + Redis throttle key
-
----
-
-### 13.2 `shift_ending_soon` — Зміна скоро закінчується
+### 13.2 `shift_ending_soon` — Зміна скоро закінчується ✅
 
 **Суть:** Якщо курʼєр встановив `planned_end_at` для зміни, за N хвилин до цього часу він отримує Telegram-сповіщення.
 
-**Рішення:** Час попередження N — **налаштування в мобільному додатку курʼєра** (не хардкод). Default: 30 хвилин. Варіанти: 10, 15, 30, 60 хв — або вимкнути.
-
-**Технічна реалізація:**
-- Додати `shift_ending_soon_min INT DEFAULT 30` в `courier.telegram_prefs JSONB` (або окреме поле в Courier model)
-- UI в мобільному: екран Профіль → Telegram сповіщення → "Нагадати за X хв до кінця зміни"
-- Cron job (кожні 5 хв): шукає активні зміни, де `planned_end_at - now() <= threshold` і сповіщення ще не надсилалось (Redis key з TTL до `planned_end_at`)
-- Сповіщення надсилається ТІЛЬКИ якщо `planned_end_at` встановлено
-
-**Залежності:** потребує cron + Redis dedup key per shift
-
-**Rate limits:**
-Telegram дозволяє 30 повідомлень/секунду на бота. При великій кількості закладів — надсилати через Bull queue (той самий підхід що і GPS пінги).
+**Реалізація (`ShiftsService.checkShiftEndingSoon()`):**
+- N береться з `courier.telegram_prefs.shift_ending_soon_min` (default 30 хв)
+- Налаштовується в мобільному додатку: Профіль → Telegram → чіп-picker 10/15/30/60 хв
+- Запит обмежений вікном `+2 год` для уникнення full table scan
+- Redis dedup: `SET NX EX` з ключем `telegram:shift_ending_soon:{shiftId}`, TTL = max(300, msUntilEnd/1000) сек
+- Сповіщення тільки якщо `planned_end_at` встановлено і `shift_ending_soon=true` в prefs
+- Cron кожні 5 хв (через `RetentionModule`)

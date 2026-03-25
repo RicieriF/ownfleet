@@ -48,11 +48,11 @@ B2B SaaS платформа для управління власними кур�
 | `AuthModule` | JWT login/refresh/logout, tenant isolation |
 | `EstablishmentsModule` | CRUD закладів, settings, PlanAccessGuard |
 | `CouriersModule` | Управління курʼєрами, FCM tokens |
-| `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, нагадування |
+| `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, Telegram-нагадування (shift_ending_soon, courier_not_responding) |
 | `OrdersModule` | Замовлення, state machine, призначення курʼєра |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
-| `RetentionModule` | Cron очищення orders + location_pings |
+| `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding (3 cron jobs, кожні 5–30 хв) |
 | `IntegrationsModule` | Poster POS webhook + iiko polling |
 | `WebhooksModule` | Outbound webhooks з HMAC, Bull retry queue |
 | `NotificationsModule` | FCM push + Telegram (завжди fire-and-forget) |
@@ -304,7 +304,7 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 180 тестів / 17 суїтів / all green**
+**Тести — ✅ 255 тестів / 19 суїтів / all green**
 
 ---
 

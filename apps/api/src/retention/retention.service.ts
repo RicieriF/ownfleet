@@ -47,6 +47,18 @@ export class RetentionService {
   }
 
   /**
+   * Runs every 5 minutes.
+   * Notifies managers when a courier stops sending GPS pings during an active delivery.
+   */
+  @Cron('0 */5 * * * *', { name: 'courier-not-responding', timeZone: 'UTC' })
+  async checkCourierNotResponding(): Promise<void> {
+    const sent = await this.shiftsService.checkCourierNotResponding();
+    if (sent > 0) {
+      this.logger.log(`Courier not responding: sent ${sent} notification(s)`);
+    }
+  }
+
+  /**
    * Runs daily at 03:00 UTC.
    * Deletes old terminal orders and location_pings per establishment.
    * delivery_proofs are NEVER deleted — retention exempt by design.
