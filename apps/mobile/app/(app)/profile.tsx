@@ -28,6 +28,7 @@ interface CourierTelegramPrefs {
   delivery_assigned?: boolean;
   manager_reminder?: boolean;
   shift_ending_soon?: boolean;
+  shift_ending_soon_min?: number;
 }
 
 interface TelegramStatus {
@@ -42,10 +43,15 @@ interface ConnectResponse {
 
 // ── Pref labels ──────────────────────────────────────────────────────────────
 
-const PREF_LABELS: { key: keyof CourierTelegramPrefs; label: string }[] = [
-  { key: 'delivery_assigned', label: 'Нова доставка призначена' },
-  { key: 'manager_reminder',  label: 'Нагадування від менеджера' },
+type BooleanPrefKey = Exclude<keyof CourierTelegramPrefs, 'shift_ending_soon_min'>;
+
+const PREF_LABELS: { key: BooleanPrefKey; label: string }[] = [
+  { key: 'delivery_assigned',  label: 'Нова доставка призначена' },
+  { key: 'manager_reminder',   label: 'Нагадування від менеджера' },
+  { key: 'shift_ending_soon',  label: 'Нагадування про закінчення зміни' },
 ];
+
+const THRESHOLD_OPTIONS = [10, 15, 30, 60] as const;
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +73,7 @@ export default function ProfileScreen() {
     try {
       const s = await apiGet<TelegramStatus>('/api/v1/telegram/status');
       setStatus(s);
-      setPrefs(s.prefs ?? {});
+      setPrefs({ shift_ending_soon_min: 30, ...(s.prefs ?? {}) });
     } catch {
       setStatus({ connected: false, prefs: {} });
     } finally {
@@ -134,7 +140,7 @@ export default function ProfileScreen() {
     }
   }
 
-  function togglePref(key: keyof CourierTelegramPrefs) {
+  function togglePref(key: BooleanPrefKey) {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
     setSavedFeedback(false);
   }
@@ -258,6 +264,29 @@ export default function ProfileScreen() {
                         <Text style={styles.prefLabel}>{label}</Text>
                       </TouchableOpacity>
                     ))}
+
+                    {prefs.shift_ending_soon && (
+                      <View style={styles.thresholdContainer}>
+                        <Text style={styles.thresholdLabel}>ПОПЕРЕДИТИ ЗА</Text>
+                        <View style={styles.thresholdRow}>
+                          {THRESHOLD_OPTIONS.map((min) => {
+                            const selected = (prefs.shift_ending_soon_min ?? 30) === min;
+                            return (
+                              <TouchableOpacity
+                                key={min}
+                                style={selected ? [styles.chip, styles.chipSelected] : styles.chip}
+                                onPress={() => setPrefs((prev) => ({ ...prev, shift_ending_soon_min: min }))}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                                  {min} хв
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
 
                     {error ? (
                       <Text style={styles.errorText}>{error}</Text>
@@ -505,6 +534,43 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
     color: '#f87171',
+  },
+
+  // Threshold chip picker
+  thresholdContainer: {
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  thresholdLabel: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 11,
+    color: '#71717a',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  thresholdRow: {
+    flexDirection: 'row',
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    backgroundColor: 'transparent',
+  },
+  chipSelected: {
+    backgroundColor: '#6aaa84',
+    borderColor: '#6aaa84',
+  },
+  chipText: {
+    fontFamily: 'Manrope_500Medium',
+    fontSize: 13,
+    color: '#71717a',
+  },
+  chipTextSelected: {
+    color: '#09090b',
   },
 
   // Shared

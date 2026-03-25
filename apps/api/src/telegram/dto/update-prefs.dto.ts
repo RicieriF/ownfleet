@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class UpdatePrefsDto {
   // Manager prefs
@@ -15,4 +15,5 @@ export class UpdatePrefsDto {
   // Courier prefs
   @IsOptional() @IsBoolean() manager_reminder?: boolean;
   @IsOptional() @IsBoolean() shift_ending_soon?: boolean;
+  @IsOptional() @IsInt() @Min(5) @Max(120) shift_ending_soon_min?: number;
 }

@@ -431,6 +431,16 @@ export class TelegramService {
     }
   }
 
+  /**
+   * Atomic SET NX EX — sets key with TTL only if it doesn't exist yet.
+   * Returns true if the key was newly created (first call), false if it already existed.
+   * Used by other services for deduplication (e.g. shift-ending-soon notifications).
+   */
+  async setNxWithTtl(key: string, ttlSeconds: number): Promise<boolean> {
+    const result = await this.redis.set(key, '1', 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
   private makeCode(): string {
     // 4 bytes = 32 bits = 4.3B combinations → e.g. "A3F1-9C2D"
     const hex = randomBytes(4).toString('hex').toUpperCase();

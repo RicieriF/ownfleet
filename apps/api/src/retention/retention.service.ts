@@ -34,6 +34,19 @@ export class RetentionService {
   }
 
   /**
+   * Runs every 5 minutes.
+   * Sends Telegram notifications to couriers whose shift is ending soon
+   * (based on planned_end_at and courier's configured threshold).
+   */
+  @Cron('0 */5 * * * *', { name: 'shift-ending-soon', timeZone: 'UTC' })
+  async checkShiftEndingSoon(): Promise<void> {
+    const sent = await this.shiftsService.checkShiftEndingSoon();
+    if (sent > 0) {
+      this.logger.log(`Shift ending soon: sent ${sent} notification(s)`);
+    }
+  }
+
+  /**
    * Runs daily at 03:00 UTC.
    * Deletes old terminal orders and location_pings per establishment.
    * delivery_proofs are NEVER deleted — retention exempt by design.

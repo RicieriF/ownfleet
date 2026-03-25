@@ -13,6 +13,8 @@ const mockGateway = {
 const mockTelegramService = {
   notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
   notifyCourier: jest.fn().mockResolvedValue(undefined),
+  setNxWithTtl: jest.fn().mockResolvedValue(true),
+  sendMessage: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockPrisma = {
@@ -57,6 +59,8 @@ describe('ShiftsService', () => {
 
     service = module.get<ShiftsService>(ShiftsService);
     jest.clearAllMocks();
+    mockTelegramService.setNxWithTtl.mockResolvedValue(true);
+    mockTelegramService.sendMessage.mockResolvedValue(undefined);
   });
 
   // ── startShift ─────────────────────────────────────────────────────────────
@@ -272,6 +276,142 @@ describe('ShiftsService', () => {
         expect.any(String),
         'courier_shift_auto_closed',
       );
+    });
+  });
+
+  // ── checkShiftEndingSoon ───────────────────────────────────────────────────
+
+  describe('checkShiftEndingSoon', () => {
+    const chatId = 'tg-99';
+
+    function makeShift(overrides: {
+      planned_end_at: Date | null;
+      telegram_chat_id?: string | null;
+      prefs?: Record<string, unknown>;
+    }) {
+      return {
+        id: 'shift-s1',
+        planned_end_at: overrides.planned_end_at,
+        courier: {
+          telegram_chat_id: 'telegram_chat_id' in overrides ? overrides.telegram_chat_id : chatId,
+          telegram_prefs: overrides.prefs ?? { shift_ending_soon: true },
+        },
+      };
+    }
+
+    it('returns 0 when no active shifts with planned_end_at', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([]);
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when courier has no telegram_chat_id', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), telegram_chat_id: null }),
+      ]);
+      // Prisma filter already excludes these, but the method should not crash if chatId is null
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when shift_ending_soon pref is false', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), prefs: { shift_ending_soon: false } }),
+      ]);
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when shift_ending_soon pref is absent', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), prefs: {} }),
+      ]);
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when not yet within threshold (60 min away, threshold 30 min)', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() + 60 * 60 * 1000),
+          prefs: { shift_ending_soon: true },
+        }),
+      ]);
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when planned_end_at is already in the past', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() - 5 * 60 * 1000),
+          prefs: { shift_ending_soon: true },
+        }),
+      ]);
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('sends notification and returns 1 when within default 30-min threshold', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() + 20 * 60 * 1000),
+          prefs: { shift_ending_soon: true },
+        }),
+      ]);
+
+      const result = await service.checkShiftEndingSoon();
+
+      expect(result).toBe(1);
+      expect(mockTelegramService.setNxWithTtl).toHaveBeenCalledWith(
+        'telegram:shift_ending_soon:shift-s1',
+        expect.any(Number),
+      );
+      expect(mockTelegramService.sendMessage).toHaveBeenCalledWith(
+        chatId,
+        expect.stringContaining('⏰'),
+      );
+    });
+
+    it('returns 0 (no duplicate) when Redis dedup key already exists', async () => {
+      mockTelegramService.setNxWithTtl.mockResolvedValueOnce(false);
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() + 20 * 60 * 1000),
+          prefs: { shift_ending_soon: true },
+        }),
+      ]);
+
+      const result = await service.checkShiftEndingSoon();
+
+      expect(result).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('respects custom shift_ending_soon_min: sends at 8 min when threshold is 10 min', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() + 8 * 60 * 1000),
+          prefs: { shift_ending_soon: true, shift_ending_soon_min: 10 },
+        }),
+      ]);
+
+      const result = await service.checkShiftEndingSoon();
+
+      expect(result).toBe(1);
+      expect(mockTelegramService.sendMessage).toHaveBeenCalledWith(chatId, expect.stringContaining('⏰'));
+    });
+
+    it('does NOT send when 15 min away but threshold is 10 min', async () => {
+      mockPrisma.shift.findMany.mockResolvedValue([
+        makeShift({
+          planned_end_at: new Date(Date.now() + 15 * 60 * 1000),
+          prefs: { shift_ending_soon: true, shift_ending_soon_min: 10 },
+        }),
+      ]);
+
+      expect(await service.checkShiftEndingSoon()).toBe(0);
+      expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
     });
   });
 });

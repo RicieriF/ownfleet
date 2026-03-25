@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { CourierTelegramPrefs } from '../telegram/telegram.types.js';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { UpdatePlannedEndDto } from './dto/update-planned-end.dto';
 import { JwtPayload } from '../auth/auth.types';
@@ -225,5 +226,70 @@ export class ShiftsService {
 
     this.logger.log(`Auto-closed ${staleShifts.length} stale shift(s)`);
     return staleShifts.length;
+  }
+
+  // ── Internal: notify couriers whose shift is ending soon (called by RetentionModule cron) ──
+
+  async checkShiftEndingSoon(): Promise<number> {
+    try {
+      const shifts = await this.prisma.shift.findMany({
+        where: {
+          ended_at: null,
+          planned_end_at: { not: null },
+          courier: { telegram_chat_id: { not: null } },
+        },
+        select: {
+          id: true,
+          planned_end_at: true,
+          courier: {
+            select: { telegram_chat_id: true, telegram_prefs: true },
+          },
+        },
+      });
+
+      let sent = 0;
+
+      for (const shift of shifts) {
+        const prefs = (shift.courier.telegram_prefs as CourierTelegramPrefs) ?? {};
+
+        if (!shift.courier.telegram_chat_id) continue;
+        if (!shift.planned_end_at) continue; // defensive guard — Prisma filter should prevent this
+        if (!prefs.shift_ending_soon) continue;
+
+        const thresholdMs = (prefs.shift_ending_soon_min ?? 30) * 60 * 1000;
+        const msUntilEnd = shift.planned_end_at.getTime() - Date.now();
+
+        if (msUntilEnd <= 0) continue;          // shift already past planned end
+        if (msUntilEnd > thresholdMs) continue; // not yet within warning window
+
+        // Minimum TTL of 5 min prevents 1-second key expiry causing duplicate sends
+        const ttlSeconds = Math.max(300, Math.ceil(msUntilEnd / 1000));
+        const isNew = await this.telegram.setNxWithTtl(
+          `telegram:shift_ending_soon:${shift.id}`,
+          ttlSeconds,
+        );
+        if (!isNew) continue; // already notified for this shift
+
+        const minutesLeft = Math.round(msUntilEnd / 60000);
+        // TODO: use establishment timezone once establishments.timezone field is added
+        const endTime = shift.planned_end_at.toLocaleTimeString('uk-UA', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'UTC',
+        });
+        const text = `⏰ Зміна завершується через ${minutesLeft} хв (о ${endTime})`;
+
+        this.telegram
+          .sendMessage(shift.courier.telegram_chat_id!, text)
+          .catch((err) => this.logger.warn('Shift ending soon notify failed', err));
+
+        sent++;
+      }
+
+      return sent;
+    } catch (err) {
+      this.logger.error('checkShiftEndingSoon failed', err);
+      return 0;
+    }
   }
 }
