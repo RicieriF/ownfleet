@@ -26,6 +26,8 @@ const mockPrisma = {
     findMany: jest.fn(),
   },
   courier: { findMany: jest.fn().mockResolvedValue([]) },
+  delivery: { findMany: jest.fn() },
+  establishment: { findMany: jest.fn() },
   $queryRaw: jest.fn(),
 };
 
@@ -61,6 +63,8 @@ describe('ShiftsService', () => {
     jest.clearAllMocks();
     mockTelegramService.setNxWithTtl.mockResolvedValue(true);
     mockTelegramService.sendMessage.mockResolvedValue(undefined);
+    mockPrisma.delivery.findMany.mockResolvedValue([]);
+    mockPrisma.establishment.findMany.mockResolvedValue([]);
   });
 
   // ── startShift ─────────────────────────────────────────────────────────────
@@ -412,6 +416,126 @@ describe('ShiftsService', () => {
 
       expect(await service.checkShiftEndingSoon()).toBe(0);
       expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── checkCourierNotResponding ──────────────────────────────────────────────
+
+  describe('checkCourierNotResponding', () => {
+    function makeDelivery(overrides: {
+      id?: string;
+      courier_id?: string;
+      courier_name?: string;
+      telegram_chat_id?: string | null;
+      est_id?: string;
+      external_id?: string | null;
+    }) {
+      return {
+        id: overrides.id ?? 'del-1',
+        courier_id: overrides.courier_id ?? 'c-1',
+        courier: {
+          name: overrides.courier_name ?? 'Ivan',
+          telegram_chat_id: 'telegram_chat_id' in overrides ? overrides.telegram_chat_id : 'tg-1',
+        },
+        order: {
+          establishment_id: overrides.est_id ?? 'est-1',
+          external_id: overrides.external_id ?? 'EXT-001',
+          id: 'order-uuid-1',
+        },
+      };
+    }
+
+    function makeEst(id = 'est-1', settings: Record<string, unknown> = {}) {
+      return { id, settings };
+    }
+
+    it('returns 0 when no in_progress deliveries', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([]);
+      expect(await service.checkCourierNotResponding()).toBe(0);
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when courier has no telegram_chat_id', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({ telegram_chat_id: null })]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) }]);
+
+      expect(await service.checkCourierNotResponding()).toBe(0);
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 when last ping is within default threshold (5 min ago, threshold 15 min)', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) }]);
+
+      expect(await service.checkCourierNotResponding()).toBe(0);
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('sends notification and returns 1 when last ping exceeds default threshold (20 min ago)', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+
+      const result = await service.checkCourierNotResponding();
+
+      expect(result).toBe(1);
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        'est-1',
+        expect.stringContaining('⚠️'),
+        'courier_not_responding',
+      );
+    });
+
+    it('returns 0 (no duplicate) when Redis dedup key already exists', async () => {
+      mockTelegramService.setNxWithTtl.mockResolvedValueOnce(false);
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+
+      expect(await service.checkCourierNotResponding()).toBe(0);
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('sends notification when courier has never pinged (no entry in location_pings)', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
+      // No rows = courier absent from location_pings entirely → pingMap.get returns undefined → lastPing = null
+      mockPrisma.$queryRaw.mockResolvedValue([]);
+
+      const result = await service.checkCourierNotResponding();
+
+      expect(result).toBe(1);
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        'est-1',
+        expect.stringContaining('⚠️'),
+        'courier_not_responding',
+      );
+    });
+
+    it('respects custom courier_not_responding_min: 20 min ago does NOT send when threshold is 30', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst('est-1', { courier_not_responding_min: 30 })]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+
+      expect(await service.checkCourierNotResponding()).toBe(0);
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('respects custom courier_not_responding_min: 31 min ago DOES send when threshold is 30', async () => {
+      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
+      mockPrisma.establishment.findMany.mockResolvedValue([makeEst('est-1', { courier_not_responding_min: 30 })]);
+      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 31 * 60 * 1000) }]);
+
+      const result = await service.checkCourierNotResponding();
+
+      expect(result).toBe(1);
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        'est-1',
+        expect.stringContaining('⚠️'),
+        'courier_not_responding',
+      );
     });
   });
 });

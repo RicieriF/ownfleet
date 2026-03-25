@@ -5,6 +5,7 @@ import {
   Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { DeliveryStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TelegramService } from '../telegram/telegram.service.js';
@@ -289,6 +290,79 @@ export class ShiftsService {
       return sent;
     } catch (err) {
       this.logger.error('checkShiftEndingSoon failed', err);
+      return 0;
+    }
+  }
+
+  // ── Internal: notify managers when courier stops responding during delivery ─
+
+  async checkCourierNotResponding(): Promise<number> {
+    try {
+      const deliveries = await this.prisma.delivery.findMany({
+        where: { status: DeliveryStatus.in_progress },
+        select: {
+          id: true,
+          courier_id: true,
+          courier: { select: { name: true, telegram_chat_id: true } },
+          order: { select: { establishment_id: true, external_id: true, id: true } },
+        },
+      });
+
+      if (deliveries.length === 0) return 0;
+
+      const estIds = [...new Set(deliveries.map((d) => d.order.establishment_id))];
+      const establishments = await this.prisma.establishment.findMany({
+        where: { id: { in: estIds } },
+        select: { id: true, settings: true },
+      });
+      const estMap = new Map(establishments.map((e) => [e.id, e.settings]));
+
+      // Batch GPS ping query — one GROUP BY instead of N per-delivery queries
+      const courierIds = [...new Set(deliveries.map((d) => d.courier_id))];
+      const pingRows = await this.prisma.$queryRaw<{ courier_id: string; last_ping: Date | null }[]>`
+        SELECT courier_id, MAX(created_at) AS last_ping
+        FROM location_pings
+        WHERE courier_id = ANY(ARRAY[${Prisma.join(courierIds)}]::uuid[])
+        GROUP BY courier_id
+      `;
+      const pingMap = new Map(pingRows.map((r) => [r.courier_id, r.last_ping]));
+
+      let sent = 0;
+
+      for (const d of deliveries) {
+        if (!d.courier.telegram_chat_id) continue;
+
+        const settings = estMap.get(d.order.establishment_id);
+        const thresholdMin = Number((settings as Record<string, unknown> | null)?.courier_not_responding_min) || 15;
+        const thresholdMs = thresholdMin * 60 * 1000;
+
+        const lastPing = pingMap.get(d.courier_id) ?? null;
+
+        const isNotResponding = lastPing === null || (Date.now() - lastPing.getTime()) > thresholdMs;
+        if (!isNotResponding) continue;
+
+        const isNew = await this.telegram.setNxWithTtl(
+          `telegram:courier_not_responding:${d.id}`,
+          thresholdMin * 2 * 60,
+        );
+        if (!isNew) continue; // already notified within this window
+
+        const minutesAgo = lastPing
+          ? Math.round((Date.now() - lastPing.getTime()) / 60000)
+          : thresholdMin;
+        const orderId = d.order.external_id ?? d.order.id.slice(0, 8);
+        const text = `⚠️ ${d.courier.name} не відповідає вже ${minutesAgo} хв (доставка #${orderId})`;
+
+        this.telegram
+          .notifyEstablishmentManagers(d.order.establishment_id, text, 'courier_not_responding')
+          .catch((err) => this.logger.warn('Courier not responding notify failed', err));
+
+        sent++;
+      }
+
+      return sent;
+    } catch (err) {
+      this.logger.error('checkCourierNotResponding failed', err);
       return 0;
     }
   }

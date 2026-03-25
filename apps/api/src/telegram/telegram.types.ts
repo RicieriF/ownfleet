@@ -22,11 +22,10 @@ export type ManagerTelegramEvent = keyof ManagerTelegramPrefs;
 export type CourierTelegramEvent = 'delivery_assigned' | 'manager_reminder' | 'shift_ending_soon';
 
 // Only events that are implemented and fired are enabled by default.
-// courier_not_responding is defined in types but not yet implemented — it will be
-// added to defaults when the cron + threshold logic is wired up.
 export const DEFAULT_MANAGER_PREFS: ManagerTelegramPrefs = {
   order_created: true,
   courier_shift_auto_closed: true,
+  courier_not_responding: true,
 };
 
 export const DEFAULT_COURIER_PREFS: CourierTelegramPrefs = {

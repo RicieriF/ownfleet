@@ -20,6 +20,7 @@ export interface Establishment {
   settings: {
     retention_orders_days?: number;
     retention_pings_days?: number;
+    courier_not_responding_min?: number;
     [key: string]: unknown;
   } | null;
 }
