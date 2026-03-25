@@ -233,10 +233,12 @@ export class ShiftsService {
 
   async checkShiftEndingSoon(): Promise<number> {
     try {
+      // Only load shifts ending within the next 2 hours — avoids full table scan at scale
+      const windowCutoff = new Date(Date.now() + 2 * 60 * 60 * 1000);
       const shifts = await this.prisma.shift.findMany({
         where: {
           ended_at: null,
-          planned_end_at: { not: null },
+          planned_end_at: { not: null, lte: windowCutoff },
           courier: { telegram_chat_id: { not: null } },
         },
         select: {
