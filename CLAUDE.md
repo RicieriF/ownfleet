@@ -49,14 +49,15 @@ B2B SaaS платформа для управління власними кур�
 | `EstablishmentsModule` | CRUD закладів, settings, PlanAccessGuard |
 | `CouriersModule` | Управління курʼєрами, FCM tokens |
 | `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, Telegram-нагадування (shift_ending_soon, courier_not_responding) |
-| `OrdersModule` | Замовлення, state machine, призначення курʼєра |
-| `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд |
+| `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign |
+| `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
-| `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding (3 cron jobs, кожні 5–30 хв) |
+| `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (4 cron jobs, кожні 5–30 хв) |
+| `EtaModule` | Розрахунок ETA через OSRM, детекція виїзду курʼєра (100м), cron-алерти про запізнення |
 | `IntegrationsModule` | Poster POS webhook + iiko polling |
 | `WebhooksModule` | Outbound webhooks з HMAC, Bull retry queue |
 | `NotificationsModule` | FCM push + Telegram (завжди fire-and-forget) |
-| `OnboardingModule` | Invite tokens для курʼєрів, onboarding статус |
+| `OnboardingModule` | Invite tokens для курʼєрів, onboarding статус, збереження transport_mode |
 | `AnalyticsModule` | Статистика доставок та ефективності |
 
 ---
@@ -65,12 +66,18 @@ B2B SaaS платформа для управління власними кур�
 
 ```sql
 establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB,
+                 -- settings JSONB містить: retention_orders_days, retention_pings_days,
+                 --   courier_not_responding_min, show_sla_on_dashboard,
+                 --   eta_alert_enabled, eta_alert_delay_minutes
                  timezone TEXT NOT NULL DEFAULT 'Europe/Kyiv',  -- IANA timezone; допустимі: Europe/Kyiv|Warsaw|Prague|Berlin|Riga; CHECK constraint в БД
-                 auto_dispatch BOOLEAN DEFAULT false,   -- false = тільки менеджер призначає; true = менеджер призначає + курʼєр може взяти сам
-                 delivery_sla_minutes INT NULL)          -- null = без таймера; N = SLA доставки в хвилинах
+                 auto_dispatch BOOLEAN DEFAULT false,
+                 delivery_sla_minutes INT NULL,        -- null = без SLA; N = SLA доставки в хвилинах
+                 lat FLOAT NULL,                       -- координати закладу для розрахунку ETA
+                 lng FLOAT NULL)
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
 couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
-                 battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count)
+                 battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count,
+                 transport_mode TransportMode NULL)    -- car|moto_gas|moto_electric|bicycle|walking; виставляється при онбордингу
 shifts          (id, courier_id, establishment_id,
                  started_at TIMESTAMPTZ NOT NULL,     -- курʼєр натиснув "Вийти на зміну"
                  ended_at TIMESTAMPTZ NULL,           -- NULL = зміна активна
@@ -83,7 +90,10 @@ shifts          (id, courier_id, establishment_id,
 orders          (id, establishment_id, external_id, address, lat, lng, status, source, created_at)
                 UNIQUE(external_id, establishment_id)
 deliveries      (id, order_id, courier_id, status, assigned_at, assignment_timeout_at,
-                 started_at, completed_at, order_closed_at, proof_id)
+                 started_at, completed_at, order_closed_at, proof_id,
+                 eta_seconds INT NULL,                -- розрахований ETA в секундах (при assign)
+                 eta_started_at TIMESTAMPTZ NULL,     -- коли курʼєр відʼїхав >100м від закладу
+                 eta_overdue_alerted_at TIMESTAMPTZ NULL) -- захист від повторних алертів
 delivery_proofs (id, delivery_id, lat, lng, captured_at, order_closed_at, photo_key,
                  geo_match, accuracy, geo_flags JSONB)  -- НІКОЛИ не видаляється
 location_pings  (id, courier_id, location GEOMETRY(Point,4326), battery, created_at)
@@ -292,7 +302,7 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  /analytics      — summary KPIs + per-courier breakdown
 ✅  /integrations   — Poster + iiko config cards
 ✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + timezone + retention config
+✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти)
 ```
 
 **Mobile App (React Native + Expo) — ✅ реалізовано:**
@@ -302,11 +312,11 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Proof of delivery (гео + фото upload до R2)
 ✅  GPS (background location + foreground ping 15с)
 ✅  FCM push notifications
-✅  Onboarding по invite token
+✅  Onboarding по invite token (2-кроковий: пароль → вибір типу транспорту)
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 256 тестів / 19 суїтів / all green**
+**Тести — ✅ 284 тестів / 20 суїтів / all green**
 
 ---
 
@@ -333,6 +343,7 @@ TELEGRAM_WEBHOOK_SECRET  (required when bot is active — webhook rejects all re
 S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET
 BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY
 WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
+OSRM_URL             (optional; default: https://router.project-osrm.org)
 ```
 
 Ніяких `.env` файлів у репозиторії. `.gitignore` + pre-commit hook.

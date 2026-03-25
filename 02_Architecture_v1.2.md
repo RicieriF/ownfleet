@@ -91,7 +91,8 @@ API побудований як Modular Monolith з чіткими межами 
 | `OrdersModule` | Замовлення, статусна машина, призначення. `UNIQUE(external_id, establishment_id)` — захист від дублікатів POS | `CRUD /api/v1/orders`<br>`POST /api/v1/orders/:id/assign`<br>`PATCH /api/v1/orders/:id/cancel` | **FIXED** |
 | `TrackingModule` (WS Gateway) | Прийом GPS пінгів, Redis pub/sub, WebSocket до дашборду | `POST /api/v1/tracking/ping`<br>`WS: courier_moved` | |
 | `ProofOfDeliveryModule` | Гео-пруф (обов'язковий) + фото (опціональний), радіус 300м, два timestamps | `GET /api/v1/deliveries/active`<br>`GET /api/v1/deliveries/:id/upload-url`<br>`POST /api/v1/deliveries/:id/proof`<br>`PATCH /api/v1/deliveries/:id/start`<br>`PATCH /api/v1/deliveries/:id/fail` | **UPDATED** |
-| `RetentionModule` | Cron очищення замовлень та GPS-пінгів. Окреме `retention_pings_days` (1–3 дні) | `Internal: @Cron("0 3 * * *")`<br>`GET\|PATCH /api/v1/establishments/:id/settings` | **NEW** |
+| `RetentionModule` | Cron очищення замовлень та GPS-пінгів. 4 cron jobs: retention cleanup (щоночі), auto-close shifts (30хв), shift_ending_soon (5хв), courier_not_responding (5хв), eta-overdue-alert (5хв) | `Internal: @Cron(...)` | **UPDATED** |
+| `EtaModule` | Розрахунок ETA через OSRM (від закладу до адреси замовлення). Детекція виїзду курʼєра (Haversine >100м). Cron-алерти про запізнення. Підтримує 5 типів транспорту + пікові коефіцієнти. | `Internal: EtaService` | **NEW** |
 | `IntegrationsModule` | Адаптери Poster POS та iiko/Syrve | `POST /api/v1/integrations/poster/webhook`<br>`GET /api/v1/integrations/iiko/orders` | |
 | `WebhooksModule` | Outbound webhook dispatcher з HMAC | `CRUD /api/v1/webhooks`<br>`Internal: dispatch events` | |
 | `NotificationsModule` | Telegram Bot + Firebase FCM. **Fire-and-forget**, ніколи не блокує API. Управляє lifecycle push-токенів: очищення stale токенів після помилки `invalid_registration` | `Internal: sendPush() / sendTelegram()` | **UPDATED** |
@@ -122,6 +123,7 @@ API побудований як Modular Monolith з чіткими межами 
 |---|-----|--------|
 | 1 | Кур'єрський додаток (фон) | `POST /api/v1/tracking/ping { lat, lng, accuracy, battery }` — кожні 15 секунд |
 | 2 | TrackingModule обробляє пінг | `Redis SET courier:{id}:pos TTL=5хв`<br>`PostgreSQL INSERT location_pings (PostGIS POINT)`<br>`Redis PUBLISH channel:est:{id}:tracking` |
+| 2b | ETA departure detection (fire-and-forget) | Якщо є активна доставка з `eta_seconds SET` і `eta_started_at NULL` → Haversine відстань до закладу. Якщо > 100м → `SET eta_started_at = NOW()` → таймер стартує на дашборді |
 | 3 | WebSocket Gateway | `SUBSCRIBE` Redis channel → `Emit "courier_moved"` до всіх WS-клієнтів закладу |
 | 4 | Manager Dashboard | `Socket.io listener → leafletMarker.setLatLng()`<br>Якщо пінг не надходив > 2 хв → маркер сірий + "остання активність X хв тому" |
 
@@ -217,8 +219,15 @@ trial_ends_at      TIMESTAMP  -- NULL for pilot; set to registration_date + 14 d
 paid_until         TIMESTAMP  -- NULL until first payment; updated on each payment
 created_at         TIMESTAMP
 onboarding_status  TEXT CHECK (onboarding_status IN ('pending','couriers_added','first_order','completed'))
-settings           JSONB  -- { retention_days: 1|3|5|7|14|30,
-                          --   retention_pings_days: 1-3 }
+timezone           TEXT NOT NULL DEFAULT 'Europe/Kyiv'  -- IANA; CHECK IN (Kyiv|Warsaw|Prague|Berlin|Riga)
+auto_dispatch      BOOLEAN DEFAULT false
+delivery_sla_minutes INT NULL   -- null = SLA не виставлений; N = публічний стандарт для клієнтів
+lat                FLOAT NULL   -- координати закладу для розрахунку ETA (OSRM)
+lng                FLOAT NULL
+settings           JSONB  -- { retention_orders_days, retention_pings_days,
+                          --   courier_not_responding_min,
+                          --   show_sla_on_dashboard,
+                          --   eta_alert_enabled, eta_alert_delay_minutes }
 ```
 
 **Plan states:**
@@ -280,8 +289,11 @@ device_platform             TEXT        -- 'ios' | 'android'
 device_brand                TEXT        -- для аналітики OEM (Xiaomi, Samsung, Huawei)
 active                      BOOLEAN
 battery_optimization_exempt BOOLEAN DEFAULT false  -- чи отримано дозвіл на фонову роботу
+device_brand                TEXT        -- для аналітики OEM (Xiaomi, Samsung, Huawei)
 last_reminder_sent_at       TIMESTAMP   -- коли менеджер останній раз натиснув [Нагадати]
 reminder_count              INT DEFAULT 0
+transport_mode              TEXT NULL   -- car|moto_gas|moto_electric|bicycle|walking
+                                        -- виставляється курʼєром при онбордингу; NULL до онбордингу
 created_at                  TIMESTAMP
 
 INDEX (establishment_id)               -- для multi-tenant запитів
@@ -307,16 +319,19 @@ INDEX  (establishment_id, created_at)         -- новий
 
 ### `deliveries` *(updated)*
 ```sql
-id                     UUID PRIMARY KEY
-order_id               UUID REFERENCES orders
-courier_id             UUID REFERENCES couriers
-status                 TEXT CHECK (status IN ('assigned','in_progress','completed','failed'))
-assigned_at            TIMESTAMP
-assignment_timeout_at  TIMESTAMP  -- assigned_at + 3 min; system auto-unassigns if courier doesn't start
-started_at             TIMESTAMP
-completed_at           TIMESTAMP
-order_closed_at        TIMESTAMP
-proof_id               UUID
+id                       UUID PRIMARY KEY
+order_id                 UUID REFERENCES orders
+courier_id               UUID REFERENCES couriers
+status                   TEXT CHECK (status IN ('assigned','in_progress','completed','failed'))
+assigned_at              TIMESTAMP
+assignment_timeout_at    TIMESTAMP  -- assigned_at + 5 min; система знімає призначення якщо курʼєр не стартував
+started_at               TIMESTAMP
+completed_at             TIMESTAMP
+order_closed_at          TIMESTAMP
+proof_id                 UUID
+eta_seconds              INT NULL   -- розрахований ETA при assign (OSRM + пікові коефіцієнти + 3хв буфер)
+eta_started_at           TIMESTAMP NULL  -- коли GPS фіксує >100м від закладу → таймер стартує
+eta_overdue_alerted_at   TIMESTAMP NULL  -- захист від повторних алертів (NULL = ще не надсилався)
 
 INDEX (courier_id, status)                    -- новий
 INDEX (assignment_timeout_at) WHERE status='assigned'  -- для efficient timeout polling
