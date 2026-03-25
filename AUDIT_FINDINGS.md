@@ -244,11 +244,9 @@ console.warn('[location-task] error:', error.message);
 
 ---
 
-### 🔵 INFO — `auto_dispatch` і `delivery_sla_minutes` в CLAUDE.md, але відсутні в Prisma schema
+### ✅ INFO — `auto_dispatch` і `delivery_sla_minutes` реалізовані
 
-CLAUDE.md архітектурна секція описує ці поля в `establishments`, але вони не реалізовані. Не є багом — задокументована майбутня фіча. Варто прибрати з CLAUDE.md поки не реалізовано.
-
-**Пріоритет:** 🔵 Інформаційний (документаційна невідповідність)
+Обидва поля тепер присутні в Prisma schema: `auto_dispatch Boolean @default(false)`, `delivery_sla_minutes Int?`, `lat Float?`, `lng Float?`. Реалізовано в рамках ETA/SLA фічі (2026-03-26).
 
 ---
 
@@ -284,5 +282,4 @@ CLAUDE.md архітектурна секція описує ці поля в `e
 | 11 | Мертвий дублюючий endpoint device-token | 🟡 | ✅ |
 
 **Що залишається відкритим (не з аудит-серії):**
-- 🔵 INFO: `auto_dispatch` і `delivery_sla_minutes` згадуються в CLAUDE.md, але не реалізовані — запланована майбутня фіча
 - 🔵 INFO: Аудит #2 (TypeScript strict check) — проведено в окремій сесії, findings відсутні

@@ -467,7 +467,7 @@ assignment_timeout_at  TIMESTAMP  -- коли спрацьовує auto-unassign
 2. Manager adds first courier → POST /api/v1/couriers
 3. Manager generates invite → POST /api/v1/onboarding/invites → returns token + deep link
 4. Deep link sent via SMS/Telegram to courier
-5. Courier opens link → installs app → POST /api/v1/onboarding/accept-invite/:token { password }
+5. Courier opens link → installs app → POST /api/v1/onboarding/accept-invite/:token { password, transport_mode }
    → receives { access_token, refresh_token, user } — immediately authenticated
 6. Courier registers FCM token → PATCH /api/v1/couriers/me/device-token
 7. Manager creates first test order → POST /api/v1/orders

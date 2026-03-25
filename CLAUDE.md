@@ -277,21 +277,22 @@ FCM push при `invalid_registration` → автоматично видалит
 
 Всі заплановані компоненти реалізовані та закомічені в `main`.
 
-**API (NestJS) — ✅ 13/13 модулів:**
+**API (NestJS) — ✅ 14/14 модулів:**
 ```
 ✅  1. Prisma schema + migrations
 ✅  2. AuthModule (JWT + refresh tokens)
 ✅  3. EstablishmentsModule + PlanAccessGuard
 ✅  4. CouriersModule
-✅  5. OrdersModule (state machine)
-✅  6. TrackingModule (GPS пінги + Redis + WebSocket)
+✅  5. OrdersModule (state machine + ETA при assign)
+✅  6. TrackingModule (GPS пінги + Redis + WebSocket + departure detection)
 ✅  7. ProofOfDeliveryModule
 ✅  8. NotificationsModule (FCM + Telegram)
-✅  9. RetentionModule (cron jobs)
+✅  9. RetentionModule (cron jobs, включаючи ETA overdue alerts)
 ✅ 10. IntegrationsModule (Poster webhook + iiko polling)
-✅ 11. OnboardingModule (invite tokens)
+✅ 11. OnboardingModule (invite tokens + transport_mode)
 ✅ 12. AnalyticsModule
 ✅ 13. WebhooksModule (outbound HMAC + Bull retry)
+✅ 14. EtaModule (OSRM розрахунок, детекція виїзду 100м, 5 типів транспорту)
 ```
 
 **Web Dashboard (Next.js) — ✅ 7/7 сторінок:**
