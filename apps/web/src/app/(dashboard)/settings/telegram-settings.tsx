@@ -33,6 +33,7 @@ const PREF_LABELS: { key: keyof ManagerPrefs; label: string; group: string }[] =
   { key: 'courier_shift_started',   label: 'Курʼєр вийшов на зміну',            group: 'КУРЄРИ' },
   { key: 'courier_shift_ended',     label: 'Курʼєр завершив зміну',             group: 'КУРЄРИ' },
   { key: 'courier_shift_auto_closed', label: 'Зміну закрито автоматично',       group: 'КУРЄРИ' },
+  { key: 'courier_not_responding',   label: 'Курʼєр не відповідає під час доставки', group: 'КУРЄРИ' },
 ];
 
 export function TelegramSettings({ initialStatus }: Props) {

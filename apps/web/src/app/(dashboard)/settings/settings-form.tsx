@@ -6,6 +6,7 @@ import { apiPatch } from '@/lib/api-client';
 interface SettingsPayload {
   retention_orders_days?: number;
   retention_pings_days?: number;
+  courier_not_responding_min?: number;
 }
 
 interface Props {
@@ -95,12 +96,17 @@ function NumberInput({
   );
 }
 
+const NOT_RESPONDING_OPTIONS = [10, 15, 30, 60] as const;
+
 export function SettingsForm({ initialSettings }: Props) {
   const [retentionOrders, setRetentionOrders] = useState(
     initialSettings?.retention_orders_days ?? 14,
   );
   const [retentionPings, setRetentionPings] = useState(
     initialSettings?.retention_pings_days ?? 3,
+  );
+  const [courierNotRespondingMin, setCourierNotRespondingMin] = useState(
+    initialSettings?.courier_not_responding_min ?? 15,
   );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -114,6 +120,7 @@ export function SettingsForm({ initialSettings }: Props) {
         await apiPatch('/api/v1/establishments/me/settings', {
           retention_orders_days: retentionOrders,
           retention_pings_days: retentionPings,
+          courier_not_responding_min: courierNotRespondingMin,
         });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
@@ -153,6 +160,40 @@ export function SettingsForm({ initialSettings }: Props) {
             max={3}
             suffix="днів"
           />
+        </FieldRow>
+      </div>
+
+      <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--br)' }}>
+        <p
+          className="mb-3"
+          style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+        >
+          Сповіщення
+        </p>
+        <FieldRow
+          label="Курʼєр не відповідає"
+          hint="Поріг мовчання під час активної доставки"
+        >
+          <div className="flex items-center gap-1">
+            {NOT_RESPONDING_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setCourierNotRespondingMin(opt)}
+                className="text-xs font-medium transition-colors"
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  fontFamily: 'var(--font-mono)',
+                  background: courierNotRespondingMin === opt ? 'var(--acm)' : 'transparent',
+                  color: courierNotRespondingMin === opt ? 'var(--bg)' : 'var(--t4)',
+                  border: `1px solid ${courierNotRespondingMin === opt ? 'var(--acm)' : 'var(--br)'}`,
+                }}
+              >
+                {opt} хв
+              </button>
+            ))}
+          </div>
         </FieldRow>
       </div>
 
