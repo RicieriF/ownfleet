@@ -47,6 +47,6 @@ export class OnboardingController {
   @Post('accept-invite/:token')
   @HttpCode(HttpStatus.OK)
   acceptInvite(@Param('token') token: string, @Body() dto: AcceptInviteDto) {
-    return this.service.acceptInvite(token, dto.password);
+    return this.service.acceptInvite(token, dto.password, dto.transport_mode);
   }
 }

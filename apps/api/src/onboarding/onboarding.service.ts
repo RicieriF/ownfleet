@@ -12,7 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser, JwtPayload } from '../auth/auth.types.js';
-import { OnboardingStatus, UserRole } from '@prisma/client';
+import { OnboardingStatus, TransportMode, UserRole } from '@prisma/client';
 
 const TOKEN_TTL_HOURS = 24;
 
@@ -102,7 +102,7 @@ export class OnboardingService {
 
   // ── Courier (public): accept invite ────────────────────────────────────
 
-  async acceptInvite(token: string, password: string) {
+  async acceptInvite(token: string, password: string, transportMode?: TransportMode) {
     const now = new Date();
 
     // Atomic claim: only succeeds if token exists, unused, and not expired.
@@ -153,6 +153,14 @@ export class OnboardingService {
     });
 
     this.logger.log(`Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`);
+
+    // Persist transport mode if provided
+    if (transportMode) {
+      await this.prisma.courier.update({
+        where: { id: courier.id },
+        data: { transport_mode: transportMode },
+      });
+    }
 
     // Issue tokens so the courier is immediately logged in after accepting invite
     const payload: JwtPayload = {

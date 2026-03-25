@@ -4,8 +4,9 @@
  * Flow: manager generates an invite link → courier opens
  * weego-courier://onboarding/<token>  or  https://app.weego.ua/onboarding/<token>
  *
- * Screen asks for a password, then calls POST /api/v1/onboarding/accept-invite/:token
- * which creates the courier account and returns access/refresh tokens.
+ * Step 1: password + confirm
+ * Step 2: transport mode selection
+ * Finish: POST /api/v1/onboarding/accept-invite/:token → setAuth → redirect to (app)
  */
 import { useState } from 'react';
 import {
@@ -18,7 +19,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -26,16 +26,32 @@ import { useAuthStore } from '@/store/auth';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
+type TransportMode = 'car' | 'moto_gas' | 'moto_electric' | 'bicycle' | 'walking';
+
+const TRANSPORT_OPTIONS: { value: TransportMode; label: string; icon: string; hint: string }[] = [
+  { value: 'car',           label: 'Авто',          icon: '🚗', hint: 'Легковий або вантажний автомобіль' },
+  { value: 'moto_gas',      label: 'Мотоцикл',      icon: '🏍️', hint: 'Бензиновий мотоцикл або скутер' },
+  { value: 'moto_electric', label: 'Електромотоцикл', icon: '⚡', hint: 'Електроскутер або e-мото' },
+  { value: 'bicycle',       label: 'Велосипед',      icon: '🚲', hint: 'Звичайний або електровелосипед' },
+  { value: 'walking',       label: 'Пішки',          icon: '🚶', hint: 'Пішохідна або самокатна доставка' },
+];
+
 export default function AcceptInviteScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const { setAuth } = useAuthStore();
 
+  // Step 1: password
+  const [step, setStep] = useState<1 | 2>(1);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+
+  // Step 2: transport
+  const [transportMode, setTransportMode] = useState<TransportMode | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleAccept() {
+  function handleNextStep() {
     if (!password || password.length < 8) {
       setError('Пароль повинен містити мінімум 8 символів');
       return;
@@ -45,13 +61,22 @@ export default function AcceptInviteScreen() {
       return;
     }
     setError('');
+    setStep(2);
+  }
+
+  async function handleAccept() {
+    if (!transportMode) {
+      setError('Оберіть тип транспорту');
+      return;
+    }
+    setError('');
     setLoading(true);
 
     try {
       const res = await fetch(`${API_URL}/api/v1/onboarding/accept-invite/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, transport_mode: transportMode }),
       });
 
       if (res.status === 404) {
@@ -91,47 +116,101 @@ export default function AcceptInviteScreen() {
             <Text style={styles.logo}>🛵</Text>
             <Text style={styles.title}>Ласкаво просимо!</Text>
             <Text style={styles.subtitle}>
-              Вас запросили до команди курʼєрів.{'\n'}Створіть пароль для входу.
+              {step === 1
+                ? 'Вас запросили до команди курʼєрів.\nСтворіть пароль для входу.'
+                : 'Оберіть тип транспорту.\nЦе потрібно для точного розрахунку часу доставки.'}
             </Text>
           </View>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Новий пароль</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Мінімум 8 символів"
-              placeholderTextColor="#71717a"
-              secureTextEntry
-              autoFocus
-            />
-
-            <Text style={[styles.label, { marginTop: 16 }]}>Підтвердити пароль</Text>
-            <TextInput
-              style={styles.input}
-              value={confirm}
-              onChangeText={setConfirm}
-              placeholder="Повторіть пароль"
-              placeholderTextColor="#71717a"
-              secureTextEntry
-            />
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
-            <TouchableOpacity
-              style={[styles.btn, loading && styles.btnDisabled]}
-              onPress={handleAccept}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.btnText}>Активувати акаунт</Text>
-              )}
-            </TouchableOpacity>
+          {/* Progress indicator */}
+          <View style={styles.progress}>
+            <View style={[styles.dot, step >= 1 && styles.dotActive]} />
+            <View style={styles.line} />
+            <View style={[styles.dot, step >= 2 && styles.dotActive]} />
           </View>
+
+          {step === 1 ? (
+            <View style={styles.form}>
+              <Text style={styles.label}>Новий пароль</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Мінімум 8 символів"
+                placeholderTextColor="#71717a"
+                secureTextEntry
+                autoFocus
+              />
+
+              <Text style={[styles.label, { marginTop: 16 }]}>Підтвердити пароль</Text>
+              <TextInput
+                style={styles.input}
+                value={confirm}
+                onChangeText={setConfirm}
+                placeholder="Повторіть пароль"
+                placeholderTextColor="#71717a"
+                secureTextEntry
+                onSubmitEditing={handleNextStep}
+              />
+
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+
+              <TouchableOpacity
+                style={styles.btn}
+                onPress={handleNextStep}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnText}>Далі →</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.form}>
+              <View style={styles.transportGrid}>
+                {TRANSPORT_OPTIONS.map((opt) => {
+                  const selected = transportMode === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[styles.transportCard, selected && styles.transportCardSelected]}
+                      onPress={() => setTransportMode(opt.value)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.transportIcon}>{opt.icon}</Text>
+                      <Text style={[styles.transportLabel, selected && styles.transportLabelSelected]}>
+                        {opt.label}
+                      </Text>
+                      <Text style={styles.transportHint}>{opt.hint}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+
+              <View style={styles.row}>
+                <TouchableOpacity
+                  style={styles.backBtn}
+                  onPress={() => { setStep(1); setError(''); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.backBtnText}>← Назад</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnFlex, (!transportMode || loading) && styles.btnDisabled]}
+                  onPress={handleAccept}
+                  disabled={!transportMode || loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.btnText}>Активувати акаунт</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -142,7 +221,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#09090b' },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
-  header: { alignItems: 'center', marginBottom: 40 },
+  header: { alignItems: 'center', marginBottom: 24 },
   logo: { fontSize: 48, marginBottom: 12 },
   title: { fontSize: 26, fontFamily: 'Manrope_700Bold', color: '#fafafa', letterSpacing: -0.5 },
   subtitle: {
@@ -152,6 +231,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+  progress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 0,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#27272a',
+  },
+  dotActive: { backgroundColor: '#6aaa84' },
+  line: { width: 32, height: 1, backgroundColor: '#27272a', marginHorizontal: 6 },
   form: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
   label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d4d4d8', marginBottom: 8 },
   input: {
@@ -179,6 +273,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 24,
   },
+  btnFlex: { flex: 1 },
   btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
   btnText: { color: '#09090b', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  transportGrid: { gap: 8 },
+  transportCard: {
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    borderRadius: 8,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  transportCardSelected: {
+    borderColor: '#6aaa84',
+    backgroundColor: 'rgba(106,170,132,0.08)',
+  },
+  transportIcon: { fontSize: 22, width: 28, textAlign: 'center' },
+  transportLabel: {
+    fontSize: 15,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#a1a1aa',
+    flex: 1,
+  },
+  transportLabelSelected: { color: '#6aaa84' },
+  transportHint: { fontSize: 12, color: '#52525b', flexShrink: 1, maxWidth: 140, textAlign: 'right' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24 },
+  backBtn: {
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  backBtnText: { color: '#71717a', fontSize: 15, fontFamily: 'Manrope_500Medium' },
 });
