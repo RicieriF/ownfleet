@@ -116,6 +116,8 @@
 - Останній GPS пінг < 5 хвилин тому
 - В радіусі 1 км від закладу (PostGIS `ST_DWithin`)
 
+`transport_mode` гарантовано `NOT NULL` для всіх курʼєрів в пулі — онбординг вимагає обов'язкового вибору типу транспорту. NULL-handling не потрібен.
+
 **OSRM failure:** Якщо OSRM недоступний під час розрахунку ETA для пулу — `runDispatchAlgorithm` повертає `{ error: 'eta_unavailable', canRetry: true }`. Відповідь HTTP не є 500. Менеджер бачить: "Не вдалося розрахувати ETA. Спробуйте ще раз."
 
 **ETA розраховується паралельно:** для всіх курʼєрів пулу — `Promise.all([...pool.map(c => etaService.calculate(...))])`. Для закладів з 10+ курʼєрами це знижує latency `/ready` з O(n) до O(1).
@@ -141,6 +143,24 @@ workload_score =
 ```
 
 Межа розрахунку — **початок поточної зміни** (`shifts.started_at`), не опівніч. Курʼєр що вийшов о 22:00 отримує коректний workload навіть якщо перейшла нова доба.
+
+**Імплементація:** Prisma ORM не може виразити цю агрегацію ефективно — використовувати `$queryRaw`. Запит повинен JOIN-ити `shifts` (де `ended_at IS NULL`) для отримання `started_at` межі, потім LEFT JOIN `deliveries` де `deliveries.started_at >= shifts.started_at`:
+
+```sql
+SELECT
+  c.id AS courier_id,
+  COALESCE(SUM(EXTRACT(EPOCH FROM (d.completed_at - d.started_at))), 0)
+    + COALESCE(SUM(CASE WHEN d.status IN ('assigned','in_progress') THEN d.eta_seconds ELSE 0 END), 0)
+  AS workload_score,
+  COUNT(d.id) FILTER (WHERE d.completed_at IS NOT NULL) AS deliveries_count
+FROM couriers c
+JOIN shifts s ON s.courier_id = c.id AND s.ended_at IS NULL
+LEFT JOIN deliveries d ON d.courier_id = c.id
+  AND d.started_at >= s.started_at
+  AND d.status NOT IN ('failed')
+WHERE c.establishment_id = $1
+GROUP BY c.id, s.started_at
+```
 
 Курʼєр з **найменшим** `workload_score` в зоні отримує рекомендацію.
 
@@ -317,12 +337,13 @@ POST /api/v1/orders/:id/assign-recommended
 POST /api/v1/orders/:id/reassign
   → роль: manager | dispatcher
   → body: { courierId: string }
-  → викликає явний метод OrdersService.reassignDelivery(deliveryId, newCourierId)
+  → контролер спочатку знаходить: delivery = findFirst({ order_id: orderId, status: 'assigned' })
+  → якщо delivery не знайдено (замовлення ще pending або вже in_progress): 404 + { reason: 'no_assignable_delivery' }
+  → потім викликає OrdersService.reassignDelivery(delivery.id, body.courierId)
   → delivery залишається в статусі 'assigned' — змінюється тільки courier_id
-  → validates: delivery must be in 'assigned' state; новий courier must be available (not assigned/in_progress)
+  → validates: новий courier must be available (not assigned/in_progress)
   → FCM push + WS event старому курʼєру: 'delivery:reassigned' (обидва — курʼєр може бути в дорозі з додатком у фоні)
   → FCM push новому курʼєру
-  → якщо delivery не в 'assigned': повертає 409 + { assignedTo: courierName }
   → якщо новий курʼєр недоступний: повертає 409 + { reason: 'courier_unavailable' }
 
 GET /api/v1/couriers/workload-today
@@ -330,6 +351,16 @@ GET /api/v1/couriers/workload-today
   → використовується: Smart Assignment UI + мобільний stats
   → кешується в Redis: ключ `workload:{establishment_id}`, TTL 15с
   → інвалідується при кожній зміні статусу delivery того ж закладу
+  → response shape:
+    {
+      couriers: [{
+        courierId: string,
+        name: string,
+        workload_seconds: number,        // для відносного прогрес-бара; фронтенд форматує → "1г 20хв"
+        deliveries_count: number,
+        avg_delay_minutes: number | null  // null якщо < 1 доставки з eta_started_at за зміну
+      }]
+    }
 ```
 
 ---

@@ -49,7 +49,7 @@ B2B SaaS платформа для управління власними кур�
 | `EstablishmentsModule` | CRUD закладів, settings, PlanAccessGuard |
 | `CouriersModule` | Управління курʼєрами, FCM tokens |
 | `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, Telegram-нагадування (shift_ending_soon, courier_not_responding) |
-| `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; self-assignment (auto_dispatch mode): `GET /available`, `POST /:id/claim` |
+| `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; dispatch алгоритм (manual/recommend/auto): `POST /ready`, `POST /assign-recommended`, `POST /reassign`; `GET /couriers/workload-today` |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
 | `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (4 cron jobs, кожні 5–30 хв) |
@@ -68,9 +68,12 @@ B2B SaaS платформа для управління власними кур�
 establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB,
                  -- settings JSONB містить: retention_orders_days, retention_pings_days,
                  --   courier_not_responding_min, show_sla_on_dashboard,
-                 --   eta_alert_enabled, eta_alert_delay_minutes
+                 --   eta_alert_enabled, eta_alert_delay_minutes,
+                 --   dispatch_recommend_radius_km, dispatch_anomaly_threshold_minutes,
+                 --   dispatch_anomaly_min_deliveries, dispatch_no_courier_escalation_minutes,
+                 --   dispatch_recommend_timeout_minutes (null = вимкнено)
                  timezone TEXT NOT NULL DEFAULT 'Europe/Kyiv',  -- IANA timezone; допустимі: Europe/Kyiv|Warsaw|Prague|Berlin|Riga; CHECK constraint в БД
-                 auto_dispatch BOOLEAN DEFAULT false,
+                 dispatch_mode dispatch_mode NOT NULL DEFAULT 'manual',  -- enum: manual|recommend|auto
                  delivery_sla_minutes INT NULL,        -- null = без SLA; N = SLA доставки в хвилинах
                  lat FLOAT NULL,                       -- координати закладу для розрахунку ETA
                  lng FLOAT NULL)
@@ -84,10 +87,12 @@ shifts          (id, courier_id, establishment_id,
                  ended_by TEXT CHECK IN ('courier','manager','auto'),
                  planned_end_at TIMESTAMPTZ NULL,     -- опціональний дедлайн зміни (таймер у мобільному)
                  total_deliveries INT DEFAULT 0,
-                 total_distance_km NUMERIC(8,2))
+                 total_distance_km NUMERIC(8,2),
+                 anomaly_alerted_at TIMESTAMPTZ NULL) -- захист від повторного Telegram-алерту про +N хв/дост
                 -- Курʼєр "на зміні" ↔ shifts.ended_at IS NULL
                 -- Авто-закриття: cron кожні 30хв, закриває зміни > 16 годин без GPS-пінгу
-orders          (id, establishment_id, external_id, address, lat, lng, status, source, created_at)
+orders          (id, establishment_id, external_id, address, lat, lng, status, source, created_at,
+                 ready_at TIMESTAMPTZ NULL)           -- встановлюється при POST /ready; використовується для dispatch idempotency і "⏳ Очікує курʼєра" UI
                 UNIQUE(external_id, establishment_id)
 deliveries      (id, order_id, courier_id, status, assigned_at, assignment_timeout_at,
                  started_at, completed_at, order_closed_at, proof_id,
@@ -303,13 +308,13 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  /analytics      — summary KPIs + per-courier breakdown
 ✅  /integrations   — Poster + iiko config cards
 ✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти) + режим призначення (auto_dispatch)
+✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти) + dispatch_mode selector (manual/recommend/auto)
 ```
 
 **Mobile App (React Native + Expo) — ✅ реалізовано:**
 ```
 ✅  Авторизація (login screen + JWT + refresh)
-✅  Головний екран (4 стани: no shift → idle → assigned → in_progress; при auto_dispatch=true: idle показує пул доступних замовлень)
+✅  Головний екран (4 стани: no shift → idle → assigned → in_progress; idle показує workload команди + власну метрику +N хв/дост)
 ✅  Proof of delivery (гео + фото upload до R2)
 ✅  GPS (background location + foreground ping 15с)
 ✅  FCM push notifications
