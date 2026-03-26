@@ -162,19 +162,24 @@ workload_score =
 
 В дашборді замовлення, що чекає на курʼєра, позначається індикатором **"⏳ Очікує курʼєра"** — менеджер бачить що ситуація є і система активно шукає.
 
+**Поведінка при знайденому курʼєрі після retry:**
+- Режим `auto`: система призначає автоматично → WS event `dispatch:courier_found` → toast менеджеру "Знайдено курʼєра для замовлення #X, призначено: Іван"
+- Режим `recommend`: WS event `dispatch:courier_found` → якщо панель відкрита — оновлюється з рекомендацією; якщо закрита — toast "Знайдено курʼєра для замовлення #X, підтвердіть призначення"
+
 ---
 
 ## Метрика ефективності курʼєра — "+N хв/дост"
 
 Вимірює наскільки реальний час доставки (заклад → клієнт) відрізняється від розрахункового ETA.
 
-**Важливо:** `eta_seconds` перераховується в момент виїзду курʼєра з закладу (`eta_started_at`) — тільки маршрут заклад→клієнт через OSRM. Це гарантує що обидва числа вимірюють одне й те саме.
+**Важливо:** `eta_seconds` перераховується в момент виїзду курʼєра з закладу (`eta_started_at`) — тільки маршрут заклад→клієнт через OSRM. Це гарантує що обидва числа вимірюють одне й те саме. EtaModule вже детектує виїзд (>100м) — в цей самий момент він оновлює `eta_seconds` свіжим розрахунком. Це також покращує точність existing overdue alertів в RetentionModule.
 
 ```
 actual_seconds = completed_at - eta_started_at    ← від виїзду з закладу
-eta_seconds    = OSRM(заклад → клієнт)           ← перерахований при виїзді
+eta_seconds    = OSRM(заклад → клієнт)           ← перерахований при виїзді EtaModule
 
 +N хв/дост = AVG(actual_seconds - eta_seconds) / 60   за сьогодні
+             WHERE eta_started_at IS NOT NULL          ← доставки без фіксованого виїзду пропускаються
 ```
 
 | Показник | Колір | Значення |
@@ -269,9 +274,13 @@ POST /api/v1/orders/:id/assign-recommended
   → якщо курʼєр вже зайнятий: повертає 409 + оновлений список доступних
 
 POST /api/v1/orders/:id/reassign
-  → менеджер перепризначає на іншого курʼєра (будь-який режим)
-  → знімає поточне призначення, призначає нового
-  → якщо замовлення вже призначено іншим менеджером: повертає 409 + { assignedTo: courierName }
+  → body: { courierId: string }
+  → викликає явний метод OrdersService.reassignDelivery(deliveryId, newCourierId)
+  → delivery залишається в статусі 'assigned' — змінюється тільки courier_id
+  → validates: delivery must be in 'assigned' state
+  → WS event старому курʼєру: 'delivery:reassigned'
+  → FCM push новому курʼєру
+  → якщо delivery не в 'assigned': повертає 409 + { assignedTo: courierName }
 
 GET /api/v1/couriers/workload-today
   → навантаження всіх курʼєрів закладу за сьогодні
@@ -301,6 +310,20 @@ GET /api/v1/couriers/workload-today
 **Mobile:**
 - Блок "Навантаження команди сьогодні" на idle екрані
 - Власна метрика `+N хв/дост` з кольоровим індикатором
+
+---
+
+## Нові явні методи OrdersModule
+
+```
+OrdersService.runDispatchAlgorithm(orderId)   ← формування пулу + tiers + workload_score
+OrdersService.assignCourier(orderId, courierId)  ← існуючий assign, використовується dispatch
+OrdersService.reassignDelivery(deliveryId, newCourierId)
+  ← validates delivery.status === 'assigned'
+  ← оновлює delivery.courier_id (НЕ змінює status)
+  ← WS event старому курʼєру + FCM push новому
+  ← НЕ порушує state machine — статус не змінюється, операція через explicit method
+```
 
 ---
 
