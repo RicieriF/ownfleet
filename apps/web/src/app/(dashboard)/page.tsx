@@ -1,14 +1,16 @@
 import { Suspense } from 'react';
 import { apiFetch } from '@/lib/api';
-import { Order, CourierWithStatus } from '@/types';
+import { Order, CourierWithStatus, Establishment } from '@/types';
 import { OrdersTable } from './orders-table';
+import { SmartAssignmentPanel } from '@/components/smart-assignment-panel';
 
 async function fetchData() {
-  const [orders, couriers] = await Promise.all([
+  const [orders, couriers, establishment] = await Promise.all([
     apiFetch<Order[]>('/api/v1/orders?status=pending,assigned,in_progress'),
     apiFetch<CourierWithStatus[]>('/api/v1/couriers/status'),
+    apiFetch<Establishment>('/api/v1/establishments/me'),
   ]);
-  return { orders, couriers };
+  return { orders, couriers, establishment };
 }
 
 function computeFleetKpi(orders: Order[], couriers: CourierWithStatus[]) {
@@ -36,7 +38,7 @@ function computeFleetKpi(orders: Order[], couriers: CourierWithStatus[]) {
 }
 
 export default async function OrdersPage() {
-  const { orders, couriers } = await fetchData();
+  const { orders, couriers, establishment } = await fetchData();
   const fleet = computeFleetKpi(orders, couriers);
 
   return (
@@ -89,6 +91,11 @@ export default async function OrdersPage() {
           </span>
         </div>
       </div>
+
+      {/* Smart assignment panel — only in recommend mode */}
+      {establishment.dispatch_mode === 'recommend' && (
+        <SmartAssignmentPanel />
+      )}
 
       {/* Orders section */}
       <div className="flex items-center justify-between mb-4">

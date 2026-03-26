@@ -30,7 +30,8 @@ export interface Establishment {
   delivery_sla_minutes?: number | null;
   lat?: number | null;
   lng?: number | null;
-  auto_dispatch: boolean;
+  dispatch_mode: 'manual' | 'recommend' | 'auto';
+  ready_at?: string | null;
 }
 
 // ── Couriers ───────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ export interface Order {
   source: OrderSource;
   notes: string | null;
   created_at: string;
+  ready_at: string | null;
   delivery: Delivery | null;
 }
 

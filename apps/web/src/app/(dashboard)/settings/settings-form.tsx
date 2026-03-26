@@ -3,6 +3,8 @@
 import { useState, useTransition } from 'react';
 import { apiPatch } from '@/lib/api-client';
 
+type DispatchMode = 'manual' | 'recommend' | 'auto';
+
 interface SettingsPayload {
   retention_orders_days?: number;
   retention_pings_days?: number;
@@ -14,7 +16,7 @@ interface SettingsPayload {
   delivery_sla_minutes?: number | null;
   lat?: number;
   lng?: number;
-  auto_dispatch?: boolean;
+  dispatch_mode?: DispatchMode;
 }
 
 interface Props {
@@ -23,7 +25,7 @@ interface Props {
   initialSlaMinutes: number | null;
   initialLat: number | null;
   initialLng: number | null;
-  initialAutoDispatch: boolean;
+  initialDispatchMode: DispatchMode;
 }
 
 function SectionCard({ title, description, children }: {
@@ -148,7 +150,7 @@ export function SettingsForm({
   initialSlaMinutes,
   initialLat,
   initialLng,
-  initialAutoDispatch,
+  initialDispatchMode,
 }: Props) {
   const [retentionOrders, setRetentionOrders] = useState(initialSettings?.retention_orders_days ?? 14);
   const [retentionPings, setRetentionPings] = useState(initialSettings?.retention_pings_days ?? 3);
@@ -162,7 +164,7 @@ export function SettingsForm({
   const [etaAlertEnabled, setEtaAlertEnabled] = useState(initialSettings?.eta_alert_enabled ?? false);
   const [etaAlertDelay, setEtaAlertDelay] = useState(initialSettings?.eta_alert_delay_minutes ?? 10);
 
-  const [autoDispatch, setAutoDispatch] = useState(initialAutoDispatch);
+  const [dispatchMode, setDispatchMode] = useState<DispatchMode>(initialDispatchMode);
 
   const [latStr, setLatStr] = useState(initialLat !== null && initialLat !== undefined ? String(initialLat) : '');
   const [lngStr, setLngStr] = useState(initialLng !== null && initialLng !== undefined ? String(initialLng) : '');
@@ -188,7 +190,7 @@ export function SettingsForm({
           show_sla_on_dashboard: showSlaOnDashboard,
           eta_alert_enabled: etaAlertEnabled,
           eta_alert_delay_minutes: etaAlertDelay,
-          auto_dispatch: autoDispatch,
+          dispatch_mode: dispatchMode,
           ...(lat !== undefined && !isNaN(lat) && { lat }),
           ...(lng !== undefined && !isNaN(lng) && { lng }),
         });
@@ -311,12 +313,61 @@ export function SettingsForm({
         title="Режим призначення"
         description="Керуйте тим, як замовлення потрапляють до курʼєрів"
       >
-        <FieldRow
-          label="Самостійне призначення курʼєрами"
-          hint="Курʼєри бачать пул непризначених замовлень і можуть самостійно взяти доставку"
-        >
-          <Toggle value={autoDispatch} onChange={setAutoDispatch} />
-        </FieldRow>
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              {
+                value: 'manual' as DispatchMode,
+                label: 'Ручне призначення',
+                hint: 'Менеджер призначає кожне замовлення вручну',
+              },
+              {
+                value: 'recommend' as DispatchMode,
+                label: 'Рекомендація',
+                hint: 'Система пропонує курʼєра — менеджер підтверджує одним кліком',
+              },
+              {
+                value: 'auto' as DispatchMode,
+                label: 'Автопризначення',
+                hint: 'Система автоматично призначає найкращого курʼєра без участі менеджера',
+              },
+            ] as const
+          ).map((opt) => {
+            const isSelected = dispatchMode === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setDispatchMode(opt.value)}
+                className="flex items-start gap-3 w-full text-left rounded-[6px] transition-colors"
+                style={{
+                  padding: '10px 12px',
+                  background: isSelected ? 'rgba(106,170,132,0.10)' : 'var(--s1)',
+                  border: `1px solid ${isSelected ? 'rgba(106,170,132,0.35)' : 'var(--br)'}`,
+                }}
+              >
+                <span
+                  className="mt-0.5 flex-shrink-0 rounded-full border transition-colors"
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    borderColor: isSelected ? 'var(--acm)' : 'var(--br2)',
+                    background: isSelected ? 'var(--acm)' : 'transparent',
+                    boxShadow: isSelected ? 'inset 0 0 0 2px var(--s1)' : 'none',
+                  }}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium" style={{ color: isSelected ? 'var(--acm)' : 'var(--t1)' }}>
+                    {opt.label}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--t4)' }}>
+                    {opt.hint}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </SectionCard>
 
       {/* Retention */}

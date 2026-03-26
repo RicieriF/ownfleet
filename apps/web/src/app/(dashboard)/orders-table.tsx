@@ -127,11 +127,25 @@ export function OrdersTable({ orders, couriers }: Props) {
             )}
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-[var(--s2)] transition-colors">
-                <td className="px-3 py-2.5 font-medium text-[var(--t1)] max-w-xs truncate">
-                  {order.address}
-                  {order.notes && (
-                    <span className="ml-2 text-xs text-[var(--t4)]">({order.notes})</span>
-                  )}
+                <td className="px-3 py-2.5 max-w-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-[var(--t1)] truncate">{order.address}</span>
+                    {order.notes && (
+                      <span className="text-xs text-[var(--t4)] shrink-0">({order.notes})</span>
+                    )}
+                    {order.ready_at && (
+                      <span
+                        className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.04em]"
+                        style={{
+                          background: 'rgba(34,197,94,0.10)',
+                          color: 'var(--ok)',
+                          border: '1px solid rgba(34,197,94,0.2)',
+                        }}
+                      >
+                        Готово
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2.5">
                   <span
