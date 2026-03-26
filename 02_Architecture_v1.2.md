@@ -88,7 +88,7 @@ API побудований як Modular Monolith з чіткими межами 
 | `AuthModule` | JWT аутентифікація, refresh tokens, tenant isolation | `POST /api/v1/auth/login`<br>`/api/v1/auth/refresh`<br>`/api/v1/auth/logout` | |
 | `EstablishmentsModule` | Multi-tenant управління закладами | `CRUD /api/v1/establishments`<br>`GET\|PATCH /api/v1/establishments/:id/settings` | |
 | `CouriersModule` | Управління кур'єрами закладу | `CRUD /api/v1/couriers`<br>`GET /api/v1/couriers/status`<br>`PATCH /api/v1/couriers/me/device-token`<br>`POST /api/v1/couriers/:id/remind` | |
-| `OrdersModule` | Замовлення, статусна машина, призначення. `UNIQUE(external_id, establishment_id)` — захист від дублікатів POS | `CRUD /api/v1/orders`<br>`POST /api/v1/orders/:id/assign`<br>`PATCH /api/v1/orders/:id/cancel` | **FIXED** |
+| `OrdersModule` | Замовлення, статусна машина, призначення. `UNIQUE(external_id, establishment_id)` — захист від дублікатів POS. Auto-dispatch: курʼєри самостійно беруть pending-замовлення (atomic claim через `updateMany`) | `CRUD /api/v1/orders`<br>`POST /api/v1/orders/:id/assign`<br>`PATCH /api/v1/orders/:id/cancel`<br>`GET /api/v1/orders/available`<br>`POST /api/v1/orders/:id/claim` | **UPDATED** |
 | `TrackingModule` (WS Gateway) | Прийом GPS пінгів, Redis pub/sub, WebSocket до дашборду | `POST /api/v1/tracking/ping`<br>`WS: courier_moved` | |
 | `ProofOfDeliveryModule` | Гео-пруф (обов'язковий) + фото (опціональний), радіус 300м, два timestamps | `GET /api/v1/deliveries/active`<br>`GET /api/v1/deliveries/:id/upload-url`<br>`POST /api/v1/deliveries/:id/proof`<br>`PATCH /api/v1/deliveries/:id/start`<br>`PATCH /api/v1/deliveries/:id/fail` | **UPDATED** |
 | `RetentionModule` | Cron очищення замовлень та GPS-пінгів. 4 cron jobs: retention cleanup (щоночі), auto-close shifts (30хв), shift_ending_soon (5хв), courier_not_responding (5хв), eta-overdue-alert (5хв) | `Internal: @Cron(...)` | **UPDATED** |
@@ -715,7 +715,7 @@ status TEXT CHECK (status IN ('pending','assigned','in_progress','completed','ca
 
 | From | To | Trigger | Actor |
 |------|----|---------|-------|
-| `pending` | `assigned` | `POST /api/v1/orders/:id/assign` | Manager/System |
+| `pending` | `assigned` | `POST /api/v1/orders/:id/assign` (менеджер призначає курʼєра) або `POST /api/v1/orders/:id/claim` (курʼєр самостійно, якщо `auto_dispatch=true`) | Manager / Courier |
 | `pending` | `cancelled` | `PATCH /api/v1/orders/:id/cancel` | Manager |
 | `assigned` | `in_progress` | `PATCH /api/v1/deliveries/:id/start` | Courier |
 | `assigned` | `cancelled` | `PATCH /api/v1/orders/:id/cancel` | Manager |

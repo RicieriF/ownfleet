@@ -49,7 +49,7 @@ B2B SaaS платформа для управління власними кур�
 | `EstablishmentsModule` | CRUD закладів, settings, PlanAccessGuard |
 | `CouriersModule` | Управління курʼєрами, FCM tokens |
 | `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, Telegram-нагадування (shift_ending_soon, courier_not_responding) |
-| `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign |
+| `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; self-assignment (auto_dispatch mode): `GET /available`, `POST /:id/claim` |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
 | `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (4 cron jobs, кожні 5–30 хв) |
@@ -303,13 +303,13 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  /analytics      — summary KPIs + per-courier breakdown
 ✅  /integrations   — Poster + iiko config cards
 ✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти)
+✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти) + режим призначення (auto_dispatch)
 ```
 
 **Mobile App (React Native + Expo) — ✅ реалізовано:**
 ```
 ✅  Авторизація (login screen + JWT + refresh)
-✅  Головний екран (4 стани: no shift → idle → assigned → in_progress)
+✅  Головний екран (4 стани: no shift → idle → assigned → in_progress; при auto_dispatch=true: idle показує пул доступних замовлень)
 ✅  Proof of delivery (гео + фото upload до R2)
 ✅  GPS (background location + foreground ping 15с)
 ✅  FCM push notifications
@@ -317,7 +317,7 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 284 тестів / 20 суїтів / all green**
+**Тести — ✅ 303 тестів / 20 суїтів / all green**
 
 ---
 
