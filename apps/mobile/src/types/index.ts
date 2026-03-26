@@ -45,6 +45,25 @@ export interface AvailableOrder {
   created_at: string;
 }
 
+export interface WorkloadCourierStat {
+  courierId: string;
+  courierName: string;
+  deliveriesCount: number;
+  activeMinutes: number;
+}
+
+export interface WorkloadToday {
+  couriers: WorkloadCourierStat[];
+  myStats: {
+    deliveriesCount: number;
+    activeMinutes: number;
+  };
+  teamAvg: {
+    deliveriesCount: number;
+    activeMinutes: number;
+  };
+}
+
 export interface PingPayload {
   lat: number;
   lng: number;

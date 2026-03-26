@@ -3,9 +3,7 @@
  *
  * States:
  *  - No active shift      → "Вийти на зміну" CTA (NoShiftState)
- *  - On shift, idle       → "Очікуємо замовлення" + shift timer in header
- *                           When auto_dispatch is enabled: also shows pool of available
- *                           pending orders that the courier can self-claim (IdleState)
+ *  - On shift, idle       → "Очікуємо замовлення" + shift timer in header + workload block
  *  - Delivery assigned    → address + [Прийняти] + shift timer
  *  - Delivery in_progress → address + [Здати замовлення] + GPS active + shift timer
  */
@@ -13,12 +11,12 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   Alert,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,7 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { useShiftStore } from '@/store/shift';
 import { apiGet, apiPost, apiPatch } from '@/api/client';
-import { ActiveDelivery, AvailableOrder, Shift } from '@/types';
+import { ActiveDelivery, Shift, WorkloadToday } from '@/types';
 import {
   requestLocationPermissions,
   startBackgroundLocationTask,
@@ -40,6 +38,7 @@ import {
 import { requestBatteryOptimizationExemption } from '@/services/battery';
 
 const POLL_INTERVAL_MS = 10_000;
+const WORKLOAD_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -98,14 +97,32 @@ export default function MainScreen() {
   const [delivery, setDelivery] = useState<ActiveDelivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
-  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [workload, setWorkload] = useState<WorkloadToday | null>(null);
 
   const pingCleanupRef = useRef<(() => void) | null>(null);
   const notificationIdRef = useRef<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const shiftTimer = useShiftTimer(shift);
+
+  // ── Fetch workload ──────────────────────────────────────────────────────
+
+  const fetchWorkload = useCallback(async () => {
+    try {
+      const data = await apiGet<WorkloadToday>('/api/v1/couriers/workload-today');
+      setWorkload(data);
+    } catch {
+      // Non-critical: silently ignore workload fetch errors
+    }
+  }, []);
+
+  const scheduleWorkloadRefresh = useCallback(() => {
+    workloadTimerRef.current = setTimeout(async () => {
+      await fetchWorkload();
+      scheduleWorkloadRefresh();
+    }, WORKLOAD_REFRESH_INTERVAL_MS);
+  }, [fetchWorkload]);
 
   // ── Fetch shift + delivery ──────────────────────────────────────────────
 
@@ -117,17 +134,6 @@ export default function MainScreen() {
       ]);
       await setShift(shiftData);
       setDelivery(deliveryData);
-
-      // Fetch available orders when on shift but no active delivery
-      if (shiftData && !deliveryData) {
-        const orders = await apiGet<AvailableOrder[]>('/api/v1/orders/available').catch((e) => {
-          if (e instanceof Error && e.message === 'SESSION_EXPIRED') throw e;
-          return []; // auto_dispatch disabled or other transient error
-        });
-        setAvailableOrders(orders);
-      } else {
-        setAvailableOrders([]);
-      }
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
         clearAuth();
@@ -151,8 +157,24 @@ export default function MainScreen() {
     requestBatteryOptimizationExemption().catch(() => {});
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      if (workloadTimerRef.current) clearTimeout(workloadTimerRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Workload: fetch when shift becomes active, refresh every 5 min ──────
+
+  useEffect(() => {
+    if (workloadTimerRef.current) {
+      clearTimeout(workloadTimerRef.current);
+      workloadTimerRef.current = null;
+    }
+    if (shift) {
+      fetchWorkload();
+      scheduleWorkloadRefresh();
+    } else {
+      setWorkload(null);
+    }
+  }, [shift?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── GPS lifecycle ──────────────────────────────────────────────────────
 
@@ -250,22 +272,6 @@ export default function MainScreen() {
     router.push({ pathname: '/(app)/proof', params: { deliveryId: delivery.id } });
   }
 
-  async function handleClaim(orderId: string) {
-    setClaimingId(orderId);
-    try {
-      // Multi-tenant safety guaranteed by JWT — API validates establishment_id from token
-      await apiPost(`/api/v1/orders/${orderId}/claim`, {});
-      // Cancel pending poll and immediately refresh, then reschedule
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-      await fetchState();
-      scheduleNextPoll();
-    } catch {
-      Alert.alert('Замовлення недоступне', 'Схоже, це замовлення вже взяв інший курʼєр.');
-    } finally {
-      setClaimingId(null);
-    }
-  }
-
   // ── Logout ─────────────────────────────────────────────────────────────
 
   async function handleLogout() {
@@ -322,17 +328,23 @@ export default function MainScreen() {
       </View>
 
       {/* Content */}
-      <View style={[styles.content, shift && !delivery && availableOrders.length > 0 && styles.contentTop]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.content,
+          (!shift || delivery) && styles.contentCentered,
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {!shift && (
           <NoShiftState onStart={handleStartShift} loading={actionLoading} />
         )}
 
         {shift && !delivery && (
-          <IdleState
-            availableOrders={availableOrders}
-            onClaim={handleClaim}
-            claimingId={claimingId}
-          />
+          <>
+            <IdleState />
+            <WorkloadBlock workload={workload} />
+          </>
         )}
 
         {shift && delivery?.status === 'assigned' && (
@@ -346,7 +358,7 @@ export default function MainScreen() {
         {shift && delivery?.status === 'in_progress' && (
           <InProgressState delivery={delivery} onComplete={handleCompleteDelivery} />
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -417,63 +429,39 @@ function NoShiftState({
   );
 }
 
-function IdleState({
-  availableOrders,
-  onClaim,
-  claimingId,
-}: {
-  availableOrders: AvailableOrder[];
-  onClaim: (orderId: string) => void;
-  claimingId: string | null;
-}) {
-  const renderItem = useCallback(
-    ({ item }: { item: AvailableOrder }) => (
-      <View style={styles.availableCard}>
-        <Text style={styles.availableAddress}>{item.address}</Text>
-        {item.notes ? <Text style={styles.availableNotes}>{item.notes}</Text> : null}
-        <TouchableOpacity
-          style={[styles.btn, styles.btnAccept, claimingId === item.id && styles.btnDisabled]}
-          onPress={() => onClaim(item.id)}
-          disabled={claimingId === item.id}
-          activeOpacity={0.8}
-        >
-          {claimingId === item.id ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.btnText}>Взяти замовлення</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    ),
-    [onClaim, claimingId],
+function IdleState() {
+  return (
+    <View style={styles.idle}>
+      <Text style={styles.idleEmoji}>⏳</Text>
+      <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
+      <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
+    </View>
   );
+}
 
-  if (availableOrders.length === 0) {
-    return (
-      <View style={styles.idle}>
-        <Text style={styles.idleEmoji}>⏳</Text>
-        <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
-        <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
-      </View>
-    );
-  }
+function WorkloadBlock({ workload }: { workload: WorkloadToday | null }) {
+  if (!workload) return null;
+
+  const { myStats, teamAvg } = workload;
+  const avgDeliveries = teamAvg.deliveriesCount % 1 === 0
+    ? String(teamAvg.deliveriesCount)
+    : teamAvg.deliveriesCount.toFixed(1);
+  const avgMinutes = teamAvg.activeMinutes % 1 === 0
+    ? String(teamAvg.activeMinutes)
+    : teamAvg.activeMinutes.toFixed(0);
 
   return (
-    <View style={styles.idleWithOrders}>
-      <View style={styles.idleCompact}>
-        <Text style={styles.idleEmoji}>⏳</Text>
-        <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
-      </View>
-      <Text style={styles.availableHeader}>
-        Доступні замовлення ({availableOrders.length})
+    <View style={styles.workloadBlock}>
+      <Text style={styles.workloadTitle}>Моя статистика сьогодні</Text>
+      <Text style={styles.workloadMain}>
+        <Text style={styles.workloadNumber}>{myStats.deliveriesCount}</Text>
+        <Text style={styles.workloadLabel}> доставок · </Text>
+        <Text style={styles.workloadNumber}>{myStats.activeMinutes}</Text>
+        <Text style={styles.workloadLabel}> хв у роботі</Text>
       </Text>
-      <FlatList
-        data={availableOrders}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        showsVerticalScrollIndicator={false}
-      />
+      <Text style={styles.workloadAvg}>
+        Середня по команді: {avgDeliveries} · {avgMinutes} хв
+      </Text>
     </View>
   );
 }
@@ -580,8 +568,9 @@ const styles = StyleSheet.create({
   logoutBtn: { fontSize: 14, color: '#71717a' },
 
   // Content
-  content: { flex: 1, padding: 20, justifyContent: 'center' },
-  contentTop: { justifyContent: 'flex-start' },
+  scrollView: { flex: 1 },
+  content: { flexGrow: 1, padding: 20, justifyContent: 'flex-start' },
+  contentCentered: { justifyContent: 'center' },
 
   // NoShiftState
   noShift: { alignItems: 'center', paddingHorizontal: 24 },
@@ -637,37 +626,46 @@ const styles = StyleSheet.create({
   startBtnText: { color: '#09090b', fontSize: 17, fontFamily: 'Manrope_700Bold' },
 
   // IdleState
-  idle: { alignItems: 'center', paddingHorizontal: 32 },
-  idleWithOrders: { flex: 1 },
-  idleCompact: { alignItems: 'center', paddingBottom: 20 },
+  idle: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 40, paddingBottom: 32 },
   idleEmoji: { fontSize: 56, marginBottom: 16 },
   idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
   idleSub: { fontSize: 15, color: '#71717a', textAlign: 'center', lineHeight: 22 },
 
-  // Available orders list
-  availableHeader: {
-    fontSize: 11,
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#71717a',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  availableCard: {
+  // WorkloadBlock
+  workloadBlock: {
     backgroundColor: '#18181b',
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
     borderColor: '#27272a',
+    marginTop: 4,
   },
-  availableAddress: {
-    fontSize: 16,
+  workloadTitle: {
+    fontSize: 11,
     fontFamily: 'Manrope_600SemiBold',
-    color: '#fafafa',
-    marginBottom: 6,
-    lineHeight: 22,
+    color: '#71717a',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
-  availableNotes: { fontSize: 13, color: '#a1a1aa', marginBottom: 12 },
+  workloadMain: {
+    marginBottom: 6,
+  },
+  workloadNumber: {
+    fontSize: 16,
+    fontFamily: 'JetBrainsMono_400Regular',
+    color: '#fafafa',
+  },
+  workloadLabel: {
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: '#a1a1aa',
+  },
+  workloadAvg: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: '#71717a',
+  },
 
   // Card (assigned / in_progress)
   card: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
