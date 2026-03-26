@@ -6,6 +6,8 @@ import { WebhooksService } from '../../webhooks/webhooks.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { EtaService } from '../../eta/eta.service.js';
 import { TrackingGateway } from '../../tracking/tracking.gateway.js';
+import { NotificationsService } from '../../notifications/notifications.service.js';
+import { CouriersService } from '../../couriers/couriers.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -54,6 +56,8 @@ const mockTelegramService = {
 const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
 const mockEtaService = { calculateEta: jest.fn().mockResolvedValue(900) };
 const mockGateway = { broadcastToEstablishment: jest.fn() };
+const mockNotificationsService = { sendPush: jest.fn().mockResolvedValue(undefined) };
+const mockCouriersService = { invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined) };
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -67,6 +71,8 @@ describe('OrdersService', () => {
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TrackingGateway, useValue: mockGateway },
+        { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: CouriersService, useValue: mockCouriersService },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);
@@ -221,7 +227,7 @@ describe('OrdersService', () => {
     };
 
     const estWithDispatch = {
-      auto_dispatch: true,
+      dispatch_mode: 'auto',
       lat: 50.45,
       lng: 30.52,
       timezone: 'Europe/Kyiv',
@@ -238,7 +244,7 @@ describe('OrdersService', () => {
       { id: 'order-1', address: 'вул. Хрещатик 1', lat: 50.44, lng: 30.51, notes: null, created_at: new Date() },
     ];
 
-    it('happy path: auto_dispatch=true, courier on shift → returns pending orders', async () => {
+    it('happy path: dispatch_mode=auto, courier on shift → returns pending orders', async () => {
       mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findMany.mockResolvedValue(availableOrders);
@@ -265,10 +271,10 @@ describe('OrdersService', () => {
       expect(callArgs.where.establishment_id).not.toBe(EST_B);
     });
 
-    it('throws BadRequestException when auto_dispatch=false', async () => {
+    it('throws BadRequestException when dispatch_mode=manual', async () => {
       mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue({
         ...estWithDispatch,
-        auto_dispatch: false,
+        dispatch_mode: 'manual',
       });
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
 
@@ -312,7 +318,7 @@ describe('OrdersService', () => {
     };
 
     const estWithDispatch = {
-      auto_dispatch: true,
+      dispatch_mode: 'auto',
       lat: 50.45,
       lng: 30.52,
       timezone: 'Europe/Kyiv',
@@ -360,7 +366,7 @@ describe('OrdersService', () => {
       mockPrisma.$transaction.mockImplementation((cb: any) => cb(mockTx2));
     });
 
-    it('happy path: auto_dispatch=true, courier on shift, pending order → returns claimed order', async () => {
+    it('happy path: dispatch_mode=auto, courier on shift, pending order → returns claimed order', async () => {
       mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
@@ -462,10 +468,10 @@ describe('OrdersService', () => {
       await expect(service.claim('order-1', nonCourierUser)).rejects.toThrow(ForbiddenException);
     });
 
-    it('throws BadRequestException when auto_dispatch=false', async () => {
+    it('throws BadRequestException when dispatch_mode=manual', async () => {
       mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue({
         ...estWithDispatch,
-        auto_dispatch: false,
+        dispatch_mode: 'manual',
       });
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
 

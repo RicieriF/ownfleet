@@ -4,6 +4,7 @@ import { CouriersService } from '../couriers.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
+import { COURIERS_REDIS_CLIENT } from '../couriers-redis.provider.js';
 
 const mockTelegramService = {
   notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
@@ -46,6 +47,7 @@ describe('CouriersService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: NotificationsService, useValue: { sendPush: jest.fn().mockResolvedValue(undefined) } },
         { provide: TelegramService, useValue: mockTelegramService },
+        { provide: COURIERS_REDIS_CLIENT, useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() } },
       ],
     }).compile();
     service = module.get<CouriersService>(CouriersService);
