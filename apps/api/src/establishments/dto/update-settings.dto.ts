@@ -44,4 +44,8 @@ export class UpdateSettingsDto {
 
   @IsOptional() @IsNumber() @Min(-180) @Max(180)
   lng?: number;
+
+  // ── Dispatch mode ────────────────────────────────────────────────────────
+  @IsOptional() @IsBoolean()
+  auto_dispatch?: boolean;
 }

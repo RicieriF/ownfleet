@@ -33,6 +33,12 @@ export class OrdersController {
     return this.service.findAll(req.user as AuthenticatedUser, statuses);
   }
 
+  // Static routes must come before parameterized :id routes
+  @Get('available')
+  getAvailable(@Req() req: any) {
+    return this.service.getAvailable(req.user as AuthenticatedUser);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.service.findOne(id, req.user as AuthenticatedUser);
@@ -57,5 +63,11 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   cancel(@Param('id') id: string, @Req() req: any) {
     return this.service.cancel(id, req.user as AuthenticatedUser);
+  }
+
+  @Post(':id/claim')
+  @HttpCode(HttpStatus.OK)
+  claim(@Param('id') id: string, @Req() req: any) {
+    return this.service.claim(id, req.user as AuthenticatedUser);
   }
 }

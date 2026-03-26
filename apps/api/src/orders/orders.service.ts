@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
@@ -14,6 +15,7 @@ import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { assertOrderTransition } from './order-state-machine.js';
 import { EtaService } from '../eta/eta.service.js';
+import { TrackingGateway } from '../tracking/tracking.gateway.js';
 
 const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 
@@ -26,6 +28,7 @@ export class OrdersService {
     private readonly webhooks: WebhooksService,
     private readonly telegram: TelegramService,
     private readonly eta: EtaService,
+    private readonly gateway: TrackingGateway,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -178,6 +181,128 @@ export class OrdersService {
     ).catch(() => {});
 
     return result;
+  }
+
+  // ── Courier self-assignment (auto_dispatch mode) ─────────────────────────
+
+  async getAvailable(user: AuthenticatedUser) {
+    await Promise.all([
+      this.fetchEstablishmentForDispatch(user.establishment_id),
+      this.assertCourierOnShift(user),
+    ]);
+
+    return this.prisma.order.findMany({
+      where: { establishment_id: user.establishment_id, status: 'pending' },
+      select: { id: true, address: true, lat: true, lng: true, notes: true, created_at: true },
+      orderBy: { created_at: 'asc' },
+    });
+  }
+
+  async claim(orderId: string, user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only couriers can claim orders');
+    }
+
+    const [est] = await Promise.all([
+      this.fetchEstablishmentForDispatch(user.establishment_id),
+      this.assertCourierOnShift(user),
+    ]);
+
+    // Fetch order (pre-check, real guard is inside transaction)
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.establishment_id !== user.establishment_id) {
+      throw new NotFoundException('Order not found');
+    }
+    if (order.status !== 'pending') {
+      throw new ConflictException('Order is no longer available');
+    }
+
+    // Fetch courier transport_mode for ETA (outside transaction — no HTTP during tx)
+    const courier = await this.prisma.courier.findUniqueOrThrow({
+      where: { id: user.courier_id },
+      select: { name: true, transport_mode: true },
+    });
+
+    let etaSeconds: number | null = null;
+    if (
+      est.lat !== null && est.lng !== null &&
+      order.lat !== null && order.lng !== null &&
+      courier.transport_mode !== null
+    ) {
+      etaSeconds = await this.eta.calculateEta({
+        establishmentLat: est.lat,
+        establishmentLng: est.lng,
+        orderLat: order.lat,
+        orderLng: order.lng,
+        transportMode: courier.transport_mode,
+        timezone: est.timezone,
+      });
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Atomic claim: only succeeds if order is still pending
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: 'pending' },
+        data: { status: 'assigned' },
+      });
+
+      if (updated.count === 0) {
+        throw new ConflictException('Order has already been claimed by another courier');
+      }
+
+      await tx.delivery.create({
+        data: {
+          order_id: orderId,
+          courier_id: user.courier_id!,
+          status: 'assigned',
+          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
+        },
+      });
+
+      return tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    });
+
+    this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', { order_id: orderId });
+    this.telegram.notifyEstablishmentManagers(
+      user.establishment_id,
+      `🚴 Курʼєр ${courier.name} самостійно взяв замовлення: ${order.address}`,
+      'delivery_assigned',
+    ).catch(() => {});
+    this.telegram.notifyCourier(
+      user.courier_id,
+      `📦 Ви взяли доставку: ${order.address}`,
+      'delivery_assigned',
+    ).catch(() => {});
+    this.webhooks.dispatch(user.establishment_id, 'order.assigned', { order_id: orderId }).catch(
+      (err) => this.logger.warn('webhook dispatch failed for order.assigned', err),
+    );
+
+    return result;
+  }
+
+  // Verifies auto_dispatch is enabled and returns establishment data needed for ETA
+  private async fetchEstablishmentForDispatch(establishmentId: string) {
+    const est = await this.prisma.establishment.findUniqueOrThrow({
+      where: { id: establishmentId },
+      select: { auto_dispatch: true, lat: true, lng: true, timezone: true },
+    });
+    if (!est.auto_dispatch) {
+      throw new BadRequestException('Self-assignment is not enabled for this establishment');
+    }
+    return est;
+  }
+
+  private async assertCourierOnShift(user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only couriers can access available orders');
+    }
+    const activeShift = await this.prisma.shift.findFirst({
+      where: { courier_id: user.courier_id, establishment_id: user.establishment_id, ended_at: null },
+    });
+    if (!activeShift) {
+      throw new BadRequestException('You must be on an active shift to access available orders');
+    }
   }
 
   async cancel(id: string, user: AuthenticatedUser) {

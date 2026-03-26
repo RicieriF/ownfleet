@@ -30,6 +30,7 @@ export interface Establishment {
   delivery_sla_minutes?: number | null;
   lat?: number | null;
   lng?: number | null;
+  auto_dispatch: boolean;
 }
 
 // ── Couriers ───────────────────────────────────────────────────────────────

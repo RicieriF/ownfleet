@@ -14,6 +14,7 @@ interface SettingsPayload {
   delivery_sla_minutes?: number | null;
   lat?: number;
   lng?: number;
+  auto_dispatch?: boolean;
 }
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
   initialSlaMinutes: number | null;
   initialLat: number | null;
   initialLng: number | null;
+  initialAutoDispatch: boolean;
 }
 
 function SectionCard({ title, description, children }: {
@@ -146,6 +148,7 @@ export function SettingsForm({
   initialSlaMinutes,
   initialLat,
   initialLng,
+  initialAutoDispatch,
 }: Props) {
   const [retentionOrders, setRetentionOrders] = useState(initialSettings?.retention_orders_days ?? 14);
   const [retentionPings, setRetentionPings] = useState(initialSettings?.retention_pings_days ?? 3);
@@ -158,6 +161,8 @@ export function SettingsForm({
 
   const [etaAlertEnabled, setEtaAlertEnabled] = useState(initialSettings?.eta_alert_enabled ?? false);
   const [etaAlertDelay, setEtaAlertDelay] = useState(initialSettings?.eta_alert_delay_minutes ?? 10);
+
+  const [autoDispatch, setAutoDispatch] = useState(initialAutoDispatch);
 
   const [latStr, setLatStr] = useState(initialLat !== null && initialLat !== undefined ? String(initialLat) : '');
   const [lngStr, setLngStr] = useState(initialLng !== null && initialLng !== undefined ? String(initialLng) : '');
@@ -183,6 +188,7 @@ export function SettingsForm({
           show_sla_on_dashboard: showSlaOnDashboard,
           eta_alert_enabled: etaAlertEnabled,
           eta_alert_delay_minutes: etaAlertDelay,
+          auto_dispatch: autoDispatch,
           ...(lat !== undefined && !isNaN(lat) && { lat }),
           ...(lng !== undefined && !isNaN(lng) && { lng }),
         });
@@ -298,6 +304,19 @@ export function SettingsForm({
             )}
           </div>
         </div>
+      </SectionCard>
+
+      {/* Dispatch mode */}
+      <SectionCard
+        title="Режим призначення"
+        description="Керуйте тим, як замовлення потрапляють до курʼєрів"
+      >
+        <FieldRow
+          label="Самостійне призначення курʼєрами"
+          hint="Курʼєри бачать пул непризначених замовлень і можуть самостійно взяти доставку"
+        >
+          <Toggle value={autoDispatch} onChange={setAutoDispatch} />
+        </FieldRow>
       </SectionCard>
 
       {/* Retention */}

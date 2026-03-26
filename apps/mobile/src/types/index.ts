@@ -36,6 +36,15 @@ export interface ActiveDelivery {
   };
 }
 
+export interface AvailableOrder {
+  id: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface PingPayload {
   lat: number;
   lng: number;

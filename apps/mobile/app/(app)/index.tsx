@@ -2,15 +2,18 @@
  * Main delivery screen.
  *
  * States:
- *  - No active shift   → "Вийти на зміну" CTA (NoShiftState)
- *  - On shift, idle    → "Очікуємо замовлення" + shift timer in header
- *  - Delivery assigned → address + [Прийняти] + shift timer
+ *  - No active shift      → "Вийти на зміну" CTA (NoShiftState)
+ *  - On shift, idle       → "Очікуємо замовлення" + shift timer in header
+ *                           When auto_dispatch is enabled: also shows pool of available
+ *                           pending orders that the courier can self-claim (IdleState)
+ *  - Delivery assigned    → address + [Прийняти] + shift timer
  *  - Delivery in_progress → address + [Здати замовлення] + GPS active + shift timer
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -23,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { useShiftStore } from '@/store/shift';
 import { apiGet, apiPost, apiPatch } from '@/api/client';
-import { ActiveDelivery, Shift } from '@/types';
+import { ActiveDelivery, AvailableOrder, Shift } from '@/types';
 import {
   requestLocationPermissions,
   startBackgroundLocationTask,
@@ -95,6 +98,8 @@ export default function MainScreen() {
   const [delivery, setDelivery] = useState<ActiveDelivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const pingCleanupRef = useRef<(() => void) | null>(null);
   const notificationIdRef = useRef<string | null>(null);
@@ -112,6 +117,17 @@ export default function MainScreen() {
       ]);
       await setShift(shiftData);
       setDelivery(deliveryData);
+
+      // Fetch available orders when on shift but no active delivery
+      if (shiftData && !deliveryData) {
+        const orders = await apiGet<AvailableOrder[]>('/api/v1/orders/available').catch((e) => {
+          if (e instanceof Error && e.message === 'SESSION_EXPIRED') throw e;
+          return []; // auto_dispatch disabled or other transient error
+        });
+        setAvailableOrders(orders);
+      } else {
+        setAvailableOrders([]);
+      }
     } catch (e) {
       if (e instanceof Error && e.message === 'SESSION_EXPIRED') {
         clearAuth();
@@ -234,6 +250,22 @@ export default function MainScreen() {
     router.push({ pathname: '/(app)/proof', params: { deliveryId: delivery.id } });
   }
 
+  async function handleClaim(orderId: string) {
+    setClaimingId(orderId);
+    try {
+      // Multi-tenant safety guaranteed by JWT — API validates establishment_id from token
+      await apiPost(`/api/v1/orders/${orderId}/claim`, {});
+      // Cancel pending poll and immediately refresh, then reschedule
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      await fetchState();
+      scheduleNextPoll();
+    } catch {
+      Alert.alert('Замовлення недоступне', 'Схоже, це замовлення вже взяв інший курʼєр.');
+    } finally {
+      setClaimingId(null);
+    }
+  }
+
   // ── Logout ─────────────────────────────────────────────────────────────
 
   async function handleLogout() {
@@ -290,12 +322,18 @@ export default function MainScreen() {
       </View>
 
       {/* Content */}
-      <View style={styles.content}>
+      <View style={[styles.content, shift && !delivery && availableOrders.length > 0 && styles.contentTop]}>
         {!shift && (
           <NoShiftState onStart={handleStartShift} loading={actionLoading} />
         )}
 
-        {shift && !delivery && <IdleState />}
+        {shift && !delivery && (
+          <IdleState
+            availableOrders={availableOrders}
+            onClaim={handleClaim}
+            claimingId={claimingId}
+          />
+        )}
 
         {shift && delivery?.status === 'assigned' && (
           <AssignedState
@@ -379,12 +417,63 @@ function NoShiftState({
   );
 }
 
-function IdleState() {
+function IdleState({
+  availableOrders,
+  onClaim,
+  claimingId,
+}: {
+  availableOrders: AvailableOrder[];
+  onClaim: (orderId: string) => void;
+  claimingId: string | null;
+}) {
+  const renderItem = useCallback(
+    ({ item }: { item: AvailableOrder }) => (
+      <View style={styles.availableCard}>
+        <Text style={styles.availableAddress}>{item.address}</Text>
+        {item.notes ? <Text style={styles.availableNotes}>{item.notes}</Text> : null}
+        <TouchableOpacity
+          style={[styles.btn, styles.btnAccept, claimingId === item.id && styles.btnDisabled]}
+          onPress={() => onClaim(item.id)}
+          disabled={claimingId === item.id}
+          activeOpacity={0.8}
+        >
+          {claimingId === item.id ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.btnText}>Взяти замовлення</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    ),
+    [onClaim, claimingId],
+  );
+
+  if (availableOrders.length === 0) {
+    return (
+      <View style={styles.idle}>
+        <Text style={styles.idleEmoji}>⏳</Text>
+        <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
+        <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.idle}>
-      <Text style={styles.idleEmoji}>⏳</Text>
-      <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
-      <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
+    <View style={styles.idleWithOrders}>
+      <View style={styles.idleCompact}>
+        <Text style={styles.idleEmoji}>⏳</Text>
+        <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
+      </View>
+      <Text style={styles.availableHeader}>
+        Доступні замовлення ({availableOrders.length})
+      </Text>
+      <FlatList
+        data={availableOrders}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -492,6 +581,7 @@ const styles = StyleSheet.create({
 
   // Content
   content: { flex: 1, padding: 20, justifyContent: 'center' },
+  contentTop: { justifyContent: 'flex-start' },
 
   // NoShiftState
   noShift: { alignItems: 'center', paddingHorizontal: 24 },
@@ -548,9 +638,36 @@ const styles = StyleSheet.create({
 
   // IdleState
   idle: { alignItems: 'center', paddingHorizontal: 32 },
+  idleWithOrders: { flex: 1 },
+  idleCompact: { alignItems: 'center', paddingBottom: 20 },
   idleEmoji: { fontSize: 56, marginBottom: 16 },
   idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
   idleSub: { fontSize: 15, color: '#71717a', textAlign: 'center', lineHeight: 22 },
+
+  // Available orders list
+  availableHeader: {
+    fontSize: 11,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#71717a',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  availableCard: {
+    backgroundColor: '#18181b',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  availableAddress: {
+    fontSize: 16,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#fafafa',
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  availableNotes: { fontSize: 13, color: '#a1a1aa', marginBottom: 12 },
 
   // Card (assigned / in_progress)
   card: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },

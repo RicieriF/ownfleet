@@ -114,6 +114,7 @@ export default async function SettingsPage() {
         initialSlaMinutes={establishment.delivery_sla_minutes ?? null}
         initialLat={establishment.lat ?? null}
         initialLng={establishment.lng ?? null}
+        initialAutoDispatch={establishment.auto_dispatch ?? false}
       />
 
       {/* Telegram notifications */}
