@@ -6,10 +6,12 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, TransportMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { CouriersService } from '../couriers/couriers.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
@@ -19,6 +21,43 @@ import { TrackingGateway } from '../tracking/tracking.gateway.js';
 
 const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 
+// Distance tiers for dispatch algorithm (in meters)
+const ZONE_1_METERS = 150;
+const ZONE_2_METERS = 1000;
+
+// Transport distance warnings (order delivery distance, in meters)
+const WALKING_WARN_METERS = 2000;
+const BICYCLE_WARN_METERS = 8000;
+
+export interface CourierWithEta {
+  courierId: string;
+  name: string;
+  transportMode: TransportMode;
+  distanceMeters: number;
+  workloadSeconds: number;
+  deliveriesCount: number;
+  etaSeconds: number;
+  transportWarning?: string;
+}
+
+export type DispatchResult =
+  | { waiting: true }
+  | { error: 'eta_unavailable'; canRetry: true }
+  | {
+      recommended: CourierWithEta;
+      pool: CourierWithEta[];
+    };
+
+// Raw row returned by workload $queryRaw
+interface WorkloadRow {
+  courier_id: string;
+  name: string;
+  transport_mode: TransportMode;
+  workload_score: string | number; // Postgres returns numeric as string
+  deliveries_count: string | number;
+  distance_meters: string | number;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -27,8 +66,10 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly webhooks: WebhooksService,
     private readonly telegram: TelegramService,
+    private readonly notifications: NotificationsService,
     private readonly eta: EtaService,
     private readonly gateway: TrackingGateway,
+    private readonly couriersService: CouriersService,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -180,6 +221,11 @@ export class OrdersService {
       'delivery_assigned',
     ).catch(() => {});
 
+    // Invalidate workload cache — fire-and-forget
+    this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
+      this.logger.warn('Failed to invalidate workload cache after assign', err),
+    );
+
     return result;
   }
 
@@ -281,13 +327,389 @@ export class OrdersService {
     return result;
   }
 
-  // Verifies auto_dispatch is enabled and returns establishment data needed for ETA
+  // ── Dispatch algorithm ───────────────────────────────────────────────────
+
+  /**
+   * Builds the eligible courier pool, applies proximity tiers and workload scoring,
+   * calculates OSRM ETA for each courier, and returns a ranked result.
+   *
+   * For `auto` dispatch_mode this also calls assignCourier() internally.
+   * Does NOT create Bull jobs — that's handled by the caller.
+   */
+  async runDispatchAlgorithm(
+    orderId: string,
+    establishmentId: string,
+  ): Promise<DispatchResult> {
+    const [order, establishment] = await Promise.all([
+      this.prisma.order.findUnique({ where: { id: orderId } }),
+      this.prisma.establishment.findUnique({
+        where: { id: establishmentId },
+        select: { id: true, lat: true, lng: true, timezone: true, dispatch_mode: true },
+      }),
+    ]);
+
+    if (!order || order.establishment_id !== establishmentId) {
+      throw new NotFoundException('Order not found');
+    }
+    if (!establishment) {
+      throw new NotFoundException('Establishment not found');
+    }
+    if (establishment.lat === null || establishment.lng === null) {
+      // Cannot filter by proximity without establishment coordinates
+      return { waiting: true };
+    }
+
+    const estLat = establishment.lat;
+    const estLng = establishment.lng;
+
+    // Step 1 + 3 — pool query with workload score via $queryRaw (PostGIS)
+    const rows = await this.prisma.$queryRaw<WorkloadRow[]>`
+      SELECT
+        c.id AS courier_id,
+        c.name,
+        c.transport_mode,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (d.completed_at - d.started_at))), 0)
+          + COALESCE(SUM(CASE WHEN d.status IN ('assigned','in_progress') THEN d.eta_seconds ELSE 0 END), 0)
+        AS workload_score,
+        COUNT(d.id) FILTER (WHERE d.completed_at IS NOT NULL) AS deliveries_count,
+        ST_Distance(
+          ST_Transform(lp.location::geometry, 3857),
+          ST_Transform(ST_SetSRID(ST_MakePoint(${estLng}, ${estLat}), 4326), 3857)
+        ) AS distance_meters
+      FROM couriers c
+      JOIN shifts s ON s.courier_id = c.id AND s.ended_at IS NULL AND s.establishment_id = ${establishmentId}
+      LEFT JOIN deliveries d ON d.courier_id = c.id
+        AND d.started_at >= s.started_at
+        AND d.status NOT IN ('failed')
+      LEFT JOIN LATERAL (
+        SELECT location FROM location_pings
+        WHERE courier_id = c.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) lp ON true
+      WHERE c.establishment_id = ${establishmentId}
+        AND c.active = true
+        AND c.transport_mode IS NOT NULL
+        AND lp.location IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM location_pings lp2
+          WHERE lp2.courier_id = c.id
+          AND lp2.created_at > NOW() - INTERVAL '5 minutes'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM deliveries d2
+          WHERE d2.courier_id = c.id
+          AND d2.status IN ('assigned', 'in_progress')
+        )
+        AND ST_DWithin(
+          ST_Transform(lp.location::geometry, 3857),
+          ST_Transform(ST_SetSRID(ST_MakePoint(${estLng}, ${estLat}), 4326), 3857),
+          ${ZONE_2_METERS}
+        )
+      GROUP BY c.id, c.name, c.transport_mode, lp.location, s.started_at
+      ORDER BY workload_score ASC, deliveries_count ASC, s.started_at ASC
+    `;
+
+    if (rows.length === 0) {
+      return { waiting: true };
+    }
+
+    // Step 2 — proximity tiers: prefer zone 1, fall back to zone 2
+    const zone1 = rows.filter((r) => Number(r.distance_meters) < ZONE_1_METERS);
+    const candidates = zone1.length > 0 ? zone1 : rows;
+
+    // Step — calculate order delivery distance for transport warnings
+    const orderDistanceMeters =
+      order.lat !== null && order.lng !== null
+        ? this.haversineMeters(estLat, estLng, order.lat, order.lng)
+        : null;
+
+    // Step — calculate OSRM ETA for all candidates in parallel
+    let etaResults: (number | null)[];
+    try {
+      etaResults = await Promise.all(
+        candidates.map((c) => {
+          if (order.lat === null || order.lng === null) return Promise.resolve(null);
+          return this.eta.calculateEta({
+            establishmentLat: estLat,
+            establishmentLng: estLng,
+            orderLat: order.lat!,
+            orderLng: order.lng!,
+            transportMode: c.transport_mode,
+            timezone: establishment.timezone,
+          });
+        }),
+      );
+    } catch (err) {
+      this.logger.warn('OSRM batch ETA failed during dispatch', err);
+      return { error: 'eta_unavailable', canRetry: true };
+    }
+
+    // If any ETA is null (OSRM unavailable), return error
+    if (etaResults.some((e) => e === null)) {
+      return { error: 'eta_unavailable', canRetry: true };
+    }
+
+    // Step 4 — build CourierWithEta list
+    const pool: CourierWithEta[] = candidates.map((c, i) => {
+      const distanceMeters = Number(c.distance_meters);
+      const transportWarning = this.buildTransportWarning(
+        c.transport_mode,
+        orderDistanceMeters,
+      );
+
+      return {
+        courierId: c.courier_id,
+        name: c.name,
+        transportMode: c.transport_mode,
+        distanceMeters,
+        workloadSeconds: Number(c.workload_score),
+        deliveriesCount: Number(c.deliveries_count),
+        etaSeconds: etaResults[i]!,
+        ...(transportWarning ? { transportWarning } : {}),
+      };
+    });
+
+    // Sort pool: zone 1 first, then by workload_score (already sorted by SQL, but ETA parallel
+    // does not change order so SQL ordering stands)
+    const recommended = pool[0]!;
+
+    // For `auto` mode — assign immediately
+    if (establishment.dispatch_mode === 'auto') {
+      try {
+        await this.assignCourier(orderId, recommended.courierId, establishmentId);
+      } catch (err) {
+        this.logger.warn(`Auto-assign failed for order ${orderId}`, err);
+        // Return result anyway — caller handles the error display
+      }
+    }
+
+    return { recommended, pool };
+  }
+
+  /**
+   * Internal method used by runDispatchAlgorithm and POST /assign-recommended.
+   * Assigns a courier to an order without going through the HTTP layer.
+   * Mirrors assign() but accepts raw IDs.
+   */
+  async assignCourier(
+    orderId: string,
+    courierId: string,
+    establishmentId: string,
+  ): Promise<void> {
+    const [order, courier, establishment] = await Promise.all([
+      this.prisma.order.findUnique({ where: { id: orderId } }),
+      this.prisma.courier.findUnique({ where: { id: courierId } }),
+      this.prisma.establishment.findUnique({
+        where: { id: establishmentId },
+        select: { lat: true, lng: true, timezone: true },
+      }),
+    ]);
+
+    if (!order || order.establishment_id !== establishmentId) {
+      throw new NotFoundException('Order not found');
+    }
+    if (!courier || courier.establishment_id !== establishmentId) {
+      throw new NotFoundException('Courier not found in your establishment');
+    }
+    if (!establishment) {
+      throw new NotFoundException('Establishment not found');
+    }
+
+    assertOrderTransition(order.status, OrderStatus.assigned);
+
+    let etaSeconds: number | null = null;
+    if (
+      establishment.lat !== null &&
+      establishment.lng !== null &&
+      order.lat !== null &&
+      order.lng !== null &&
+      courier.transport_mode !== null
+    ) {
+      etaSeconds = await this.eta.calculateEta({
+        establishmentLat: establishment.lat,
+        establishmentLng: establishment.lng,
+        orderLat: order.lat,
+        orderLng: order.lng,
+        transportMode: courier.transport_mode,
+        timezone: establishment.timezone,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.assigned },
+      });
+      await tx.delivery.create({
+        data: {
+          order_id: orderId,
+          courier_id: courierId,
+          status: 'assigned',
+          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
+        },
+      });
+    });
+
+    // FCM push to courier — fire-and-forget
+    this.notifications
+      .sendPush(courierId, {
+        title: 'Нова доставка',
+        body: `Вам призначено доставку: ${order.address}`,
+        data: { type: 'delivery_assigned', order_id: orderId },
+      })
+      .catch((err) => this.logger.warn(`FCM push failed for courier ${courierId}`, err));
+
+    try {
+      this.gateway.broadcastToEstablishment(establishmentId, 'order:assigned', {
+        order_id: orderId,
+        courier_id: courierId,
+      });
+    } catch (err) {
+      this.logger.warn('WS broadcast failed for order:assigned', err);
+    }
+
+    this.telegram
+      .notifyEstablishmentManagers(
+        establishmentId,
+        `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
+        'delivery_assigned',
+      )
+      .catch(() => {});
+
+    // Invalidate workload cache — fire-and-forget
+    this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
+      this.logger.warn('Failed to invalidate workload cache after assignCourier', err),
+    );
+  }
+
+  /**
+   * Reassigns an existing delivery (status must be 'assigned') to a new courier.
+   * Does NOT change delivery status — only updates courier_id.
+   */
+  async reassignDelivery(
+    deliveryId: string,
+    newCourierId: string,
+    establishmentId: string,
+  ): Promise<void> {
+    const delivery = await this.prisma.delivery.findUnique({
+      where: { id: deliveryId },
+      include: {
+        order: { select: { establishment_id: true, address: true } },
+        courier: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!delivery) {
+      throw new NotFoundException('Delivery not found');
+    }
+    if (delivery.order.establishment_id !== establishmentId) {
+      throw new ForbiddenException('Delivery does not belong to your establishment');
+    }
+    if (delivery.status !== 'assigned') {
+      throw new ConflictException(
+        'Delivery cannot be reassigned — must be in "assigned" status',
+      );
+    }
+
+    // Validate new courier is available (no active delivery)
+    const newCourier = await this.prisma.courier.findUnique({
+      where: { id: newCourierId },
+      select: { id: true, name: true, establishment_id: true },
+    });
+
+    if (!newCourier || newCourier.establishment_id !== establishmentId) {
+      throw new NotFoundException('New courier not found in your establishment');
+    }
+
+    const activeDelivery = await this.prisma.delivery.findFirst({
+      where: {
+        courier_id: newCourierId,
+        status: { in: ['assigned', 'in_progress'] },
+      },
+    });
+    if (activeDelivery) {
+      throw new ConflictException('New courier already has an active delivery');
+    }
+
+    const oldCourierId = delivery.courier_id;
+
+    await this.prisma.delivery.update({
+      where: { id: deliveryId },
+      data: { courier_id: newCourierId },
+    });
+
+    // FCM push to old courier — fire-and-forget
+    this.notifications
+      .sendPush(oldCourierId, {
+        title: 'Доставку перепризначено',
+        body: `Доставку ${delivery.order.address} перепризначено іншому курʼєру`,
+        data: { type: 'delivery_reassigned', delivery_id: deliveryId },
+      })
+      .catch((err) =>
+        this.logger.warn(`FCM push (reassigned) failed for old courier ${oldCourierId}`, err),
+      );
+
+    // FCM push to new courier — fire-and-forget
+    this.notifications
+      .sendPush(newCourierId, {
+        title: 'Нова доставка',
+        body: `Вам призначено доставку: ${delivery.order.address}`,
+        data: { type: 'delivery_assigned', delivery_id: deliveryId },
+      })
+      .catch((err) =>
+        this.logger.warn(`FCM push (assign) failed for new courier ${newCourierId}`, err),
+      );
+
+    try {
+      this.gateway.broadcastToEstablishment(establishmentId, 'delivery:reassigned', {
+        delivery_id: deliveryId,
+        old_courier_id: oldCourierId,
+        new_courier_id: newCourierId,
+      });
+    } catch (err) {
+      this.logger.warn('WS broadcast failed for delivery:reassigned', err);
+    }
+
+    // Invalidate workload cache — fire-and-forget
+    this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
+      this.logger.warn('Failed to invalidate workload cache after reassignDelivery', err),
+    );
+  }
+
+  private buildTransportWarning(
+    mode: TransportMode,
+    orderDistanceMeters: number | null,
+  ): string | undefined {
+    if (orderDistanceMeters === null) return undefined;
+    if (mode === TransportMode.walking && orderDistanceMeters > WALKING_WARN_METERS) {
+      return `Доставка ${(orderDistanceMeters / 1000).toFixed(1)} км — велика відстань для пішки`;
+    }
+    if (mode === TransportMode.bicycle && orderDistanceMeters > BICYCLE_WARN_METERS) {
+      return `Доставка ${(orderDistanceMeters / 1000).toFixed(1)} км — велика відстань для велосипеда`;
+    }
+    return undefined;
+  }
+
+  private haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6_371_000;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Verifies dispatch_mode allows self-assignment and returns establishment data needed for ETA
   private async fetchEstablishmentForDispatch(establishmentId: string) {
     const est = await this.prisma.establishment.findUniqueOrThrow({
       where: { id: establishmentId },
-      select: { auto_dispatch: true, lat: true, lng: true, timezone: true },
+      select: { dispatch_mode: true, lat: true, lng: true, timezone: true },
     });
-    if (!est.auto_dispatch) {
+    if (est.dispatch_mode !== 'auto') {
       throw new BadRequestException('Self-assignment is not enabled for this establishment');
     }
     return est;
@@ -320,6 +742,163 @@ export class OrdersService {
     return updated;
   }
 
+  // ── Mark order food ready (dispatch step 1) ──────────────────────────────
+
+  /**
+   * Marks that food is ready for pickup. Sets ready_at timestamp and broadcasts
+   * order:ready WS event. Does NOT change order status.
+   * Valid for orders in 'pending' or 'assigned' state.
+   */
+  async markReady(id: string, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
+    const order = await this.assertBelongs(id, user.establishment_id);
+
+    if (order.status !== OrderStatus.pending && order.status !== OrderStatus.assigned) {
+      throw new ConflictException(
+        `Cannot mark order ready in status '${order.status}'`,
+      );
+    }
+
+    const readyAt = new Date();
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: { ready_at: readyAt },
+    });
+
+    try {
+      this.gateway.broadcastToEstablishment(user.establishment_id, 'order:ready', {
+        orderId: id,
+        readyAt,
+      });
+    } catch (err) {
+      this.logger.warn('WS broadcast failed for order:ready', err);
+    }
+
+    this.logger.log(`Order ${id} marked ready at ${readyAt.toISOString()}`);
+    return updated;
+  }
+
+  // ── Manager approves recommended courier (recommend dispatch mode) ────────
+
+  /**
+   * Manager confirms a recommended courier assignment.
+   * Uses race-safe updateMany to ensure the order is still pending.
+   */
+  async assignRecommended(
+    id: string,
+    courierId: string,
+    user: AuthenticatedUser,
+  ) {
+    this.assertManagerOrOwner(user);
+
+    // Pre-flight: verify order exists and belongs to establishment
+    const order = await this.assertBelongs(id, user.establishment_id);
+    if (order.status !== OrderStatus.pending) {
+      throw new ConflictException(
+        `Order is not in 'pending' status (current: '${order.status}')`,
+      );
+    }
+
+    // Verify courier belongs to same establishment
+    const courier = await this.prisma.courier.findUnique({
+      where: { id: courierId },
+    });
+    if (!courier || courier.establishment_id !== user.establishment_id) {
+      throw new NotFoundException('Courier not found in your establishment');
+    }
+
+    // Fetch establishment for ETA calculation
+    const establishment = await this.prisma.establishment.findUniqueOrThrow({
+      where: { id: user.establishment_id },
+      select: { lat: true, lng: true, timezone: true },
+    });
+
+    // Calculate ETA outside transaction (HTTP call)
+    let etaSeconds: number | null = null;
+    if (
+      establishment.lat !== null &&
+      establishment.lng !== null &&
+      order.lat !== null &&
+      order.lng !== null &&
+      courier.transport_mode !== null
+    ) {
+      etaSeconds = await this.eta.calculateEta({
+        establishmentLat: establishment.lat,
+        establishmentLng: establishment.lng,
+        orderLat: order.lat,
+        orderLng: order.lng,
+        transportMode: courier.transport_mode,
+        timezone: establishment.timezone,
+      });
+    }
+
+    // Race-safe transaction: only proceeds if order is still pending
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id, status: 'pending' },
+        data: { status: 'assigned' },
+      });
+
+      if (updated.count === 0) {
+        throw new ConflictException('Order has already been assigned');
+      }
+
+      await tx.delivery.create({
+        data: {
+          order_id: id,
+          courier_id: courierId,
+          status: 'assigned',
+          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
+          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
+        },
+      }).catch((err) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new ConflictException('Order is already being assigned');
+        }
+        throw err;
+      });
+
+      return tx.order.findUniqueOrThrow({ where: { id } });
+    });
+
+    // FCM push to courier — fire-and-forget
+    this.notifications
+      .sendPush(courierId, {
+        title: 'Нова доставка',
+        body: `Вам призначено доставку: ${order.address}`,
+        data: { type: 'delivery_assigned', order_id: id },
+      })
+      .catch((err) => this.logger.warn(`FCM push failed for courier ${courierId}`, err));
+
+    try {
+      this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', {
+        order_id: id,
+        courier_id: courierId,
+      });
+    } catch (err) {
+      this.logger.warn('WS broadcast failed for order:assigned', err);
+    }
+
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
+        'delivery_assigned',
+      )
+      .catch(() => {});
+
+    this.webhooks
+      .dispatch(user.establishment_id, 'order.assigned', { order_id: id })
+      .catch((err) => this.logger.warn('webhook dispatch failed for order.assigned', err));
+
+    // Invalidate workload cache — fire-and-forget
+    this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
+      this.logger.warn('Failed to invalidate workload cache after assignRecommended', err),
+    );
+
+    return result;
+  }
+
   // ── Called internally by ProofOfDeliveryModule ───────────────────────────
   async transitionStatus(
     orderId: string,
@@ -331,6 +910,24 @@ export class OrdersService {
     return this.prisma.order.update({
       where: { id: orderId },
       data: { status: to },
+    });
+  }
+
+  /**
+   * Returns the delivery in 'assigned' state for the given order, or null if not found.
+   * Used by the reassign controller to resolve delivery ID from order ID.
+   */
+  async findAssignedDelivery(
+    orderId: string,
+    establishmentId: string,
+  ): Promise<{ id: string } | null> {
+    // Verify order belongs to establishment first
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.establishment_id !== establishmentId) return null;
+
+    return this.prisma.delivery.findFirst({
+      where: { order_id: orderId, status: 'assigned' },
+      select: { id: true },
     });
   }
 
