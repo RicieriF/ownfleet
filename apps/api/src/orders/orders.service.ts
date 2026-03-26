@@ -263,7 +263,7 @@ export class OrdersService {
       return tx.order.findUniqueOrThrow({ where: { id: orderId } });
     });
 
-    this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', { order_id: orderId });
+    try { this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', { order_id: orderId }); } catch (err) { this.logger.warn('WS broadcast failed for order:assigned', err); }
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `🚴 Курʼєр ${courier.name} самостійно взяв замовлення: ${order.address}`,
