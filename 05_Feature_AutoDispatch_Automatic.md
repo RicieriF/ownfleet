@@ -159,11 +159,21 @@ workload_score =
 
 1. Замовлення залишається в `pending`, `ready_at` зафіксовано
 2. Bull ставить delayed job: "перевірити замовлення X через 1 хвилину"
-3. Через хвилину алгоритм запускається знову:
-   - `auto`: якщо курʼєр знайдений — призначає автоматично
-   - `recommend`: якщо курʼєр знайдений — надсилає WS event менеджеру для підтвердження (НЕ авто-призначає)
-4. Якщо через `dispatch_no_courier_escalation_minutes` (дефолт: 10 хв) нікого досі немає → Telegram менеджеру як крайній ескалейшн
-5. **При переході замовлення в `cancelled`** — всі pending Bull dispatch jobs для цього замовлення скасовуються негайно
+3. На початку кожного job — **перевірка `order.status`**:
+   - Якщо `assigned` або `cancelled` → job завершується без дій (idempotent)
+   - Якщо `pending` → запускає алгоритм знову
+4. Якщо курʼєр знайдений:
+   - `auto`: призначає автоматично
+   - `recommend`: надсилає WS event менеджеру для підтвердження (НЕ авто-призначає)
+5. Якщо через `dispatch_no_courier_escalation_minutes` (дефолт: 10 хв) нікого досі немає → Telegram менеджеру як крайній ескалейшн
+6. **При переході замовлення в `cancelled`** — всі pending Bull dispatch jobs скасовуються негайно
+
+**Відновлення після рестарту сервера (onModuleInit):**
+При старті `OrdersModule` виконується запит:
+```sql
+SELECT id FROM orders WHERE ready_at IS NOT NULL AND status = 'pending'
+```
+Для кожного знайденого замовлення — ставиться новий Bull job. Без цього замовлення з `ready_at` після деплою або краша сервера залишились би в стані "⏳ Очікує курʼєра" назавжди.
 
 В дашборді замовлення, що чекає на курʼєра, позначається індикатором **"⏳ Очікує курʼєра"** — менеджер бачить що ситуація є і система активно шукає.
 
@@ -178,6 +188,8 @@ workload_score =
 Вимірює наскільки реальний час доставки (заклад → клієнт) відрізняється від розрахункового ETA.
 
 **Важливо:** `eta_seconds` перераховується в момент виїзду курʼєра з закладу (`eta_started_at`) — тільки маршрут заклад→клієнт через OSRM. Це гарантує що обидва числа вимірюють одне й те саме. EtaModule вже детектує виїзд (>100м) — в цей самий момент він оновлює `eta_seconds` свіжим розрахунком. Це також покращує точність existing overdue alertів в RetentionModule.
+
+**Атомарність:** `eta_started_at` і `eta_seconds` оновлюються **одним** `UPDATE deliveries SET eta_started_at = $1, eta_seconds = $2 WHERE id = $3`. Два окремих запити створили б вікно де cron бачить `eta_started_at` встановленим але `eta_seconds` ще старим — неправильний overdue дедлайн.
 
 ```
 actual_seconds = completed_at - eta_started_at    ← від виїзду з закладу
@@ -288,9 +300,11 @@ POST /api/v1/orders/:id/reassign
   → якщо delivery не в 'assigned': повертає 409 + { assignedTo: courierName }
 
 GET /api/v1/couriers/workload-today
-  → навантаження всіх курʼєрів закладу за сьогодні
+  → навантаження всіх курʼєрів закладу за поточну зміну
   → доступний для ролей: manager, dispatcher, courier (multi-tenant guard)
   → використовується: Smart Assignment UI + мобільний stats
+  → кешується в Redis: ключ `workload:{establishment_id}`, TTL 15с
+  → інвалідується при кожній зміні статусу delivery того ж закладу
 ```
 
 ---
@@ -329,6 +343,43 @@ OrdersService.reassignDelivery(deliveryId, newCourierId)
   ← WS event старому курʼєру + FCM push новому
   ← НЕ порушує state machine — статус не змінюється, операція через explicit method
 ```
+
+---
+
+## Що видаляється (self-select mode)
+
+При реалізації цієї фічі видалити повністю:
+
+**Backend (OrdersModule):**
+- `GET /api/v1/orders/available` — endpoint для пулу доступних замовлень
+- `POST /api/v1/orders/:id/claim` — endpoint самостійного захоплення замовлення
+- Логіка `auto_dispatch` перевірки в `OrdersService`
+
+**Web Dashboard:**
+- `auto_dispatch` toggle в `/settings` → замінюється `dispatch_mode` selector
+
+**Mobile:**
+- Idle-екран: блок "Доступні замовлення" (пул для self-select)
+- Логіка polling `GET /orders/available`
+
+---
+
+## Тести P0 (блокують мерж)
+
+| # | Що тестується | Сценарії |
+|---|--------------|----------|
+| 1 | `runDispatchAlgorithm` — pool filter | Shift неактивна → не в пулі; GPS > 5хв → не в пулі; є active delivery → не в пулі |
+| 2 | `runDispatchAlgorithm` — proximity tiers | Zone 1 є → обирає Zone 1; Zone 1 пуста → обирає Zone 2; обидві пусті → `{ waiting: true }` |
+| 3 | `runDispatchAlgorithm` — workload_score | Менший score → рекомендація; тай-брейкер: менше доставок → раніше зміна |
+| 4 | `POST /ready` — idempotency | Повторний виклик → той самий результат, алгоритм не запускається двічі |
+| 5 | `POST /assign-recommended` — race | Курʼєр зайнятий на момент підтвердження → 409 + оновлений список |
+| 6 | `reassignDelivery` — state guard | `assigned` → успіх; `in_progress` → помилка |
+| 7 | Bull retry — статус перевірка | Order `assigned` → job завершується; `cancelled` → job завершується |
+| 8 | Bull retry — режим | `auto` → auto-assign; `recommend` → WS event без assign |
+| 9 | `onModuleInit` requeue | Pending orders з `ready_at` при старті → нові jobs |
+| 10 | `+N хв/дост` — NULL guard | `eta_started_at IS NULL` → delivery пропускається в AVG |
+| 11 | Multi-tenant | Order чужого establishment → 403 на всіх нових endpoints |
+| 12 | Transport warning | walking + відстань > 2км → ⚠ у відповіді |
 
 ---
 
