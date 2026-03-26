@@ -116,6 +116,10 @@
 - Останній GPS пінг < 5 хвилин тому
 - В радіусі 1 км від закладу (PostGIS `ST_DWithin`)
 
+**OSRM failure:** Якщо OSRM недоступний під час розрахунку ETA для пулу — `runDispatchAlgorithm` повертає `{ error: 'eta_unavailable', canRetry: true }`. Відповідь HTTP не є 500. Менеджер бачить: "Не вдалося розрахувати ETA. Спробуйте ще раз."
+
+**ETA розраховується паралельно:** для всіх курʼєрів пулу — `Promise.all([...pool.map(c => etaService.calculate(...))])`. Для закладів з 10+ курʼєрами це знижує latency `/ready` з O(n) до O(1).
+
 ### Крок 2 — Proximity tiers (пріоритет за зоною)
 
 Система шукає курʼєра в найближчій зоні, розширюючись якщо порожньо. Максимальний радіус — 1 км: курʼєр за межею вже не є "поряд" незалежно від типу транспорту.
@@ -166,20 +170,25 @@ workload_score =
    - `auto`: призначає автоматично
    - `recommend`: надсилає WS event менеджеру для підтвердження (НЕ авто-призначає)
 5. Якщо через `dispatch_no_courier_escalation_minutes` (дефолт: 10 хв) нікого досі немає → Telegram менеджеру як крайній ескалейшн
-6. **При переході замовлення в `cancelled`** — всі pending Bull dispatch jobs скасовуються негайно
+6. **При переході замовлення в `cancelled`** — Bull job для цього замовлення скасовується (через jobId `dispatch:${orderId}`). Якщо job встигне запуститись — перевірка `order.status` в першому рядку завершить його без дій
 
 **Відновлення після рестарту сервера (onModuleInit):**
 При старті `OrdersModule` виконується запит:
 ```sql
 SELECT id FROM orders WHERE ready_at IS NOT NULL AND status = 'pending'
 ```
-Для кожного знайденого замовлення — ставиться новий Bull job. Без цього замовлення з `ready_at` після деплою або краша сервера залишились би в стані "⏳ Очікує курʼєра" назавжди.
+Для кожного знайденого замовлення — ставиться Bull job з `jobId: 'dispatch:${orderId}'`. Bull ігнорує повторний `add()` з тим самим jobId — запобігає дублюванню якщо jobs вже є в Redis після рестарту. Без цього замовлення з `ready_at` після деплою або краша сервера залишились би в стані "⏳ Очікує курʼєра" назавжди.
+
+**Те ж саме jobId використовується при першому dispatch:** `queue.add(data, { jobId: 'dispatch:${orderId}', delay: 60_000 })` — це єдиний спосіб гарантувати idempotency між restart і звичайним retry flow.
 
 В дашборді замовлення, що чекає на курʼєра, позначається індикатором **"⏳ Очікує курʼєра"** — менеджер бачить що ситуація є і система активно шукає.
 
 **Поведінка при знайденому курʼєрі після retry:**
 - Режим `auto`: система призначає автоматично → WS event `dispatch:courier_found` → toast менеджеру "Знайдено курʼєра для замовлення #X, призначено: Іван"
 - Режим `recommend`: WS event `dispatch:courier_found` → якщо панель відкрита — оновлюється з рекомендацією; якщо закрита — toast "Знайдено курʼєра для замовлення #X, підтвердіть призначення"
+
+**Timeout для непідтвердженої рекомендації (режим `recommend`):**
+Якщо WS event надіслано але менеджер не підтвердив протягом `dispatch_recommend_timeout_minutes` — надсилається Telegram нагадування: "Замовлення #X очікує підтвердження призначення курʼєра". Не авто-призначення — тільки нагадування. Дефолт: `null` (вимкнено). Менеджер активує в Settings якщо хоче.
 
 ---
 
@@ -206,6 +215,8 @@ eta_seconds    = OSRM(заклад → клієнт)           ← перера�
 | `> +30 хв` систематично | 🔴 | Аномалія → Telegram alert менеджеру |
 
 **Захист від хибних спрацювань:** флаг спрацьовує тільки якщо **3+ доставки підряд** або **середнє за зміну** перевищує поріг. Один затор — не аномалія.
+
+**Deduplication anomaly alert:** надсилається **максимум 1 раз за зміну** на курʼєра. Флаг зберігається в `shifts.anomaly_alerted_at TIMESTAMPTZ NULL` — скидається автоматично при старті нової зміни (нова зміна = новий рядок shifts).
 
 Пороги налаштовуються в Settings закладу.
 
@@ -268,9 +279,19 @@ ALTER TABLE orders
   "dispatch_recommend_radius_km": 1,
   "dispatch_anomaly_threshold_minutes": 30,
   "dispatch_anomaly_min_deliveries": 3,
-  "dispatch_no_courier_escalation_minutes": 10
+  "dispatch_no_courier_escalation_minutes": 10,
+  "dispatch_recommend_timeout_minutes": null
 }
 ```
+
+### Нова колонка `shifts.anomaly_alerted_at`
+
+```sql
+ALTER TABLE shifts
+  ADD COLUMN anomaly_alerted_at TIMESTAMPTZ NULL;
+```
+
+Скидається автоматично при старті нової зміни (новий рядок в `shifts`). Запобігає Telegram-спаму при систематичних затримках курʼєра.
 
 ---
 
@@ -278,29 +299,33 @@ ALTER TABLE orders
 
 ```
 POST /api/v1/orders/:id/ready
+  → роль: manager | dispatcher
   → тригер "їжа готова", запускає алгоритм
   → idempotent: якщо ready_at вже встановлено — повертає поточний стан без повторного запуску
   → замовлення залишається в статусі 'pending' до фактичного призначення
   → повертає: рекомендований курʼєр + список доступних з workload/ETA
   → для 'auto': одразу призначає (status → 'assigned') і повертає результат
-  → якщо пул порожній: ставить Bull retry job, повертає { waiting: true }
+  → якщо пул порожній: ставить Bull retry job (jobId: 'dispatch:{orderId}'), повертає { waiting: true }
+  → якщо OSRM недоступний: повертає { error: 'eta_unavailable', canRetry: true } (не 500)
 
 POST /api/v1/orders/:id/assign-recommended
+  → роль: manager | dispatcher
   → менеджер підтверджує рекомендацію (режим 'recommend')
   → повторно перевіряє доступність курʼєра перед призначенням
   → якщо курʼєр вже зайнятий: повертає 409 + оновлений список доступних
 
 POST /api/v1/orders/:id/reassign
+  → роль: manager | dispatcher
   → body: { courierId: string }
   → викликає явний метод OrdersService.reassignDelivery(deliveryId, newCourierId)
   → delivery залишається в статусі 'assigned' — змінюється тільки courier_id
-  → validates: delivery must be in 'assigned' state
+  → validates: delivery must be in 'assigned' state; новий courier must be available (not assigned/in_progress)
   → FCM push + WS event старому курʼєру: 'delivery:reassigned' (обидва — курʼєр може бути в дорозі з додатком у фоні)
   → FCM push новому курʼєру
   → якщо delivery не в 'assigned': повертає 409 + { assignedTo: courierName }
+  → якщо новий курʼєр недоступний: повертає 409 + { reason: 'courier_unavailable' }
 
 GET /api/v1/couriers/workload-today
-  → навантаження всіх курʼєрів закладу за поточну зміну
   → доступний для ролей: manager, dispatcher, courier (multi-tenant guard)
   → використовується: Smart Assignment UI + мобільний stats
   → кешується в Redis: ключ `workload:{establishment_id}`, TTL 15с
@@ -313,7 +338,9 @@ GET /api/v1/couriers/workload-today
 
 **MVP (обовʼязково):** При будь-якому призначенні через новий dispatch flow (recommend або auto) — FCM push курʼєру через існуючий `NotificationsModule`. Без push курʼєр дізнається про замовлення тільки при відкритті додатку — весь сенс авто-диспетчу губиться.
 
-Перевірити що існуючий assignment flow в `OrdersModule` вже надсилає FCM push при `status → assigned`. Якщо ні — додати в рамках цієї фічі.
+**Перший крок імплементації:** перевірити `OrdersService.assignCourier()` — чи надсилає вона FCM push при `status → assigned`. Зафіксувати результат:
+- ✅ вже є → нічого не міняти, dispatch reuses it
+- ⚠ немає → додати FCM push в `assignCourier()` в рамках цієї фічі
 
 ---
 
@@ -322,6 +349,9 @@ GET /api/v1/couriers/workload-today
 **Web Dashboard:**
 - Кнопка "Готово до відправки" на `pending` замовленнях (з confirmation dialog) — **відображається тільки в режимах `recommend` і `auto`**; в `manual` режимі менеджер призначає курʼєра через існуючий flow
 - `SmartAssignmentPanel` — модальна панель (режим `recommend`: до призначення; режим `auto`: після призначення з кнопкою "Перепризначити іншого")
+  - **Loading state:** spinner поки `POST /ready` виконується (~0.5–2с OSRM запити)
+  - **Empty pool state** (`{ waiting: true }`): текст "⏳ Шукаємо курʼєра... Замовлення в черзі." з можливістю закрити панель
+  - **Error state** (`{ error: 'eta_unavailable' }`): текст "Не вдалося розрахувати ETA. Спробуйте ще раз." з кнопкою retry
 - Індикатор "⏳ Очікує курʼєра" на замовленнях де `ready_at IS NOT NULL` але статус ще `pending`
 - Колонка `+N хв/дост` в таблиці курʼєрів
 - `dispatch_mode` selector в /settings (замінює `auto_dispatch` toggle)
@@ -355,6 +385,8 @@ OrdersService.reassignDelivery(deliveryId, newCourierId)
 - `POST /api/v1/orders/:id/claim` — endpoint самостійного захоплення замовлення
 - Логіка `auto_dispatch` перевірки в `OrdersService`
 
+**⚠ Координований deploy (мобільний):** Backend endpoints `GET /orders/available` і `POST /orders/:id/claim` **не видаляються одразу** — тимчасово повертають HTTP 410 Gone. Повне видалення — після підтвердження що нова мобільна версія розповсюджена серед активних користувачів. При початковому запуску (до першого реального release) це правило неактуальне — видалення можна робити одразу.
+
 **Web Dashboard:**
 - `auto_dispatch` toggle в `/settings` → замінюється `dispatch_mode` selector
 
@@ -380,6 +412,12 @@ OrdersService.reassignDelivery(deliveryId, newCourierId)
 | 10 | `+N хв/дост` — NULL guard | `eta_started_at IS NULL` → delivery пропускається в AVG |
 | 11 | Multi-tenant | Order чужого establishment → 403 на всіх нових endpoints |
 | 12 | Transport warning | walking + відстань > 2км → ⚠ у відповіді |
+| 13 | OSRM failure в алгоритмі | OSRM timeout → `{ error: 'eta_unavailable', canRetry: true }`, не 500 |
+| 14 | `onModuleInit` DB failure | DB падає під час requeue → caught, module продовжує старт |
+| 15 | Bull jobId deduplication | `onModuleInit` для order з наявним Bull job → не створює дублікат |
+| 16 | `POST /reassign` — новий курʼєр недоступний | Курʼєр зайнятий → 409 + `{ reason: 'courier_unavailable' }` |
+| 17 | Role authorization | Курʼєр викликає `POST /ready` → 403 |
+| 18 | Anomaly alert throttle | 3+ overdue deliveries за зміну → Telegram надсилається 1 раз, не при кожній перевірці |
 
 ---
 
