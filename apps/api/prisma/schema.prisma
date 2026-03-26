@@ -82,6 +82,12 @@ enum TransportMode {
   walking
 }
 
+enum DispatchMode {
+  manual
+  recommend
+  auto
+}
+
 // ─────────────────────────────────────────
 // Establishments (tenants)
 // ─────────────────────────────────────────
@@ -96,7 +102,7 @@ model Establishment {
   onboarding_status OnboardingStatus @default(pending)
   settings          Json             @default("{}")
   timezone          String           @default("Europe/Kyiv")
-  auto_dispatch     Boolean          @default(false)
+  dispatch_mode     DispatchMode     @default(manual)
   delivery_sla_minutes Int?
   lat               Float?
   lng               Float?
@@ -203,9 +209,10 @@ model Shift {
   ended_at         DateTime?
   ended_by         String?   // 'courier' | 'manager' | 'auto'
   planned_end_at   DateTime?
-  total_deliveries Int       @default(0)
+  total_deliveries  Int       @default(0)
   total_distance_km Decimal  @default(0) @db.Decimal(8, 2)
-  created_at       DateTime  @default(now())
+  anomaly_alerted_at DateTime?
+  created_at        DateTime  @default(now())
 
   courier       Courier       @relation(fields: [courier_id], references: [id], onDelete: Cascade)
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
@@ -230,6 +237,7 @@ model Order {
   status           OrderStatus @default(pending)
   source           OrderSource @default(manual)
   notes            String?
+  ready_at         DateTime?
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
 
