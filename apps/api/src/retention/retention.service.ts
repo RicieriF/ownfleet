@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ShiftsService } from '../shifts/shifts.service.js';
 import { EtaService } from '../eta/eta.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
 import { OrderStatus } from '@prisma/client';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -21,6 +24,8 @@ export class RetentionService {
     private readonly prisma: PrismaService,
     private readonly shiftsService: ShiftsService,
     private readonly etaService: EtaService,
+    private readonly telegram: TelegramService,
+    @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
   ) {}
 
   /**
@@ -70,6 +75,110 @@ export class RetentionService {
     const sent = await this.etaService.checkOverdueDeliveries();
     if (sent > 0) {
       this.logger.log(`ETA overdue: sent ${sent} alert(s)`);
+    }
+  }
+
+  /**
+   * Runs every 30 minutes.
+   * Alerts managers via Telegram when a courier's delivery rate is significantly
+   * higher than the establishment average (possible courier overload).
+   * One alert per shift maximum (guarded by anomaly_alerted_at).
+   */
+  @Cron('0 */30 * * * *', { name: 'shift-anomaly-check', timeZone: 'UTC' })
+  async checkShiftAnomalies(): Promise<void> {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+
+    // Only consider shifts that have been active long enough and have enough data
+    const shifts = await this.prisma.shift.findMany({
+      where: {
+        ended_at: null,
+        started_at: { lt: twoHoursAgo },
+        anomaly_alerted_at: null,
+        total_deliveries: { gt: 5 },
+      },
+      include: { courier: { select: { name: true } } },
+    });
+
+    for (const shift of shifts) {
+      const hoursActive = (Date.now() - shift.started_at.getTime()) / (1000 * 60 * 60);
+      const ratePerHour = shift.total_deliveries / hoursActive;
+
+      // Get other active shifts in the same establishment for comparison
+      const otherActiveShifts = await this.prisma.shift.findMany({
+        where: {
+          establishment_id: shift.establishment_id,
+          ended_at: null,
+          id: { not: shift.id },
+          total_deliveries: { gt: 0 },
+        },
+      });
+
+      if (otherActiveShifts.length === 0) continue; // Cannot compare without others
+
+      const avgRate =
+        otherActiveShifts.reduce((sum, s) => {
+          const hrs = (Date.now() - s.started_at.getTime()) / (1000 * 60 * 60);
+          return sum + s.total_deliveries / Math.max(hrs, 0.5);
+        }, 0) / otherActiveShifts.length;
+
+      if (avgRate > 0 && ratePerHour > 2 * avgRate) {
+        const msg = `⚠️ ${shift.courier.name}: ${shift.total_deliveries} доставок за ${hoursActive.toFixed(1)} год — у ${(ratePerHour / avgRate).toFixed(1)}x більше за середнє по команді`;
+        this.telegram
+          .notifyEstablishmentManagers(shift.establishment_id, msg, 'shift_anomaly')
+          .catch(() => {});
+        await this.prisma.shift.update({
+          where: { id: shift.id },
+          data: { anomaly_alerted_at: new Date() },
+        });
+        this.logger.log(
+          `Shift anomaly alert: courier ${shift.courier.name} (shift ${shift.id})`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Runs every 5 minutes.
+   * In `recommend` dispatch mode, re-enqueues pending orders that have been
+   * waiting longer than the establishment's configured timeout, so the algorithm
+   * can pick the next best available courier.
+   */
+  @Cron('0 */5 * * * *', { name: 'recommend-timeout-check', timeZone: 'UTC' })
+  async checkRecommendTimeout(): Promise<void> {
+    const establishments = await this.prisma.establishment.findMany({
+      where: { dispatch_mode: 'recommend' },
+      select: { id: true, settings: true },
+    });
+
+    for (const est of establishments) {
+      const settings = est.settings as Record<string, unknown>;
+      const timeoutMinutes = settings?.dispatch_recommend_timeout_minutes as number | undefined;
+      if (!timeoutMinutes) continue;
+
+      const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+      const staleOrders = await this.prisma.order.findMany({
+        where: {
+          establishment_id: est.id,
+          status: 'pending',
+          created_at: { lt: cutoff },
+        },
+        select: { id: true, establishment_id: true },
+      });
+
+      for (const order of staleOrders) {
+        await this.dispatchQueue
+          .add(
+            { orderId: order.id, establishmentId: order.establishment_id, attempt: 1 },
+            { jobId: `dispatch:${order.id}` },
+          )
+          .catch(() => {});
+      }
+
+      if (staleOrders.length > 0) {
+        this.logger.log(
+          `Recommend timeout: re-enqueued ${staleOrders.length} stale order(s) for establishment ${est.id}`,
+        );
+      }
     }
   }
 

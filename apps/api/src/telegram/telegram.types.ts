@@ -8,6 +8,7 @@ export interface ManagerTelegramPrefs {
   courier_shift_ended?: boolean;
   courier_shift_auto_closed?: boolean;
   courier_not_responding?: boolean;
+  shift_anomaly?: boolean;
 }
 
 export interface CourierTelegramPrefs {

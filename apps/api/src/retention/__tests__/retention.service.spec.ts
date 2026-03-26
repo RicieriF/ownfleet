@@ -1,22 +1,37 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bull';
 import { RetentionService } from '../retention.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ShiftsService } from '../../shifts/shifts.service.js';
 import { EtaService } from '../../eta/eta.service.js';
+import { TelegramService } from '../../telegram/telegram.service.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
 const mockOrder = { deleteMany: jest.fn() };
 const mockEstablishment = { findMany: jest.fn() };
+const mockShift = {
+  findMany: jest.fn().mockResolvedValue([]),
+  update: jest.fn().mockResolvedValue({}),
+};
 
 const mockPrisma = {
   establishment: mockEstablishment,
   order: mockOrder,
+  shift: mockShift,
   retentionLog: mockRetentionLog,
   $executeRaw: jest.fn(),
 };
 
 const mockShiftsService = {
   autoCloseStaleShifts: jest.fn().mockResolvedValue(0),
+};
+
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockDispatchQueue = {
+  add: jest.fn().mockResolvedValue(undefined),
 };
 
 describe('RetentionService', () => {
@@ -30,6 +45,8 @@ describe('RetentionService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ShiftsService, useValue: mockShiftsService },
         { provide: EtaService, useValue: mockEtaService },
+        { provide: TelegramService, useValue: mockTelegramService },
+        { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
       ],
     }).compile();
 
