@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpException,
   HttpStatus,
   NotFoundException,
   Param,
@@ -43,9 +44,13 @@ export class OrdersController {
   }
 
   // Static routes must come before parameterized :id routes
+  /** @deprecated Removed in auto-dispatch v2 — self-assignment is no longer supported */
   @Get('available')
-  getAvailable(@Req() req: any) {
-    return this.service.getAvailable(req.user as AuthenticatedUser);
+  getAvailable() {
+    throw new HttpException(
+      { code: 'ENDPOINT_REMOVED', message: 'Self-assignment removed. Orders are auto-assigned by the system.' },
+      HttpStatus.GONE,
+    );
   }
 
   @Get(':id')
@@ -74,10 +79,14 @@ export class OrdersController {
     return this.service.cancel(id, req.user as AuthenticatedUser);
   }
 
+  /** @deprecated Removed in auto-dispatch v2 — self-assignment is no longer supported */
   @Post(':id/claim')
-  @HttpCode(HttpStatus.OK)
-  claim(@Param('id') id: string, @Req() req: any) {
-    return this.service.claim(id, req.user as AuthenticatedUser);
+  @HttpCode(HttpStatus.GONE)
+  claim() {
+    throw new HttpException(
+      { code: 'ENDPOINT_REMOVED', message: 'Self-assignment removed. Orders are auto-assigned by the system.' },
+      HttpStatus.GONE,
+    );
   }
 
   /**
