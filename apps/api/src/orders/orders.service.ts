@@ -6,6 +6,8 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { OrderStatus, TransportMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
@@ -70,6 +72,7 @@ export class OrdersService {
     private readonly eta: EtaService,
     private readonly gateway: TrackingGateway,
     private readonly couriersService: CouriersService,
+    @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -127,6 +130,18 @@ export class OrdersService {
         `📦 Нове замовлення: ${order.address}`,
         'order_created',
       ).catch(() => {});
+      // Trigger auto-dispatch if establishment has dispatch_mode='auto'
+      void this.prisma.establishment.findUnique({
+        where: { id: user.establishment_id },
+        select: { dispatch_mode: true },
+      }).then((est) => {
+        if (est?.dispatch_mode === 'auto') {
+          return this.dispatchQueue.add(
+            { orderId: order.id, establishmentId: user.establishment_id, attempt: 1 },
+            { jobId: `dispatch:${order.id}` },
+          );
+        }
+      }).catch((err) => this.logger.warn('Failed to enqueue dispatch', err));
       return order;
     } catch (err) {
       // Race condition: two concurrent requests for the same external_id both passed

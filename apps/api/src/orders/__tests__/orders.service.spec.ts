@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bull';
 import { OrdersService } from '../orders.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
@@ -44,7 +45,10 @@ const mockPrisma = {
   shift: {
     findFirst: jest.fn(),
   },
-  establishment: { findUniqueOrThrow: jest.fn().mockResolvedValue(mockEstablishment) },
+  establishment: {
+    findUniqueOrThrow: jest.fn().mockResolvedValue(mockEstablishment),
+    findUnique: jest.fn().mockResolvedValue({ dispatch_mode: 'manual' }),
+  },
   $transaction: jest.fn((cb: any) => cb(mockTx)),
 };
 
@@ -73,6 +77,7 @@ describe('OrdersService', () => {
         { provide: TrackingGateway, useValue: mockGateway },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
+        { provide: getQueueToken('dispatch'), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);
