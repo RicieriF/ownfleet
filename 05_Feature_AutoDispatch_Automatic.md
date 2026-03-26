@@ -210,6 +210,8 @@ SELECT id FROM orders WHERE ready_at IS NOT NULL AND status = 'pending'
 **Timeout для непідтвердженої рекомендації (режим `recommend`):**
 Якщо WS event надіслано але менеджер не підтвердив протягом `dispatch_recommend_timeout_minutes` — надсилається Telegram нагадування: "Замовлення #X очікує підтвердження призначення курʼєра". Не авто-призначення — тільки нагадування. Дефолт: `null` (вимкнено). Менеджер активує в Settings якщо хоче.
 
+**Cron ownership:** перевірка живе в `RetentionModule` (той самий cron що anomaly alert, кожні 30 хв). Умова: `orders WHERE status = 'pending' AND ready_at IS NOT NULL AND ready_at < NOW() - dispatch_recommend_timeout_minutes`.
+
 ---
 
 ## Метрика ефективності курʼєра — "+N хв/дост"
@@ -237,6 +239,8 @@ eta_seconds    = OSRM(заклад → клієнт)           ← перера�
 **Захист від хибних спрацювань:** флаг спрацьовує тільки якщо **3+ доставки підряд** або **середнє за зміну** перевищує поріг. Один затор — не аномалія.
 
 **Deduplication anomaly alert:** надсилається **максимум 1 раз за зміну** на курʼєра. Флаг зберігається в `shifts.anomaly_alerted_at TIMESTAMPTZ NULL` — скидається автоматично при старті нової зміни (нова зміна = новий рядок shifts).
+
+**Cron ownership:** перевірка аномалії живе в `RetentionModule` як 5-й cron job (кожні 30 хв) — поруч з іншими cron-алертами (`courier_not_responding`, `eta-overdue`). Читає `GET /couriers/workload-today` дані або напряму через сервіс.
 
 Пороги налаштовуються в Settings закладу.
 
