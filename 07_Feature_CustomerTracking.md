@@ -406,7 +406,38 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 
 ---
 
+## Platform Admin Gate
+
+Трекінг-віджет — **opt-in фіча на рівні платформи**. За замовчуванням вимкнено для всіх тенантів.
+
+**Нове поле в `establishments`:**
+```sql
+customer_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
+```
+
+Керується тільки через super admin панель (`is_platform_admin = true`). Менеджер закладу не може сам вмикати/вимикати цю фічу.
+
+**Коли `customer_tracking_enabled = false` (дефолт):**
+- У `/settings` немає секції "Трекінг для клієнтів" — менеджер взагалі не підозрює про існування фічі
+- В таблиці доставок немає кнопки "Копіювати посилання"
+- `POST /api/v1/api-keys` повертає `403 Forbidden`
+- Публічні endpoints `GET /api/v1/public/*` технічно доступні, але без API ключа не працюють
+
+**Коли `customer_tracking_enabled = true`:**
+- Повна секція з'являється в `/settings`
+- Кнопка "Копіювати посилання" з'являється в таблиці доставок
+- Все працює як описано нижче
+
+**Super admin panel** (окрема внутрішня сторінка, не для менеджерів):
+- Список всіх тенантів
+- Тогл "Customer Tracking" per-establishment
+- Вмикання/вимикання без перезапуску сервісу
+
+---
+
 ## Дашборд менеджера — нові елементи
+
+> Ця секція відображається тільки якщо `establishment.customer_tracking_enabled = true`.
 
 **Сторінка /settings — секція "Tracking Widget":**
 
@@ -437,6 +468,18 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 - API ключ генерується автоматично при першому збереженні сайту — менеджер його не бачить окремо, він вже вшитий у готовий код
 - Копіює код → дає розробнику сайту → більше нічого не потрібно
 - "Вимкнути" — soft disable (`is_active = false`); ключ і налаштування зберігаються
+
+**Головна сторінка `/` — таблиця активних доставок:**
+
+Коли `customer_tracking_enabled = true` і delivery в статусі `in_progress` — у рядку доставки з'являється кнопка:
+
+```
+[📋 Посилання клієнту]
+```
+
+Тап → копіює `https://weego.app/t/TOKEN` в буфер. Менеджер пересилає клієнту у Telegram/Viber/SMS. Токен генерується ліниво при першому натисканні.
+
+Для закладів без сайту — це єдиний спосіб ділитись трекінгом. Для закладів з віджетом — додатковий канал (наприклад, для замовлень по телефону).
 
 Все що стосується безпеки (ключі, домени, rate limiting, аудит) — **невидиме для менеджера, автоматичне**.
 
@@ -541,7 +584,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 4. Тести: geocode успішно → координати збережені; Nominatim timeout → null, без блокування; кеш hit → Nominatim не викликається
 
 ### Фаза 1 — Бекенд
-1. Міграція: `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
+1. Міграція: `establishments.customer_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
 2. `ApiKeysModule` — авто-генерація ключа при збереженні сайту; toggle is_active; `allowed_domains` заповнюється автоматично з поля "Адреса сайту" в /settings
 3. `PublicTrackingModule` — endpoints + багаторівневий rate limiting (per-IP + per-key + per-token)
 4. Domain restriction middleware: перевірка `Origin` header проти `allowed_domains`
@@ -563,8 +606,10 @@ Referrer-Policy: strict-origin-when-cross-origin
 1. `tracker.js` loader — vanilla JS, без залежностей; включаючи retry логіку (2с × 15 спроб = 30с)
 2. Iframe оверлей логіка (show/minimize)
 3. Hosted page: `/embed/track/[token]` в standalone режимі + `/t/[token]` redirect (short URL)
-4. Секція в /settings — генерація API ключа + copy-paste код + кнопка "Копіювати посилання клієнту"
-5. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
+4. Секція в /settings — умовна (рендериться тільки якщо `customer_tracking_enabled = true`): генерація API ключа + copy-paste код
+5. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок — умовна (тільки якщо `customer_tracking_enabled = true` і delivery `in_progress`)
+6. Super admin panel: тогл `customer_tracking_enabled` per-establishment
+7. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
 
 ### Фаза 4 — Тести
 **API ключ і domain restriction:**

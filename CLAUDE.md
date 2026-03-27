@@ -82,7 +82,12 @@ establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, s
                  dispatch_mode dispatch_mode NOT NULL DEFAULT 'manual',  -- enum: manual|recommend|auto
                  delivery_sla_minutes INT NULL,        -- null = без SLA; N = SLA доставки в хвилинах
                  lat FLOAT NULL,                       -- координати закладу для розрахунку ETA
-                 lng FLOAT NULL)
+                 lng FLOAT NULL,
+                 customer_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE)
+                -- customer_tracking_enabled: feature flag, вмикається тільки через super admin panel
+                -- (is_platform_admin = true). Менеджер закладу не має доступу до цього параметру.
+                -- За замовчуванням FALSE — секція Tracking Widget в /settings і кнопка
+                -- "Копіювати посилання клієнту" в таблиці доставок не відображаються.
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
 couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
                  battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count,
