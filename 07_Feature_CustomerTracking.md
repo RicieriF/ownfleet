@@ -163,6 +163,21 @@ POS webhook → lat/lng є в payload      → зберігаємо як є
 - **Геокодування синхронне** — виконується під час обробки webhook, до збереження замовлення. Якщо Nominatim недоступний — замовлення зберігається без координат (не блокуємо)
 - **Міграція:** при деплої фічі запускати окремий скрипт для геокодування існуючих замовлень з `lat = null`
 
+### Authenticated endpoint для менеджера (OrdersModule)
+
+Окремий від публічних endpoints. Менеджер авторизований через JWT.
+
+```
+POST /api/v1/orders/:id/tracking-token
+```
+Захищений `JwtAuthGuard` + `PlanAccessGuard` + перевірка `establishment_id`.
+Генерує (або повертає існуючий) tracking token для замовлення.
+Відповідь: `{ url: "https://weego.app/t/TOKEN" }` — готове посилання для клієнта.
+Ця URL копіюється в буфер при натисканні кнопки "Копіювати посилання клієнту" в дашборді.
+
+Реалізація ідентична токенам від віджету: `INSERT ... ON CONFLICT (order_id) DO NOTHING`.
+Одна таблиця `tracking_tokens`, той самий `expires_at = NOW() + 4h`, та сама `/embed/track/TOKEN` сторінка.
+
 ### PublicTrackingModule (NestJS)
 
 Окремий модуль без `JwtAuthGuard` і `PlanAccessGuard`.
@@ -172,7 +187,7 @@ POS webhook → lat/lng є в payload      → зберігаємо як є
 ```
 GET  /api/v1/public/order/:externalId/token?key=API_KEY
 ```
-Повертає tracking token для замовлення. Авторизація через API ключ.
+Повертає tracking token для замовлення. Авторизація через API ключ. Використовується тільки tracker.js у браузері клієнта.
 
 ```
 GET  /api/v1/public/track/:token
@@ -457,6 +472,11 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 │  │ <script>Weego.track('ORDER_ID')</script>     │   │
 │  └──────────────────────────────────────────────┘   │
 │                                                      │
+│  ─ ─ ─ якщо hosted_tracking_enabled = true ─ ─ ─   │
+│  Немає сайту? Копіюйте посилання для кожного         │
+│  замовлення прямо з таблиці доставок.               │
+│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
+│                                                      │
 │                              [Вимкнути віджет]       │
 └──────────────────────────────────────────────────────┘
 ```
@@ -582,11 +602,11 @@ Referrer-Policy: strict-origin-when-cross-origin
 4. Тести: geocode успішно → координати збережені; Nominatim timeout → null, без блокування; кеш hit → Nominatim не викликається
 
 ### Фаза 1 — Бекенд
-1. Міграція: `establishments.customer_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
+1. Міграція: `establishments.hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
 2. `ApiKeysModule` — авто-генерація ключа при збереженні сайту; toggle is_active; `allowed_domains` заповнюється автоматично з поля "Адреса сайту" в /settings
 3. `PublicTrackingModule` — endpoints + багаторівневий rate limiting (per-IP + per-key + per-token)
 4. Domain restriction middleware: перевірка `Origin` header проти `allowed_domains`
-5. Лінива генерація токена при першому запиті від віджету (`INSERT ... ON CONFLICT (order_id) DO NOTHING`)
+5. Лінива генерація токена: два флоу — від віджету (публічний endpoint з API ключем) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують `INSERT ... ON CONFLICT (order_id) DO NOTHING` в одну таблицю
 6. Публічний WebSocket namespace `/public`
 7. TrackingModule: публікація GPS пінгів в `delivery:{id}:public` Redis канал
 8. WS lifecycle: disconnect через 15 хв після `delivery.completed_at`
