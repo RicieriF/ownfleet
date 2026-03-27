@@ -406,38 +406,36 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 
 ---
 
-## Platform Admin Gate
+## Platform Admin Gate (Hosted Page)
 
-Трекінг-віджет — **opt-in фіча на рівні платформи**. За замовчуванням вимкнено для всіх тенантів.
+Hosted tracking page — **opt-in фіча на рівні платформи**. Для переважної більшості закладів вона не потрібна і лише відволікає менеджера.
 
 **Нове поле в `establishments`:**
 ```sql
-customer_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
+hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 ```
 
-Керується тільки через super admin панель (`is_platform_admin = true`). Менеджер закладу не може сам вмикати/вимикати цю фічу.
+Керується тільки через super admin панель (`is_platform_admin = true`). Менеджер закладу не може сам вмикати/вимикати.
 
-**Коли `customer_tracking_enabled = false` (дефолт):**
-- У `/settings` немає секції "Трекінг для клієнтів" — менеджер взагалі не підозрює про існування фічі
-- В таблиці доставок немає кнопки "Копіювати посилання"
-- `POST /api/v1/api-keys` повертає `403 Forbidden`
-- Публічні endpoints `GET /api/v1/public/*` технічно доступні, але без API ключа не працюють
+**Що контролює цей флаг:**
 
-**Коли `customer_tracking_enabled = true`:**
-- Повна секція з'являється в `/settings`
-- Кнопка "Копіювати посилання" з'являється в таблиці доставок
-- Все працює як описано нижче
+Тільки два UI-елементи, пов'язані з hosted page:
+1. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок
+2. Пояснювальна фраза в `/settings` під embed-кодом ("Немає сайту? Просто копіюйте посилання...")
+
+**Що флаг НЕ контролює:**
+- Секція "Трекінг для клієнтів" в `/settings` — завжди видима
+- Генерація API ключа і embed-код — завжди доступні
+- Публічні endpoints `/api/v1/public/*` — завжди доступні
 
 **Super admin panel** (окрема внутрішня сторінка, не для менеджерів):
 - Список всіх тенантів
-- Тогл "Customer Tracking" per-establishment
+- Тогл "Hosted Tracking Page" per-establishment
 - Вмикання/вимикання без перезапуску сервісу
 
 ---
 
 ## Дашборд менеджера — нові елементи
-
-> Ця секція відображається тільки якщо `establishment.customer_tracking_enabled = true`.
 
 **Сторінка /settings — секція "Tracking Widget":**
 
@@ -471,7 +469,7 @@ customer_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 
 **Головна сторінка `/` — таблиця активних доставок:**
 
-Коли `customer_tracking_enabled = true` і delivery в статусі `in_progress` — у рядку доставки з'являється кнопка:
+Коли `hosted_tracking_enabled = true` і delivery в статусі `in_progress` — у рядку доставки з'являється кнопка:
 
 ```
 [📋 Посилання клієнту]
@@ -606,9 +604,9 @@ Referrer-Policy: strict-origin-when-cross-origin
 1. `tracker.js` loader — vanilla JS, без залежностей; включаючи retry логіку (2с × 15 спроб = 30с)
 2. Iframe оверлей логіка (show/minimize)
 3. Hosted page: `/embed/track/[token]` в standalone режимі + `/t/[token]` redirect (short URL)
-4. Секція в /settings — умовна (рендериться тільки якщо `customer_tracking_enabled = true`): генерація API ключа + copy-paste код
-5. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок — умовна (тільки якщо `customer_tracking_enabled = true` і delivery `in_progress`)
-6. Super admin panel: тогл `customer_tracking_enabled` per-establishment
+4. Секція в /settings — завжди видима: генерація API ключа + copy-paste код + пояснювальна фраза про hosted page (умовна: тільки якщо `hosted_tracking_enabled = true`)
+5. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок — умовна (тільки якщо `hosted_tracking_enabled = true` і delivery `in_progress`)
+6. Super admin panel: тогл `hosted_tracking_enabled` per-establishment
 7. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
 
 ### Фаза 4 — Тести
