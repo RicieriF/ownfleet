@@ -162,12 +162,20 @@ export class RetentionService {
         where: {
           establishment_id: est.id,
           status: 'pending',
-          created_at: { lt: cutoff },
+          // ready_at: when the order was marked ready (POST /ready).
+          // Using ready_at — not created_at — so the timeout starts when
+          // the kitchen finished, not when the order arrived in the system.
+          // Orders without ready_at have not been dispatched yet — skip them.
+          ready_at: { not: null, lt: cutoff },
         },
         select: { id: true, establishment_id: true },
       });
 
       for (const order of staleOrders) {
+        // attempt: 1 is intentional — this cron starts a fresh dispatch wave,
+        // not a retry of a prior wave. The processor's 30-attempt cap applies
+        // within each wave. Escalation for persistently unassigned orders is
+        // handled separately via dispatch_no_courier_escalation_minutes (planned).
         await this.dispatchQueue
           .add(
             { orderId: order.id, establishmentId: order.establishment_id, attempt: 1 },

@@ -185,6 +185,121 @@ describe('RetentionService', () => {
     });
   });
 
+  // ── checkShiftAnomalies ────────────────────────────────────────────────────
+
+  describe('checkShiftAnomalies', () => {
+    const FOUR_HOURS_AGO = new Date(Date.now() - 4 * 60 * 60 * 1000);
+
+    const makeShift = (overrides: Record<string, unknown> = {}) => ({
+      id: 's1',
+      establishment_id: 'est-1',
+      ended_at: null,
+      started_at: FOUR_HOURS_AGO,
+      total_deliveries: 12,
+      anomaly_alerted_at: null,
+      courier: { name: 'Ivan' },
+      ...overrides,
+    });
+
+    it('does nothing when no active shifts exist', async () => {
+      mockShift.findMany.mockResolvedValue([]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(mockShift.update).not.toHaveBeenCalled();
+    });
+
+    it('skips when candidate is the only shift for that establishment (no comparison pool)', async () => {
+      mockShift.findMany.mockResolvedValue([makeShift()]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('skips candidate with ≤ 5 deliveries (not enough data)', async () => {
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', total_deliveries: 5 }),
+        makeShift({ id: 's2', total_deliveries: 2, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('skips when anomaly_alerted_at is already set (one alert per shift)', async () => {
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', total_deliveries: 20, anomaly_alerted_at: new Date() }),
+        makeShift({ id: 's2', total_deliveries: 3, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('sends alert and sets anomaly_alerted_at when rate > 2x team average', async () => {
+      // s1: 12 deliveries / 4h = 3/h; s2: 3 deliveries / 4h = 0.75/h
+      // avg = 0.75/h; 3 > 2 * 0.75 = 1.5 → ALERT
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', total_deliveries: 12, anomaly_alerted_at: null }),
+        makeShift({ id: 's2', total_deliveries: 3, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+        'est-1',
+        expect.stringContaining('Ivan'),
+        'shift_anomaly',
+      );
+      expect(mockShift.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { anomaly_alerted_at: expect.any(Date) },
+      });
+    });
+
+    it('does not alert when rate is below 2x threshold', async () => {
+      // s1: 10 deliveries / 4h = 2.5/h; s2: 8 deliveries / 4h = 2/h
+      // avg = 2/h; 2.5 < 2 * 2 = 4 → NO ALERT
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', total_deliveries: 10, anomaly_alerted_at: null }),
+        makeShift({ id: 's2', total_deliveries: 8, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(mockShift.update).not.toHaveBeenCalled();
+    });
+
+    it('skips comparison when other shifts have 0 deliveries (no valid comparison pool)', async () => {
+      // s2 has 0 deliveries → filtered from otherActiveShifts → otherActiveShifts.length === 0 → skip
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', total_deliveries: 20, anomaly_alerted_at: null }),
+        makeShift({ id: 's2', total_deliveries: 0, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+
+    it('does not cross-compare shifts from different establishments (multi-tenant)', async () => {
+      // s1 at est-1 has high rate but no same-establishment comparisons → no alert
+      mockShift.findMany.mockResolvedValue([
+        makeShift({ id: 's1', establishment_id: 'est-1', total_deliveries: 20 }),
+        makeShift({ id: 's2', establishment_id: 'est-2', total_deliveries: 3, courier: { name: 'Petro' } }),
+      ]);
+
+      await service.checkShiftAnomalies();
+
+      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    });
+  });
+
   // ── checkRecommendTimeout ───────────────────────────────────────────────────
 
   describe('checkRecommendTimeout', () => {
