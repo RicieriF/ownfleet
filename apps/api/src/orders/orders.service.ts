@@ -439,51 +439,52 @@ export class OrdersService {
         ? this.haversineMeters(estLat, estLng, order.lat, order.lng)
         : null;
 
-    // Step — calculate OSRM ETA for all candidates in parallel
-    let etaResults: (number | null)[];
-    try {
-      etaResults = await Promise.all(
-        candidates.map((c) => {
-          if (order.lat === null || order.lng === null) return Promise.resolve(null);
-          return this.eta.calculateEta({
-            establishmentLat: estLat,
-            establishmentLng: estLng,
-            orderLat: order.lat!,
-            orderLng: order.lng!,
-            transportMode: c.transport_mode,
-            timezone: establishment.timezone,
-          });
-        }),
-      );
-    } catch (err) {
-      this.logger.warn('OSRM batch ETA failed during dispatch', err);
-      return { error: 'eta_unavailable', canRetry: true };
-    }
+    // Step — calculate OSRM ETA for all candidates in parallel.
+    // Promise.allSettled keeps working even if individual OSRM calls fail,
+    // so a single flaky courier does not block the entire batch.
+    const etaSettled = await Promise.allSettled(
+      candidates.map((c) => {
+        if (order.lat === null || order.lng === null) return Promise.resolve(null);
+        return this.eta.calculateEta({
+          establishmentLat: estLat,
+          establishmentLng: estLng,
+          orderLat: order.lat!,
+          orderLng: order.lng!,
+          transportMode: c.transport_mode,
+          timezone: establishment.timezone,
+        });
+      }),
+    );
 
-    // If any ETA is null (OSRM unavailable), return error
-    if (etaResults.some((e) => e === null)) {
-      return { error: 'eta_unavailable', canRetry: true };
-    }
-
-    // Step 4 — build CourierWithEta list
-    const pool: CourierWithEta[] = candidates.map((c, i) => {
+    // Step 4 — build CourierWithEta list from candidates whose ETA succeeded
+    const pool: CourierWithEta[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const settled = etaSettled[i]!;
+      if (settled.status === 'rejected' || settled.value === null) {
+        this.logger.warn(
+          `OSRM ETA failed for courier ${candidates[i]!.courier_id}`,
+          settled.status === 'rejected' ? settled.reason : 'null ETA',
+        );
+        continue;
+      }
+      const c = candidates[i]!;
       const distanceMeters = Number(c.distance_meters);
-      const transportWarning = this.buildTransportWarning(
-        c.transport_mode,
-        orderDistanceMeters,
-      );
-
-      return {
+      const transportWarning = this.buildTransportWarning(c.transport_mode, orderDistanceMeters);
+      pool.push({
         courierId: c.courier_id,
         name: c.name,
         transportMode: c.transport_mode,
         distanceMeters,
         workloadSeconds: Number(c.workload_score),
         deliveriesCount: Number(c.deliveries_count),
-        etaSeconds: etaResults[i]!,
+        etaSeconds: settled.value,
         ...(transportWarning ? { transportWarning } : {}),
-      };
-    });
+      });
+    }
+
+    if (pool.length === 0) {
+      return { error: 'eta_unavailable', canRetry: true };
+    }
 
     // Sort pool: zone 1 first, then by workload_score (already sorted by SQL, but ETA parallel
     // does not change order so SQL ordering stands)

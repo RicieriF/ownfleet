@@ -269,21 +269,47 @@ describe('OrdersService — dispatch algorithm', () => {
       }
     });
 
-    it('two couriers, OSRM throws on first, returns second → { error: eta_unavailable } (Promise.all fails all)', async () => {
+    it('two couriers, OSRM throws on first but succeeds for second → assigns second courier', async () => {
+      // Both couriers in zone1 (< 150m) so both end up in candidates
       const row1 = makeWorkloadRow(100);
-      const row2 = { ...makeWorkloadRow(200), courier_id: 'c2', name: 'Petro' };
+      const row2 = { ...makeWorkloadRow(120), courier_id: 'c2', name: 'Petro' };
 
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
       mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
       mockPrisma.$queryRaw.mockResolvedValue([row1, row2]);
-      // Promise.all fails entirely when any promise throws
+      // Promise.allSettled: first fails, second succeeds → second courier wins
       mockEtaService.calculateEta
         .mockRejectedValueOnce(new Error('OSRM timeout'))
         .mockResolvedValueOnce(400);
 
+      // assignCourier dependencies for auto-assign of c2
+      mockPrisma.courier.findUnique.mockResolvedValue({ ...courierA, id: 'c2', name: 'Petro' });
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithAuto);
+
       const result = await service.runDispatchAlgorithm('order-1', EST_A);
 
-      // The code uses Promise.all which means if first throws, whole batch fails
+      // With Promise.allSettled, the surviving courier (c2) is still assigned
+      expect('recommended' in result).toBe(true);
+      if ('recommended' in result) {
+        expect(result.recommended.courierId).toBe('c2');
+        expect(result.recommended.etaSeconds).toBe(400);
+      }
+    });
+
+    it('two couriers, OSRM throws for ALL → returns { error: eta_unavailable }', async () => {
+      // Both couriers in zone1 (< 150m) so both are in candidates
+      const row1 = makeWorkloadRow(100);
+      const row2 = { ...makeWorkloadRow(120), courier_id: 'c2', name: 'Petro' };
+
+      mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
+      mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
+      mockPrisma.$queryRaw.mockResolvedValue([row1, row2]);
+      mockEtaService.calculateEta
+        .mockRejectedValueOnce(new Error('OSRM timeout'))
+        .mockRejectedValueOnce(new Error('OSRM timeout'));
+
+      const result = await service.runDispatchAlgorithm('order-1', EST_A);
+
       expect(result).toEqual({ error: 'eta_unavailable', canRetry: true });
     });
   });
