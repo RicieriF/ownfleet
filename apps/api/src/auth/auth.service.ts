@@ -7,7 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LoginDto } from './dto/login.dto.js';
-import { JwtPayload } from './auth.types.js';
+import { JwtPayload, AuthenticatedUser } from './auth.types.js';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -103,6 +103,26 @@ export class AuthService {
     const refreshToken = await this.createRefreshToken(stored.user.id);
 
     return { accessToken, refreshToken };
+  }
+
+  /**
+   * Issues a short-lived (60s) JWT for WebSocket authentication.
+   * The web dashboard fetches this token via GET /auth/ws-token and passes
+   * it in socket.io auth — the WS gateway validates it like a regular JWT.
+   * Short expiry limits the XSS theft window to one minute.
+   */
+  issueWsToken(user: AuthenticatedUser): string {
+    const payload: JwtPayload = {
+      sub: user.id,
+      establishment_id: user.establishment_id,
+      role: user.role,
+      is_platform_admin: user.is_platform_admin,
+      ...(user.courier_id ? { courier_id: user.courier_id } : {}),
+    };
+    return this.jwt.sign(payload, {
+      secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      expiresIn: '60s',
+    });
   }
 
   async logout(rawToken: string): Promise<void> {

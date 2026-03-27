@@ -8,7 +8,12 @@ import { JwtPayload, AuthenticatedUser } from '../auth.types.js';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        // Cookie fallback: web dashboard proxies /api/v1/* through Next.js rewrites
+        // which forward all cookies — so the httpOnly access_token arrives here.
+        (req: any) => req?.cookies?.['access_token'] ?? null,
+      ]),
       ignoreExpiration: false,
       secretOrKey: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });

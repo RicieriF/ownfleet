@@ -20,10 +20,9 @@ export async function POST(req: NextRequest) {
 
   const response = NextResponse.json({ ok: true, user: data.user });
 
-  // Forward access_token as a regular cookie (readable server + client side)
   if (data.access_token) {
     response.cookies.set('access_token', data.access_token, {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',

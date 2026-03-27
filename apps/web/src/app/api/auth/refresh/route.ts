@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   if (data.access_token) {
     response.cookies.set('access_token', data.access_token, {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',

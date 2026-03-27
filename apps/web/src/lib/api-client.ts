@@ -1,14 +1,9 @@
 /**
  * Client-side API fetch wrapper.
- * Reads access_token from cookie, handles 401 → auto-refresh.
+ * access_token is httpOnly — forwarded automatically via Next.js rewrite proxy.
+ * Handles 401 → auto-refresh.
  * Used in 'use client' components and client-side actions.
  */
-
-function getCookieValue(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
 async function refreshToken(): Promise<boolean> {
   const res = await fetch('/api/auth/refresh', { method: 'POST' });
@@ -20,11 +15,8 @@ export async function clientFetch<T>(
   init?: RequestInit,
   retry = true,
 ): Promise<T> {
-  const token = getCookieValue('access_token');
-
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(init?.headers ?? {}),
   };
 

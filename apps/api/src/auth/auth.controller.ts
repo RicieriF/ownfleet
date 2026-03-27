@@ -1,15 +1,19 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
+import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
+import { AuthenticatedUser } from './auth.types.js';
 import { LoginDto } from './dto/login.dto.js';
 
 const REFRESH_COOKIE = 'refresh_token';
@@ -53,6 +57,20 @@ export class AuthController {
     const { accessToken, refreshToken } = await this.authService.refresh(raw);
     res.cookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
     return { access_token: accessToken, refresh_token: refreshToken };
+  }
+
+  /**
+   * Issues a short-lived (60s) JWT for WebSocket authentication.
+   * The web client calls this endpoint (cookie is forwarded automatically via
+   * the Next.js rewrite proxy), then passes the returned token to socket.io auth.
+   * Keeps the long-lived access_token out of JS entirely.
+   */
+  @Get('ws-token')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  wsToken(@Req() req: any): { token: string } {
+    const user = req.user as AuthenticatedUser;
+    return { token: this.authService.issueWsToken(user) };
   }
 
   // logout does NOT require JwtAuthGuard — access token may be expired
