@@ -24,6 +24,7 @@ B2B SaaS платформа для управління власними кур�
 | Mobile (курʼєр) | React Native + Expo SDK 51 |
 | Web (менеджер) | Next.js 14 App Router + shadcn/ui + Tailwind |
 | Maps | Leaflet + OpenStreetMap |
+| Geocoding | Nominatim (OpenStreetMap) + Redis кеш (TTL 30 днів) + Bull черга (rate limit 1 req/s) |
 | File Storage | Cloudflare R2 (S3-сумісний, presigned URLs) |
 | Push | Firebase FCM |
 | Notifications | Telegram Bot (fire-and-forget, side-channel) |
@@ -36,6 +37,8 @@ B2B SaaS платформа для управління власними кур�
 **Modular Monolith** — один NestJS застосунок, чіткі межі між модулями (bounded contexts). Модулі НЕ імпортують один одного напряму — тільки через сервіси або події.
 
 **Multi-tenancy:** `establishment_id` присутній у кожній таблиці. JWT payload містить `{ sub: userId, establishment_id, role }`. Middleware перевіряє ізоляцію тенанта на кожному запиті.
+
+**Виняток:** `tracking_tokens` — навмисно без `establishment_id`. Доступ тільки через непередбачуваний UUID token (122 bits entropy). Токен сам є ключем ізоляції — не можна запитати дані іншого замовлення не маючи його токена.
 
 **API versioning:** всі endpoints — `/api/v1/` prefix.
 
@@ -52,13 +55,16 @@ B2B SaaS платформа для управління власними кур�
 | `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; dispatch алгоритм (manual/recommend/auto): `POST /ready`, `POST /assign-recommended`, `POST /reassign`; `GET /couriers/workload-today` |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
-| `RetentionModule` | Cron: очищення orders + location_pings; авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (4 cron jobs, кожні 5–30 хв) |
+| `RetentionModule` | Cron: очищення orders + location_pings + tracking_tokens (де expires_at < NOW()); авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (5 cron jobs, кожні 5–30 хв) |
 | `EtaModule` | Розрахунок ETA через OSRM, детекція виїзду курʼєра (100м), cron-алерти про запізнення |
-| `IntegrationsModule` | Poster POS webhook + iiko polling |
+| `GeocodingModule` | Геокодування адрес через Nominatim; Redis кеш; Bull черга (rate limit 1 req/s); викликається з `IntegrationsModule` при отриманні POS webhook. Якщо координати вже є в payload — Nominatim не викликається. Timeout 2с — замовлення зберігається без блокування |
+| `IntegrationsModule` | Poster POS webhook + iiko polling; при отриманні замовлення без координат → виклик `GeocodingService` |
 | `WebhooksModule` | Outbound webhooks з HMAC, Bull retry queue |
 | `NotificationsModule` | FCM push + Telegram (завжди fire-and-forget) |
 | `OnboardingModule` | Invite tokens для курʼєрів, onboarding статус, збереження transport_mode |
 | `AnalyticsModule` | Статистика доставок та ефективності |
+| `ApiKeysModule` | 🔲 PLANNED: API ключі для закладів (customer tracking widget); таблиця `api_keys` з `is_active` для soft-disable без втрати audit history |
+| `PublicTrackingModule` | 🔲 PLANNED: Публічні endpoints без auth для customer tracking widget; окремий WS namespace `/public`; кімнати `delivery:{delivery_id}:public` (ізольований простір від менеджерських кімнат) |
 
 ---
 
@@ -108,6 +114,13 @@ webhooks        (id, establishment_id, url, secret, events TEXT[], active,
 invite_tokens   (id, establishment_id, token, courier_id, expires_at, used_at)
 retention_logs  (id, establishment_id, deleted_orders, deleted_pings, run_at)
 billing_events  (id, establishment_id, type, amount_usd, notes, created_at)
+-- 🔲 PLANNED (customer tracking widget):
+tracking_tokens (id, order_id UNIQUE, token UNIQUE, expires_at, created_at)
+                -- expires_at = created_at + 4h; без establishment_id — навмисний виняток з multi-tenancy;
+                -- доступ тільки через UUID token (122 bits entropy); UNIQUE(order_id) гарантує ідемпотентність
+                -- RetentionModule прибирає рядки де expires_at < NOW()
+api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active BOOLEAN DEFAULT TRUE, created_at, last_used_at)
+                -- is_active: soft disable без втрати last_used_at (audit); bcrypt hash в key_hash
 ```
 
 ---
@@ -203,7 +216,7 @@ const orders = await prisma.order.findMany({ where: { status: 'pending' } });
 
 Застосовується через `@UseGuards(JwtAuthGuard, PlanAccessGuard)` на всіх бізнес-ендпоінтах.
 
-**НЕ застосовується на:** `/health`, `/api/v1/auth/*`, `/api/v1/onboarding/accept-invite/:token`
+**НЕ застосовується на:** `/health`, `/api/v1/auth/*`, `/api/v1/onboarding/accept-invite/:token`, `/api/v1/public/*`
 
 Логіка:
 ```typescript
@@ -339,6 +352,7 @@ FCM push при `invalid_registration` → автоматично видалит
 - `PlanAccessGuard` логіка — зміна може зламати білінг
 - `delivery_proofs` retention — ця таблиця захищена навмисно
 - WebSocket room naming: `est:{establishment_id}` — зміна зламає multi-tenant ізоляцію
+- Публічний WS namespace `/public` використовує кімнати `delivery:{delivery_id}:public` — окремий простір імен, не плутати з менеджерськими кімнатами
 
 ---
 
@@ -382,6 +396,7 @@ All font choices, colors, spacing, border-radius, and aesthetic direction are de
 
 Key decisions to remember:
 - **Dark-first** — background `#09090b` (zinc-950), surface `#18181b` (zinc-900). Do NOT switch to a light dashboard.
+  - **Виняток: `/embed/track/[token]`** — публічна сторінка трекінгу для клієнтів закладу використовує **світлу тему** (білий фон, нейтральні кольори). Причина: embed відображається всередині iframe на сайтах ресторанів (здебільшого світлі), його бачать клієнти, а не менеджери. Sage accent — `#3d7a5a` (light mode варіант). Це єдиний виняток із dark-first правила в усьому продукті.
 - **Manrope** — primary font for all UI text (web + mobile). Import from Google Fonts. NOT Onest, Inter, or Roboto.
 - **JetBrains Mono** — for all numerical data, timestamps, IDs, coordinates, battery %, order counts.
 - **Sage accent** — `#6aaa84` (dark mode) / `#3d7a5a` (light mode). The ONLY non-neutral interactive color. No blue, no indigo, no violet.
