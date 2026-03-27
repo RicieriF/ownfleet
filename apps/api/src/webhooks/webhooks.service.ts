@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
@@ -12,6 +13,40 @@ import { CreateWebhookDto } from './dto/create-webhook.dto.js';
 import { UpdateWebhookDto } from './dto/update-webhook.dto.js';
 
 export const WEBHOOK_QUEUE = 'webhook-dispatch';
+
+/**
+ * Blocks SSRF via webhook URLs pointing to internal / link-local networks.
+ * Covers: loopback, RFC-1918 private ranges, AWS/cloud metadata (169.254.x.x),
+ * and IPv6 equivalents. Throws BadRequestException if the URL resolves to any
+ * of these ranges — so the error surfaces cleanly at the API boundary.
+ */
+function assertNotInternalUrl(rawUrl: string): void {
+  let hostname: string;
+  try {
+    hostname = new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    // @IsUrl() in the DTO already rejects malformed URLs — this is a safety net.
+    throw new BadRequestException('Invalid webhook URL');
+  }
+
+  // Strip IPv6 brackets: [::1] → ::1
+  const host = hostname.replace(/^\[|\]$/g, '');
+
+  const BLOCKED = [
+    /^127\./,                         // loopback
+    /^localhost$/,                    // loopback alias
+    /^10\./,                          // RFC-1918 class A
+    /^172\.(1[6-9]|2\d|3[01])\./,    // RFC-1918 class B
+    /^192\.168\./,                    // RFC-1918 class C
+    /^169\.254\./,                    // link-local / cloud metadata (AWS, GCP, Azure)
+    /^0\./,                           // "this" network
+    /^(::1|::ffff:127\.|fc|fd)/,      // IPv6 loopback + ULA
+  ];
+
+  if (BLOCKED.some((re) => re.test(host))) {
+    throw new BadRequestException('Webhook URL must not point to an internal address');
+  }
+}
 
 export interface WebhookJob {
   webhookId: string;
@@ -29,6 +64,7 @@ export class WebhooksService {
   ) {}
 
   async create(dto: CreateWebhookDto, user: AuthenticatedUser) {
+    assertNotInternalUrl(dto.url);
     return this.prisma.webhook.create({
       data: {
         establishment_id: user.establishment_id,
@@ -64,6 +100,7 @@ export class WebhooksService {
   }
 
   async update(id: string, dto: UpdateWebhookDto, user: AuthenticatedUser) {
+    if (dto.url !== undefined) assertNotInternalUrl(dto.url);
     await this.assertBelongs(id, user.establishment_id);
     return this.prisma.webhook.update({
       where: { id },

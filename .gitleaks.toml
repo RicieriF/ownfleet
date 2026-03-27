@@ -1,0 +1,12 @@
+title = "weego-cmi gitleaks config"
+
+[allowlist]
+  paths = [
+    "apps/api/package-lock.json",
+    "apps/web/package-lock.json",
+    "apps/mobile/package-lock.json",
+    "apps/api/.env.example",
+    "apps/web/.env.example",
+    "apps/mobile/.env.example",
+    ".gstack/security-reports",
+  ]
