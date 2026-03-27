@@ -70,6 +70,10 @@ describe('EtaService', () => {
   // ── calculateEta ──────────────────────────────────────────────────────────
 
   describe('calculateEta', () => {
+    // Pin time to 14:00 UTC — outside peak hours (7–9, 17–19) so coefficient = 1.0
+    beforeAll(() => jest.useFakeTimers({ now: new Date('2024-01-15T14:00:00.000Z') }));
+    afterAll(() => jest.useRealTimers());
+
     it('car mode → returns OSRM duration + 3-minute buffer', async () => {
       mockFetch.mockResolvedValue(makeOsrmOk(300));
 
