@@ -366,6 +366,7 @@ describe('OrdersService — dispatch algorithm', () => {
         'order.assigned',
         { order_id: 'order-1' },
       );
+      expect(mockCouriersService.invalidateWorkloadCache).toHaveBeenCalledWith(EST_A);
       expect(result).toEqual(assignedOrder);
     });
 

@@ -7,7 +7,7 @@ import { EtaService } from '../../eta/eta.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
-const mockOrder = { deleteMany: jest.fn() };
+const mockOrder = { deleteMany: jest.fn(), findMany: jest.fn() };
 const mockEstablishment = { findMany: jest.fn() };
 const mockShift = {
   findMany: jest.fn().mockResolvedValue([]),
@@ -53,6 +53,7 @@ describe('RetentionService', () => {
     service = module.get<RetentionService>(RetentionService);
     jest.clearAllMocks();
     mockOrder.deleteMany.mockResolvedValue({ count: 0 });
+    mockOrder.findMany.mockResolvedValue([]);
     mockPrisma.$executeRaw.mockResolvedValue(0);
     mockRetentionLog.create.mockResolvedValue({});
   });
@@ -181,6 +182,64 @@ describe('RetentionService', () => {
 
       await expect(service.runRetention()).resolves.not.toThrow();
       expect(mockOrder.deleteMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ── checkRecommendTimeout ───────────────────────────────────────────────────
+
+  describe('checkRecommendTimeout', () => {
+    it('skips establishment when dispatch_recommend_timeout_minutes is not set', async () => {
+      mockEstablishment.findMany.mockResolvedValue([{ id: 'est-1', settings: {} }]);
+
+      await service.checkRecommendTimeout();
+
+      expect(mockOrder.findMany).not.toHaveBeenCalled();
+      expect(mockDispatchQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('skips establishment when dispatch_recommend_timeout_minutes is null', async () => {
+      mockEstablishment.findMany.mockResolvedValue([
+        { id: 'est-1', settings: { dispatch_recommend_timeout_minutes: null } },
+      ]);
+
+      await service.checkRecommendTimeout();
+
+      expect(mockOrder.findMany).not.toHaveBeenCalled();
+      expect(mockDispatchQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('re-enqueues stale orders using ready_at cutoff (not created_at)', async () => {
+      mockEstablishment.findMany.mockResolvedValue([
+        { id: 'est-1', settings: { dispatch_recommend_timeout_minutes: 10 } },
+      ]);
+      mockOrder.findMany.mockResolvedValue([{ id: 'order-stale', establishment_id: 'est-1' }]);
+
+      await service.checkRecommendTimeout();
+
+      expect(mockOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            establishment_id: 'est-1',
+            status: 'pending',
+            ready_at: expect.objectContaining({ not: null, lt: expect.any(Date) }),
+          }),
+        }),
+      );
+      expect(mockDispatchQueue.add).toHaveBeenCalledWith(
+        { orderId: 'order-stale', establishmentId: 'est-1', attempt: 1 },
+        { jobId: 'dispatch:order-stale' },
+      );
+    });
+
+    it('does nothing when no stale orders found', async () => {
+      mockEstablishment.findMany.mockResolvedValue([
+        { id: 'est-1', settings: { dispatch_recommend_timeout_minutes: 10 } },
+      ]);
+      mockOrder.findMany.mockResolvedValue([]);
+
+      await service.checkRecommendTimeout();
+
+      expect(mockDispatchQueue.add).not.toHaveBeenCalled();
     });
   });
 });
