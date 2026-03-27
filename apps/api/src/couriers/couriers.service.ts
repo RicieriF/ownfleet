@@ -3,7 +3,9 @@ import {
   NotFoundException,
   ForbiddenException,
   Logger,
+  Inject,
 } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
@@ -11,10 +13,29 @@ import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { COURIERS_REDIS_CLIENT } from './couriers-redis.provider.js';
 
 // Thresholds for online status (in ms)
 const ONLINE_MS = 30_000;        // < 30s  → online
 const BACKGROUND_MS = 5 * 60_000; // < 5min → background
+
+const WORKLOAD_CACHE_TTL_SEC = 15;
+
+interface WorkloadTodayRow {
+  courier_id: string;
+  name: string;
+  workload_seconds: string | number;
+  deliveries_count: string | number;
+  avg_delay_minutes: string | number | null;
+}
+
+export interface WorkloadTodayCourier {
+  courierId: string;
+  name: string;
+  workloadSeconds: number;
+  deliveriesCount: number;
+  avgDelayMinutes: number | null;
+}
 
 @Injectable()
 export class CouriersService {
@@ -24,6 +45,7 @@ export class CouriersService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly telegram: TelegramService,
+    @Inject(COURIERS_REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   async findAll(user: AuthenticatedUser) {
@@ -169,6 +191,98 @@ export class CouriersService {
 
     this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);
     return { reminded: true, courier_name: courier.name };
+  }
+
+  /**
+   * Returns workload statistics for all couriers currently on an active shift.
+   * Cached in Redis for 15 seconds per establishment.
+   * Accessible by manager, dispatcher, and courier roles (multi-tenant guard handles isolation).
+   */
+  async getWorkloadToday(establishmentId: string): Promise<{ couriers: WorkloadTodayCourier[] }> {
+    const cacheKey = `workload:${establishmentId}`;
+
+    // Try cache first
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as unknown;
+        if (
+          parsed !== null &&
+          typeof parsed === 'object' &&
+          Array.isArray((parsed as Record<string, unknown>).couriers)
+        ) {
+          return parsed as { couriers: WorkloadTodayCourier[] };
+        }
+      }
+    } catch (err) {
+      this.logger.warn('Redis get failed for workload cache — continuing to DB', err);
+    }
+
+    // Query all couriers on active shifts for this establishment
+    const rows = await this.prisma.$queryRaw<WorkloadTodayRow[]>`
+      SELECT
+        c.id AS courier_id,
+        c.name,
+        COALESCE(
+          SUM(EXTRACT(EPOCH FROM (d.completed_at - d.started_at)))
+            FILTER (WHERE d.completed_at IS NOT NULL AND d.started_at IS NOT NULL),
+          0
+        )
+        + COALESCE(
+          SUM(CASE WHEN d.status IN ('assigned','in_progress') THEN d.eta_seconds ELSE 0 END),
+          0
+        ) AS workload_seconds,
+        COUNT(d.id) FILTER (WHERE d.completed_at IS NOT NULL) AS deliveries_count,
+        CASE
+          WHEN COUNT(d.id) FILTER (WHERE d.eta_started_at IS NOT NULL AND d.completed_at IS NOT NULL) >= 1
+          THEN AVG(
+            EXTRACT(EPOCH FROM (d.completed_at - d.eta_started_at)) - d.eta_seconds
+          ) FILTER (WHERE d.eta_started_at IS NOT NULL AND d.completed_at IS NOT NULL AND d.eta_seconds IS NOT NULL) / 60.0
+          ELSE NULL
+        END AS avg_delay_minutes
+      FROM couriers c
+      JOIN shifts s ON s.courier_id = c.id
+        AND s.ended_at IS NULL
+        AND s.establishment_id = ${establishmentId}
+      LEFT JOIN deliveries d ON d.courier_id = c.id
+        AND d.started_at >= s.started_at
+        AND d.status NOT IN ('failed')
+      WHERE c.establishment_id = ${establishmentId}
+        AND c.active = true
+      GROUP BY c.id, c.name, s.started_at
+      ORDER BY workload_seconds DESC
+    `;
+
+    const couriers: WorkloadTodayCourier[] = rows.map((r) => ({
+      courierId: r.courier_id,
+      name: r.name,
+      workloadSeconds: Number(r.workload_seconds),
+      deliveriesCount: Number(r.deliveries_count),
+      avgDelayMinutes: r.avg_delay_minutes !== null ? Number(r.avg_delay_minutes) : null,
+    }));
+
+    const result = { couriers };
+
+    // Cache result
+    try {
+      await this.redis.setex(cacheKey, WORKLOAD_CACHE_TTL_SEC, JSON.stringify(result));
+    } catch (err) {
+      this.logger.warn('Redis setex failed for workload cache', err);
+    }
+
+    return result;
+  }
+
+  /**
+   * Invalidates the workload cache for an establishment.
+   * Called whenever delivery status changes in OrdersService / ProofOfDeliveryModule.
+   */
+  async invalidateWorkloadCache(establishmentId: string): Promise<void> {
+    try {
+      await this.redis.del(`workload:${establishmentId}`);
+    } catch (err) {
+      this.logger.warn(`Failed to invalidate workload cache for ${establishmentId}`, err);
+    }
   }
 
   async clearDeviceToken(courierId: string): Promise<void> {

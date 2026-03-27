@@ -35,6 +35,18 @@ export class CouriersController {
     return this.service.findAll(req.user as AuthenticatedUser);
   }
 
+  /**
+   * Returns today's workload for all couriers on active shifts.
+   * Used by Smart Assignment UI and mobile stats.
+   * Cached in Redis: TTL 15s, key workload:{establishment_id}.
+   * Accessible by manager, dispatcher, and courier roles.
+   */
+  @Get('workload-today')
+  getWorkloadToday(@Req() req: any) {
+    const user = req.user as AuthenticatedUser;
+    return this.service.getWorkloadToday(user.establishment_id);
+  }
+
   /** Courier self-registers FCM token after login */
   @Patch('me/device-token')
   @HttpCode(HttpStatus.OK)

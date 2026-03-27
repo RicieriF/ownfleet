@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import { DispatchMode } from '@prisma/client';
 
 export const ALLOWED_TIMEZONES = [
   'Europe/Kyiv',
@@ -46,6 +47,6 @@ export class UpdateSettingsDto {
   lng?: number;
 
   // ── Dispatch mode ────────────────────────────────────────────────────────
-  @IsOptional() @IsBoolean()
-  auto_dispatch?: boolean;
+  @IsOptional() @IsEnum(DispatchMode)
+  dispatch_mode?: DispatchMode;
 }
