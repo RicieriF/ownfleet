@@ -244,7 +244,7 @@ export class OrdersService {
     return result;
   }
 
-  // ── Courier self-assignment (auto_dispatch mode) ─────────────────────────
+  // ── Courier self-assignment (deprecated — endpoints return 410) ───────────
 
   async getAvailable(user: AuthenticatedUser) {
     await Promise.all([
@@ -531,6 +531,7 @@ export class OrdersService {
       throw new NotFoundException('Establishment not found');
     }
 
+    // Validate that order is currently pending (pre-flight check — final guard is atomic inside tx)
     assertOrderTransition(order.status, OrderStatus.assigned);
 
     let etaSeconds: number | null = null;
@@ -552,10 +553,14 @@ export class OrdersService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id: orderId },
+      // Atomic race guard: only proceeds if order is still pending at commit time
+      const updated = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.pending },
         data: { status: OrderStatus.assigned },
       });
+      if (updated.count === 0) {
+        throw new ConflictException('Order has already been assigned');
+      }
       await tx.delivery.create({
         data: {
           order_id: orderId,

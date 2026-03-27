@@ -88,30 +88,32 @@ export class RetentionService {
   async checkShiftAnomalies(): Promise<void> {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
-    // Only consider shifts that have been active long enough and have enough data
-    const shifts = await this.prisma.shift.findMany({
-      where: {
-        ended_at: null,
-        started_at: { lt: twoHoursAgo },
-        anomaly_alerted_at: null,
-        total_deliveries: { gt: 5 },
-      },
+    // Fetch all active shifts (candidate + comparison pool) in a single query
+    const allActiveShifts = await this.prisma.shift.findMany({
+      where: { ended_at: null, started_at: { lt: twoHoursAgo } },
       include: { courier: { select: { name: true } } },
     });
 
-    for (const shift of shifts) {
+    // Group by establishment for O(1) comparison lookups
+    const byEstablishment = new Map<string, typeof allActiveShifts>();
+    for (const s of allActiveShifts) {
+      const list = byEstablishment.get(s.establishment_id) ?? [];
+      list.push(s);
+      byEstablishment.set(s.establishment_id, list);
+    }
+
+    // Only consider shifts that need an alert and have enough data
+    const candidates = allActiveShifts.filter(
+      (s) => s.anomaly_alerted_at === null && s.total_deliveries > 5,
+    );
+
+    for (const shift of candidates) {
       const hoursActive = (Date.now() - shift.started_at.getTime()) / (1000 * 60 * 60);
       const ratePerHour = shift.total_deliveries / hoursActive;
 
-      // Get other active shifts in the same establishment for comparison
-      const otherActiveShifts = await this.prisma.shift.findMany({
-        where: {
-          establishment_id: shift.establishment_id,
-          ended_at: null,
-          id: { not: shift.id },
-          total_deliveries: { gt: 0 },
-        },
-      });
+      const otherActiveShifts = (byEstablishment.get(shift.establishment_id) ?? []).filter(
+        (s) => s.id !== shift.id && s.total_deliveries > 0,
+      );
 
       if (otherActiveShifts.length === 0) continue; // Cannot compare without others
 

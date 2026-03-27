@@ -20,11 +20,12 @@ export class DispatchService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    // On server restart, requeue any pending orders in establishments with dispatch_mode='auto'
+    // On server restart, requeue pending orders for both 'auto' and 'recommend' modes.
+    // 'recommend' mode also uses the queue to find and broadcast courier recommendations.
     const pendingOrders = await this.prisma.order.findMany({
       where: {
         status: 'pending',
-        establishment: { dispatch_mode: 'auto' },
+        establishment: { dispatch_mode: { in: ['auto', 'recommend'] } },
       },
       select: { id: true, establishment_id: true },
     });
