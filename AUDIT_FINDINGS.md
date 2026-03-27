@@ -261,11 +261,54 @@ console.warn('[location-task] error:', error.message);
 
 ---
 
+## Аудит #9 — Security (повторний, після dispatch-фічі)
+**Дата:** 2026-03-27
+**Скіл:** `/cso` (Chief Security Officer — daily mode, 8/10 confidence gate, all phases 0–14)
+**Результат:** 4 findings (1 критичний CVE, 3 high). Всі 4 закриті в тій же сесії.
+
+### ✅ FINDING-12 — CVE-2025-29927: Next.js middleware auth bypass
+
+**Статус:** Закрито — `next` оновлено з `14.2.5` до `14.2.30` (apps/web/package.json).
+
+**Суть:** Заголовок `x-middleware-subrequest` дозволяв обійти будь-який middleware, включаючи auth — будь-який запит ставав автентифікованим без токену. Патч у 14.2.30.
+
+---
+
+### ✅ FINDING-13 — Telegram webhook приймав запити без секрету
+
+**Статус:** Закрито — логіка перевірки інвертована в `telegram.service.ts`.
+
+**Суть:** `if (this.webhookSecret && secretHeader !== ...)` пропускав всі запити коли `TELEGRAM_WEBHOOK_SECRET` не встановлений. Змінено на `if (!this.webhookSecret || secretHeader !== ...)` — без секрету відхиляє все.
+
+---
+
+### ✅ FINDING-14 — SSRF через URL вебхуків
+
+**Статус:** Закрито — `assertNotInternalUrl()` додано в `webhooks.service.ts` для `create()` і `update()`.
+
+**Суть:** `@IsUrl({ require_tld: false })` дозволяв `localhost`, `192.168.*`, `169.254.169.254` (AWS metadata). Тепер блокує loopback, RFC-1918, link-local, IPv6 ULA.
+
+---
+
+### ✅ FINDING-15 — access_token читався через JavaScript (XSS-вектор)
+
+**Статус:** Закрито — повна реалізація httpOnly + ws-token exchange.
+
+**Суть:** JWT зберігався в звичайному (non-httpOnly) cookie, доступному через `document.cookie`. При XSS — миттєве викрадення сесії.
+
+**Що зроблено:**
+- `access_token` тепер httpOnly у login та refresh Next.js routes
+- `jwt.strategy.ts` додано cookie extractor — API-запити через Next.js proxy автентифікуються через cookie
+- `GET /auth/ws-token` (JwtAuthGuard) — видає 60-секундний JWT для WebSocket
+- `socket.ts` — async auth callback: перед кожним підключенням отримує свіжий ws-token
+
+---
+
 ## Підсумок після всіх аудитів
 
-**Дата закриття серії:** 2026-03-25
-**Всього findings:** 11 (4 критичних 🔴, 5 середніх 🟡, 2 інформаційних 🔵)
-**Статус:** ✅ Всі 11 закриті
+**Дата останнього оновлення:** 2026-03-27
+**Всього findings:** 15 (5 критичних 🔴, 7 середніх 🟡, 3 інформаційних 🔵)
+**Статус:** ✅ Всі 15 закриті
 
 | # | Finding | Пріоритет | Статус |
 |---|---------|-----------|--------|
@@ -280,6 +323,10 @@ console.warn('[location-task] error:', error.message);
 | 09 | Composite index `(courier_id, status)` на deliveries | 🟡 | ✅ |
 | 10 | Composite index `(courier_id, created_at DESC)` на location_pings | 🟡 | ✅ |
 | 11 | Мертвий дублюючий endpoint device-token | 🟡 | ✅ |
+| 12 | CVE-2025-29927: Next.js middleware auth bypass | 🔴 | ✅ |
+| 13 | Telegram webhook без перевірки секрету | 🟡 | ✅ |
+| 14 | SSRF через URL вебхуків | 🟡 | ✅ |
+| 15 | access_token у JS-доступному cookie (XSS-вектор) | 🔴 | ✅ |
 
 **Що залишається відкритим (не з аудит-серії):**
 - 🔵 INFO: Аудит #2 (TypeScript strict check) — проведено в окремій сесії, findings відсутні

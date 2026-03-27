@@ -218,9 +218,15 @@ throw HttpException({ code: 'PLAN_EXPIRED' }, 402);
 
 ## WebSocket Auth
 
-Клієнт: `io(WS_URL, { auth: { token: accessToken } })`
+Веб-клієнт перед підключенням отримує short-lived ws-token (60с):
+`GET /api/v1/auth/ws-token` (cookie-auth, JwtAuthGuard) → `{ token: string }`
+
+Клієнт: `io(WS_URL, { auth: (cb) => fetchWsToken().then(token => cb({ token })) })`
 Сервер: `handleConnection()` перевіряє JWT → `socket.join('est:' + establishment_id)`
 Неавторизовані — відхиляються негайно. Менеджер отримує тільки події свого закладу.
+
+Мобільний додаток використовує `x-refresh-token` header замість cookie.
+`access_token` cookie — httpOnly (JS не може читати). Refresh через `/api/auth/refresh`.
 
 ---
 
@@ -322,7 +328,7 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 303 тестів / 20 суїтів / all green**
+**Тести — ✅ 324 тестів / 21 суїт / all green**
 
 ---
 

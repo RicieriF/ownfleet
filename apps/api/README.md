@@ -43,15 +43,17 @@ All endpoints use `/api/v1/` prefix. See `02_Architecture_v1.2.md` at the repo r
 
 | Module | Responsibility |
 |--------|---------------|
-| `AuthModule` | JWT login/refresh/logout, multi-tenant isolation |
-| `EstablishmentsModule` | Establishment CRUD, settings, PlanAccessGuard |
-| `CouriersModule` | Courier management, FCM tokens, online status |
-| `OrdersModule` | Orders, state machine, courier assignment |
-| `TrackingModule` | GPS pings → Redis → WebSocket → dashboard |
+| `AuthModule` | JWT login/refresh/logout, ws-token (60s), multi-tenant isolation |
+| `EstablishmentsModule` | Establishment CRUD, settings, PlanAccessGuard, dispatch_mode |
+| `CouriersModule` | Courier management, FCM tokens, workload-today Redis cache |
+| `ShiftsModule` | Shifts: start/end, auto-close (16h), Telegram reminders |
+| `OrdersModule` | Orders, state machine, dispatch algorithm (manual/recommend/auto), ETA |
+| `TrackingModule` | GPS pings → Redis → WebSocket → dashboard, departure detection |
+| `EtaModule` | OSRM routing, ETA calculation, 5 transport modes, overdue alerts |
 | `ProofOfDeliveryModule` | Geo-proof (required) + photo (optional), 300m check |
 | `NotificationsModule` | Firebase FCM + Telegram (fire-and-forget) |
-| `OnboardingModule` | Courier invite tokens, onboarding status |
+| `OnboardingModule` | Courier invite tokens, transport mode selection |
 | `AnalyticsModule` | Delivery statistics, courier performance |
-| `RetentionModule` | Cron cleanup of orders and location pings |
+| `RetentionModule` | Cron: order/ping cleanup, auto-close shifts, ETA overdue, courier alerts |
 | `IntegrationsModule` | Poster POS webhook + iiko polling |
 | `WebhooksModule` | Outbound webhooks with HMAC signing and Bull retry queue |

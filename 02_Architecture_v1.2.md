@@ -600,8 +600,8 @@ Token refresh (Firebase rotates tokens periodically)
 | Механізм | Опис | |
 |----------|------|-|
 | TLS 1.3 | Весь трафік зашифрований, HTTP → HTTPS redirect | |
-| JWT + Refresh Tokens | Access token TTL 15 хв, Refresh TTL 30 днів, HttpOnly cookie | |
-| WebSocket auth | JWT передається у `socket.auth.token` при handshake. `handleConnection()` перевіряє токен через JwtService → витягує `establishment_id` → клієнт приєднується до room `est:{id}`. З'єднання без валідного токена відхиляються негайно. | **NEW** |
+| JWT + Refresh Tokens | Access token TTL 15 хв (httpOnly cookie), Refresh TTL 30 днів (httpOnly cookie). JS не може читати жоден з них. | |
+| WebSocket auth | Веб-клієнт викликає `GET /auth/ws-token` (cookie-auth) → отримує short-lived JWT (60с) → передає у `socket.auth.token` при handshake. `handleConnection()` перевіряє токен через JwtService → клієнт приєднується до room `est:{id}`. З'єднання без валідного токена відхиляються негайно. | **UPDATED** |
 | Multi-tenant isolation | REST: `establishment_id` в кожному запиті, middleware-перевірка. WS: кожен клієнт ізольований у власній кімнаті `est:{id}`, отримує тільки свої події. | **UPDATED** |
 | Rate Limiting | 100 req/хв per user, 10 req/сек per IP на `/api/v1/tracking/ping` | |
 | HMAC webhooks | Підпис вхідних (Poster) та вихідних webhook запитів | |
