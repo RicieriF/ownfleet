@@ -45,6 +45,14 @@ describe('TelegramService', () => {
   let service: TelegramService;
 
   beforeEach(async () => {
+    // Restore the default mockConfig.get implementation before each test,
+    // since some tests mutate it (e.g., the "no secret configured" test).
+    mockConfig.get.mockImplementation((key: string) => {
+      if (key === 'TELEGRAM_BOT_TOKEN') return 'test-token';
+      if (key === 'TELEGRAM_WEBHOOK_SECRET') return 'secret-xyz';
+      return null;
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TelegramService,
@@ -115,7 +123,7 @@ describe('TelegramService', () => {
       expect(result).toBe(true);
     });
 
-    it('accepts update when no webhook secret is configured', async () => {
+    it('rejects update when no webhook secret is configured', async () => {
       mockConfig.get.mockImplementation((key: string) => {
         if (key === 'TELEGRAM_BOT_TOKEN') return 'test-token';
         return null; // no TELEGRAM_WEBHOOK_SECRET
@@ -131,12 +139,11 @@ describe('TelegramService', () => {
       }).compile();
       const svc = module.get<TelegramService>(TelegramService);
 
-      mockRedis.getdel.mockResolvedValue(null);
       const result = await svc.handleWebhookUpdate(
         { update_id: 1, message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' } },
         undefined,
       );
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 

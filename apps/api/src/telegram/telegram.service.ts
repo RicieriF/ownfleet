@@ -43,7 +43,7 @@ export class TelegramService {
       this.logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
     } else if (!this.webhookSecret) {
       this.logger.warn(
-        'TELEGRAM_WEBHOOK_SECRET not set — webhook endpoint is open to unauthenticated requests. Set this in production.',
+        'TELEGRAM_WEBHOOK_SECRET not set — all webhook requests will be rejected. Set this env var to enable the Telegram bot.',
       );
     }
   }
@@ -70,8 +70,8 @@ export class TelegramService {
    * Returns false if the secret token is invalid.
    */
   async handleWebhookUpdate(update: TelegramUpdate, secretHeader: string | undefined): Promise<boolean> {
-    if (this.webhookSecret && secretHeader !== this.webhookSecret) {
-      this.logger.warn('Telegram webhook: invalid secret token');
+    if (!this.webhookSecret || secretHeader !== this.webhookSecret) {
+      this.logger.warn('Telegram webhook: missing or invalid secret token');
       return false;
     }
 
