@@ -35,7 +35,7 @@ function SectionCard({ title, description, children }: {
 }) {
   return (
     <div
-      className="rounded-lg mb-4"
+      className="rounded-md mb-4"
       style={{
         background: 'var(--s2)',
         border: '1px solid var(--br)',
@@ -102,8 +102,10 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     <button
       type="button"
       onClick={() => onChange(!value)}
-      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors outline-none"
       style={{ background: value ? 'var(--acm)' : 'var(--s3)' }}
+      onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+      onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
     >
       <span
         className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform"

@@ -303,7 +303,7 @@ export default function MainScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerName}>👋 {user?.name}</Text>
+          <Text style={styles.headerName}>{user?.name}</Text>
           {shift && (
             <Text style={styles.shiftTimer}>{shiftTimer}</Text>
           )}
@@ -432,7 +432,7 @@ function NoShiftState({
 function IdleState() {
   return (
     <View style={styles.idle}>
-      <Text style={styles.idleEmoji}>⏳</Text>
+      <Ionicons name="hourglass-outline" size={52} color="#3f3f46" style={{ marginBottom: 16 }} />
       <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
       <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
     </View>
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     borderColor: '#3f3f46',
   },
   endShiftText: { fontSize: 12, color: '#a1a1aa', fontFamily: 'Manrope_500Medium' },
-  logoutBtn: { fontSize: 14, color: '#71717a' },
+  logoutBtn: { fontSize: 14, color: '#71717a', fontFamily: 'Manrope_400Regular' },
 
   // Content
   scrollView: { flex: 1 },
@@ -627,8 +627,7 @@ const styles = StyleSheet.create({
 
   // IdleState
   idle: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 40, paddingBottom: 32 },
-  idleEmoji: { fontSize: 56, marginBottom: 16 },
-  idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
+idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
   idleSub: { fontSize: 15, color: '#71717a', textAlign: 'center', lineHeight: 22 },
 
   // WorkloadBlock

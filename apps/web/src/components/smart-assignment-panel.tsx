@@ -42,13 +42,6 @@ const TRANSPORT_LABELS: Record<TransportMode, string> = {
   walking: 'пішки',
 };
 
-const TRANSPORT_ICONS: Record<TransportMode, string> = {
-  car: '🚗',
-  moto_gas: '🛵',
-  moto_electric: '🛵',
-  bicycle: '🚲',
-  walking: '🚶',
-};
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -321,7 +314,6 @@ export function SmartAssignmentPanel() {
               {/* Order row */}
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span style={{ color: 'var(--t3)', fontSize: '13px' }}>📦</span>
                   <span
                     className="text-sm font-medium truncate"
                     style={{ color: 'var(--t1)' }}
@@ -345,7 +337,7 @@ export function SmartAssignmentPanel() {
                   className="flex-shrink-0 text-xs"
                   style={{ fontFamily: 'var(--font-mono)', color: 'var(--t4)' }}
                 >
-                  🕐 {formatTime(order.created_at)}
+                  {formatTime(order.created_at)}
                 </span>
               </div>
 
@@ -366,7 +358,6 @@ export function SmartAssignmentPanel() {
                         {zoneLabel(recommendation.distance_meters)}{' '}
                         ({Math.round(recommendation.distance_meters)}м)
                         {' '}
-                        {TRANSPORT_ICONS[recommendation.transport_mode]}{' '}
                         {TRANSPORT_LABELS[recommendation.transport_mode]}
                       </span>
                     </div>
