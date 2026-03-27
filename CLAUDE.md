@@ -119,8 +119,12 @@ tracking_tokens (id, order_id UNIQUE, token UNIQUE, expires_at, created_at)
                 -- expires_at = created_at + 4h; без establishment_id — навмисний виняток з multi-tenancy;
                 -- доступ тільки через UUID token (122 bits entropy); UNIQUE(order_id) гарантує ідемпотентність
                 -- RetentionModule прибирає рядки де expires_at < NOW()
-api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active BOOLEAN DEFAULT TRUE, created_at, last_used_at)
-                -- is_active: soft disable без втрати last_used_at (audit); bcrypt hash в key_hash
+api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active BOOLEAN DEFAULT TRUE,
+                 allowed_domains TEXT[] DEFAULT '{}', last_used_at, last_used_domain TEXT NULL, created_at)
+                -- Публічний ключ за дизайном (як Google Maps API key). Захист через domain restriction:
+                -- сервер перевіряє Origin header проти allowed_domains; порожній масив = заблоковано.
+                -- bcrypt hash в key_hash; key_prefix (8 символів) для пошуку без повного скану.
+                -- last_used_domain: аудит звідки використовується ключ.
 ```
 
 ---

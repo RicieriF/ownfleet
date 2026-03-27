@@ -97,12 +97,17 @@ tracking_tokens (
 api_keys (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   establishment_id  UUID NOT NULL REFERENCES establishments(id),
-  key_hash          TEXT NOT NULL,      -- bcrypt hash
-  key_prefix        TEXT NOT NULL,      -- перші 8 символів для відображення
-  name              TEXT NOT NULL,      -- "Основний сайт", "Мобільний додаток"
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE,  -- soft disable без втрати last_used_at
-  created_at        TIMESTAMPTZ DEFAULT NOW(),
-  last_used_at      TIMESTAMPTZ NULL
+  key_hash          TEXT NOT NULL,           -- bcrypt hash повного ключа
+  key_prefix        TEXT NOT NULL,           -- перші 8 символів для відображення в UI
+  name              TEXT NOT NULL,           -- "Основний сайт", "Мобільний додаток"
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  allowed_domains   TEXT[] NOT NULL DEFAULT '{}',
+  -- Масив дозволених доменів: ['pizza-vezuviy.com.ua', 'www.pizza-vezuviy.com.ua']
+  -- Порожній масив = ключ ще не налаштований, всі запити блокуються (крім localhost для тестування)
+  -- Сервер порівнює Origin header запиту з цим списком; без збігу → 403 Forbidden
+  last_used_at      TIMESTAMPTZ NULL,
+  last_used_domain  TEXT NULL,              -- останній домен з якого використовувався ключ (аудит)
+  created_at        TIMESTAMPTZ DEFAULT NOW()
 )
 ```
 
@@ -204,7 +209,18 @@ Read-only. Клієнт підписується тільки на свою до
 }
 ```
 
-**Rate limiting:** 60 req/хв на IP на всіх `/api/v1/public/*` endpoints.
+**Валідація API ключа (endpoint `/api/v1/public/order/:externalId/token`):**
+1. Отримати `key` з query string
+2. За `key_prefix` (перші 8 символів) знайти запис у `api_keys` — уникаємо повного скану таблиці
+3. `bcrypt.compare(key, key_hash)` — перевірка хешу
+4. Перевірити `is_active = true`
+5. Перевірити `Origin` header запиту проти `allowed_domains` — якщо немає збігу → `403 Forbidden`
+6. Оновити `last_used_at` і `last_used_domain` (fire-and-forget, без блокування відповіді)
+
+**Rate limiting (багаторівневий):**
+- **60 req/хв на IP** — захист від простих ботів і DDoS
+- **300 req/хв на API ключ** — захист від зловживання конкретним ключем, при цьому не обмежує заклади з великим трафіком
+- **10 req/хв на tracking token** — захист від скрейпінгу через перебір активних токенів
 
 ### WebSocket — публічний namespace
 
@@ -229,6 +245,14 @@ io('/public', { auth: { token: 'TRACKING_TOKEN' } })
 `courier:location` і `delivery:route` — розділені навмисно: location пушиться на кожен пінг (легкий), route перераховується через OSRM тільки при значному відхиленні (важкий). Клієнт оновлює маркер на кожен location, але не перемальовує маршрут.
 
 **TrackingModule** при кожному GPS пінгу публікує в Redis канал `delivery:{id}:public` → PublicTrackingModule пушить `courier:location`. Раз на 60с (окремий Redis timer) пушить `delivery:eta`. При значному зсуві маршруту — пушить `delivery:route`.
+
+**Lifecycle WS при завершенні доставки:**
+1. OrdersModule змінює `delivery.status → completed`
+2. Публікує в Redis `delivery:{id}:public` подію `delivery:status`
+3. PublicTrackingModule пушить клієнту `delivery:status { deliveryStatus: 'completed' }`
+4. Клієнт показує "Доставлено!" екран
+5. Через 15 хвилин після `delivery.completed_at` → сервер надсилає `error: TOKEN_EXPIRED` і розриває WS (`socket.disconnect(true)`)
+6. Snapshot endpoint `GET /api/v1/public/track/:token` повертає 404 через 15 хвилин після `delivery.completed_at` — незалежно від `token.expires_at`
 
 **Reconnection — поведінка tracker.js при розриві зʼєднання:**
 
@@ -350,7 +374,9 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 
 **Сторінка /settings:**
 - Секція "Tracking Widget"
-- Генерація API ключа (показується один раз при створенні)
+- Генерація API ключа (показується один раз при створенні, потім тільки prefix)
+- **Поле "Дозволені домени"** — textarea де менеджер вводить домени свого сайту (один на рядок). Обов'язково заповнити перед тим як ключ почне працювати. UI показує попередження якщо `allowed_domains` порожній.
+- **Статус останнього використання** — `last_used_at` + `last_used_domain` (аудит: менеджер бачить звідки використовується ключ)
 - Готовий код для вставки (copy-paste блок з script tag + приклад виклику)
 - Інструкція в 3 кроки з скріншотами
 
@@ -369,13 +395,67 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 
 ## Безпека
 
-- Tracking token: UUID v4 (122 bits entropy) — не вгадати
-- Токен прив'язаний до конкретної доставки — не дає доступу до інших даних
-- Токен expire: `created_at + 4h` — після цього 404
-- API ключ: bcrypt hash в БД, передається тільки в HTTPS
-- Public endpoints: rate limit 60 req/хв/IP
-- Public WebSocket: read-only, тільки один delivery channel per token
-- Не витікає: телефон курʼєра, establishment_id, інші замовлення, інші курʼєри
+### Модель захисту API ключа
+
+API ключ — **публічний за дизайном**, як Stripe publishable key або Google Maps API key. Він знаходиться у вихідному коді сторінки закладу і це нормально — він не дає доступу до приватних даних. Реальний захист забезпечується трьома рівнями:
+
+**Рівень 1 — Domain restriction (основний захист):**
+Сервер перевіряє `Origin` header кожного запиту до `/api/v1/public/*` проти `api_keys.allowed_domains`. Навіть якщо хтось скопіював ключ — використати його можна тільки з зареєстрованого домену закладу.
+- `allowed_domains: []` → всі запити блокуються (ключ щойно створений, ще не налаштований)
+- `allowed_domains: ['pizza-vezuviy.com.ua']` → тільки цей домен
+- `localhost` завжди дозволений для тестування (лише в development режимі)
+
+**Рівень 2 — Tracking token як ізоляція:**
+Навіть знаючи API ключ і `external_id` замовлення — зловмисник отримає tracking token прив'язаний тільки до цього одного замовлення. UUID v4 (122 bits entropy) — перебір нереальний.
+
+**Рівень 3 — Багаторівневий rate limit:**
+- 60 req/хв на IP (базовий захист від ботів)
+- 300 req/хв на API ключ (захист від зловживання конкретним ключем)
+- 10 req/хв на tracking token (захист від скрейпінгу)
+
+### Lifecycle tracking token
+
+```
+Токен створено: expires_at = created_at + 4h
+Доставка завершена: delivery.completed_at встановлено
+
+Ефективний TTL = min(token.expires_at, delivery.completed_at + 15min)
+
+Через 15 хв після completed_at:
+  → GET /api/v1/public/track/:token → 404
+  → WS: сервер надсилає { error: 'TOKEN_EXPIRED' } → socket.disconnect(true)
+```
+
+15 хвилин після завершення — достатньо щоб клієнт побачив "Доставлено!" і закрив вікно.
+
+### Embed сторінка — HTTP security headers
+
+Next.js middleware для всіх `/embed/track/*` маршрутів:
+```
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: https://*.tile.openstreetmap.org;
+  connect-src 'self' wss: https://*.openstreetmap.org;
+  frame-ancestors *;           ← дозволяємо embed в будь-який iframe
+
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+```
+
+`frame-ancestors *` замість `X-Frame-Options: ALLOW-FROM` — сучасний стандарт, підтримується всіма браузерами. Дозволяє вставляти embed у будь-який сайт закладу без whitelist на рівні headers (domain restriction вже є на рівні API ключа).
+
+### Що не витікає
+
+| Поле | Чому не повертається |
+|------|---------------------|
+| `establishment_id` | Внутрішній UUID, клієнту не потрібен |
+| `delivery_id` | Не повертається в snapshot; WS кімната відома тільки серверу |
+| Телефон курʼєра | Явно виключений |
+| GPS-історія | Тільки поточна позиція з Redis |
+| Дані інших замовлень | Токен прив'язаний до одного `order_id` |
+| `order_id` / `courier_id` | Внутрішні UUID, не повертаються |
 
 ---
 
@@ -398,13 +478,15 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 4. Тести: geocode успішно → координати збережені; Nominatim timeout → null, без блокування; кеш hit → Nominatim не викликається
 
 ### Фаза 1 — Бекенд
-1. Міграція: `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`) таблиці
-2. `ApiKeysModule` — CRUD ключів для закладу (create, list, toggle is_active, delete)
-3. `PublicTrackingModule` — endpoints + rate limiting
-4. Лінива генерація токена при першому запиті від віджету (`INSERT ... ON CONFLICT (order_id) DO NOTHING`)
-5. Публічний WebSocket namespace `/public`
-6. TrackingModule: публікація GPS пінгів в `delivery:{id}:public` Redis канал
-7. RetentionModule: cron для очищення `tracking_tokens` де `expires_at < NOW()`
+1. Міграція: `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
+2. `ApiKeysModule` — CRUD ключів для закладу (create, list, toggle is_active, update allowed_domains, delete)
+3. `PublicTrackingModule` — endpoints + багаторівневий rate limiting (per-IP + per-key + per-token)
+4. Domain restriction middleware: перевірка `Origin` header проти `allowed_domains`
+5. Лінива генерація токена при першому запиті від віджету (`INSERT ... ON CONFLICT (order_id) DO NOTHING`)
+6. Публічний WebSocket namespace `/public`
+7. TrackingModule: публікація GPS пінгів в `delivery:{id}:public` Redis канал
+8. WS lifecycle: disconnect через 15 хв після `delivery.completed_at`
+9. RetentionModule: cron для очищення `tracking_tokens` де `min(expires_at, completed_at + 15min) < NOW()`
 
 ### Фаза 2 — Embed сторінка
 1. `/embed/track/[token]` — Next.js route
@@ -421,12 +503,36 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 4. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
 
 ### Фаза 4 — Тести
-- Public endpoints: валідний API ключ, невалідний → 401, rate limit → 429
-- Token generation: ідемпотентність — паралельні запити повертають той самий токен (UNIQUE + ON CONFLICT)
-- Expired token → 404
-- WebSocket: невалідний token → відхилення
-- Multi-tenant: токен замовлення A не дає доступу до даних замовлення B
-- Retention: expired tokens прибираються cron-ом
+**API ключ і domain restriction:**
+- Валідний ключ + домен в `allowed_domains` → 200
+- Валідний ключ + домен НЕ в `allowed_domains` → 403
+- Валідний ключ + `allowed_domains: []` → 403
+- Невалідний ключ → 401
+- `is_active: false` → 401
+- Rate limit per-IP → 429 після 60 req/хв
+- Rate limit per-key → 429 після 300 req/хв
+- `last_used_domain` оновлюється після успішного запиту
+
+**Tracking token:**
+- Ідемпотентність: паралельні запити повертають той самий токен (UNIQUE + ON CONFLICT)
+- Expired token (`expires_at < NOW()`) → 404
+- Токен після `delivery.completed_at + 15min` → 404 (незалежно від `expires_at`)
+- Токен доставки в `in_progress` → коректний snapshot
+- Rate limit per-token → 429 після 10 req/хв
+
+**WebSocket:**
+- Невалідний tracking token → відхилення при підключенні
+- Після `delivery:completed` → клієнт отримує `delivery:status` подію
+- Через 15 хв після `delivery.completed_at` → WS розривається з `TOKEN_EXPIRED`
+- Reconnect: клієнт переконнектується → snapshot оновлюється
+
+**Multi-tenant і ізоляція:**
+- Токен замовлення A не дає доступу до даних замовлення B
+- `delivery_id` не повертається в жодному публічному endpoint
+
+**Retention:**
+- Expired tokens прибираються cron-ом
+- `delivery_proofs` при цьому не чіпаються (незмінна вимога)
 
 ---
 
