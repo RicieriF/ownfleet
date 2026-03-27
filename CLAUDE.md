@@ -64,7 +64,7 @@ B2B SaaS платформа для управління власними кур�
 | `OnboardingModule` | Invite tokens для курʼєрів, onboarding статус, збереження transport_mode |
 | `AnalyticsModule` | Статистика доставок та ефективності |
 | `ApiKeysModule` | 🔲 PLANNED: API ключі для закладів (customer tracking widget); таблиця `api_keys` з `is_active` для soft-disable без втрати audit history |
-| `PublicTrackingModule` | 🔲 PLANNED: Публічні endpoints без auth для customer tracking widget; окремий WS namespace `/public`; кімнати `delivery:{delivery_id}:public` (ізольований простір від менеджерських кімнат) |
+| `PublicTrackingModule` | 🔲 PLANNED: Публічні endpoints без auth для customer tracking widget; окремий WS namespace `/public`; кімнати `order:{order_id}:public` (прив'язані до order, не delivery — delivery може ще не існувати при State 0) |
 
 ---
 
@@ -361,7 +361,7 @@ FCM push при `invalid_registration` → автоматично видалит
 - `PlanAccessGuard` логіка — зміна може зламати білінг
 - `delivery_proofs` retention — ця таблиця захищена навмисно
 - WebSocket room naming: `est:{establishment_id}` — зміна зламає multi-tenant ізоляцію
-- Публічний WS namespace `/public` використовує кімнати `delivery:{delivery_id}:public` — окремий простір імен, не плутати з менеджерськими кімнатами
+- Публічний WS namespace `/public` використовує кімнати `order:{order_id}:public` — окремий простір імен, не плутати з менеджерськими кімнатами
 
 ---
 

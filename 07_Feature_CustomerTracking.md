@@ -146,22 +146,31 @@ api_keys (
 `GeocodingService` вирішує це автоматично при обробці кожного вхідного webhook в `IntegrationsModule`:
 
 ```
-POS webhook → lat/lng є в payload      → зберігаємо як є
-            → lat/lng відсутні          → GeocodingService.geocode(address)
-                → Redis cache hit        → повертаємо кешовані координати миттєво
-                → Nominatim API          → зберігаємо результат + кешуємо
-                → Nominatim timeout/err  → lat=null, lng=null, Logger.warn (замовлення не блокується)
+POS webhook → lat/lng є в payload      → зберігаємо як є, webhook відповідає одразу
+            → lat/lng відсутні
+                → Redis cache hit        → зберігаємо координати, webhook відповідає одразу
+                → Cache miss             → зберігаємо order з lat=null, webhook відповідає одразу
+                                           → Bull job геокодує асинхронно
+                                               → Nominatim success → UPDATE orders SET lat,lng
+                                                                    → WS: order:coords_ready
+                                               → Nominatim timeout/err → lat=null, Logger.warn
 ```
 
-**Що показуємо без координат:** тільки текстовий статус доставки, карту і маршрут приховуємо.
+**Geocoding — асинхронний флоу (cache miss):**
+Webhook ніколи не чекає Nominatim. Order зберігається миттєво. Bull job геокодує у фоні (rate limit 1 req/s через Bull limiter). Після успішного геокодування:
+1. `UPDATE orders SET lat=..., lng=...`
+2. PublicTrackingModule пушить `order:coords_ready { lat, lng }` в кімнату `order:{order_id}:public`
+3. Віджет отримує coords → показує карту (якщо клієнт вже відкрив трекер)
+4. Якщо клієнт відкрив трекер після геокодування — coords вже в snapshot, WS event не потрібен
+
+**Що показуємо без координат:** тільки текстовий статус і ETA. Карту і маршрут показуємо щойно coords з'являться (через snapshot або WS).
 
 **Технічні деталі:**
 - **Nominatim (OpenStreetMap)** — безкоштовний, без API ключа, добре покриває українські адреси
-- **Redis кеш:** ключ `geocode:{sha1(address.toLowerCase().trim())}` → `{lat, lng}`, TTL 30 днів. Одна адреса геокодується один раз незалежно від кількості замовлень на неї
-- **Rate limit:** Nominatim вимагає не більше 1 req/sec. Bull черга з `limiter: { max: 1, duration: 1000 }`. Якщо є кеш — черга не потрібна (відповідь миттєво)
-- **Timeout:** 2 секунди. Якщо Nominatim не відповів — `lat = null`, логуємо, продовжуємо
-- **Геокодування синхронне** — виконується під час обробки webhook, до збереження замовлення. Якщо Nominatim недоступний — замовлення зберігається без координат (не блокуємо)
-- **Міграція:** при деплої фічі запускати окремий скрипт для геокодування існуючих замовлень з `lat = null`
+- **Redis кеш:** ключ `geocode:{sha1(address.toLowerCase().trim())}` → `{lat, lng}`, TTL 30 днів. Cache hit → синхронно, миттєво, без Bull
+- **Rate limit:** Bull черга з `limiter: { max: 1, duration: 1000 }` — тільки для асинхронного флоу (cache miss). Webhook ніколи не стоїть у черзі
+- **Timeout:** 2 секунди на Nominatim запит. Failure → lat=null, логуємо
+- **Міграція:** той самий Bull job механізм — скрипт ставить в чергу всі існуючі orders з `lat=null`
 
 ### Authenticated endpoint для менеджера (OrdersModule)
 
@@ -280,7 +289,9 @@ Read-only. Клієнт підписується тільки на свою до
 io('/public', { auth: { token: 'TRACKING_TOKEN' } })
 ```
 
-Сервер валідує токен → підписує socket на кімнату `delivery:{delivery_id}:public`.
+Сервер валідує токен → знаходить `order_id` з `tracking_tokens` → підписує socket на кімнату `order:{order_id}:public`.
+
+Кімната прив'язана до `order_id` (завжди доступна з моменту створення замовлення), а не до `delivery_id` (якого може ще не бути при State 0 — order pending).
 
 **Події які отримує клієнт:**
 
@@ -290,17 +301,18 @@ io('/public', { auth: { token: 'TRACKING_TOKEN' } })
 | `delivery:status` | `{ orderStatus, deliveryStatus }` | Зміна статусу delivery або order |
 | `delivery:eta` | `{ etaSeconds }` | Кожні 60с під час in_progress |
 | `delivery:route` | `{ routeGeometry: GeoJSON }` | Коли курʼєр відхилився >50м від попереднього маршруту |
+| `order:coords_ready` | `{ lat, lng }` | Коли async геокодування завершилось (cache miss флоу) |
 
 `courier:location` і `delivery:route` — розділені навмисно: location пушиться на кожен пінг (легкий), route перераховується через OSRM тільки при значному відхиленні (важкий). Клієнт оновлює маркер на кожен location, але не перемальовує маршрут.
 
-**TrackingModule** при кожному GPS пінгу публікує в Redis канал `delivery:{id}:public` → PublicTrackingModule пушить `courier:location`. Раз на 60с (окремий Redis timer) пушить `delivery:eta`. При значному зсуві маршруту — пушить `delivery:route`.
+**TrackingModule** при кожному GPS пінгу публікує в Redis канал `order:{order_id}:public` → PublicTrackingModule пушить `courier:location`. Раз на 60с (окремий Redis timer) пушить `delivery:eta`. При значному зсуві маршруту — пушить `delivery:route`.
 
 **Lifecycle WS при завершенні доставки:**
 1. OrdersModule змінює `delivery.status → completed`
 2. Публікує в Redis `delivery:{id}:public` подію `delivery:status`
 3. PublicTrackingModule пушить клієнту `delivery:status { deliveryStatus: 'completed' }`
 4. Клієнт показує "Доставлено!" екран
-5. Через 15 хвилин після `delivery.completed_at` → сервер надсилає `error: TOKEN_EXPIRED` і розриває WS (`socket.disconnect(true)`)
+5. Через 15 хвилин після `delivery.completed_at` → сервер надсилає `error: TOKEN_EXPIRED` і розриває WS (`socket.disconnect(true)`). Таймер реалізується як Bull delayed job (`queue.add({ orderId }, { delay: 15 * 60 * 1000 })`) — переживає рестарт сервера, гарантовано спрацює
 6. Snapshot endpoint `GET /api/v1/public/track/:token` повертає 404 через 15 хвилин після `delivery.completed_at` — незалежно від `token.expires_at`
 
 **Reconnection — поведінка tracker.js при розриві зʼєднання:**
