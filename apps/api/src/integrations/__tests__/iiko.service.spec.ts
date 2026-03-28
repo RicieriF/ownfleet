@@ -1,14 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IikoService } from '../iiko.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { GeocodingService } from '../../geocoding/geocoding.service.js';
 
 // ── fetch mock ─────────────────────────────────────────────────────────────
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-const mockOrder = { createMany: jest.fn().mockResolvedValue({ count: 1 }) };
+const mockOrder = {
+  createMany: jest.fn().mockResolvedValue({ count: 1 }),
+  findMany: jest.fn().mockResolvedValue([]),
+};
 const mockIntegration = { findMany: jest.fn() };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
+const mockGeocodingService = { enqueueGeocode: jest.fn().mockResolvedValue(undefined) };
 
 const VALID_CONFIG = {
   server_url: 'http://iiko-server:8080',
@@ -35,6 +40,7 @@ describe('IikoService', () => {
       providers: [
         IikoService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: GeocodingService, useValue: mockGeocodingService },
       ],
     }).compile();
     service = module.get<IikoService>(IikoService);
@@ -199,6 +205,72 @@ describe('IikoService', () => {
         .mockResolvedValueOnce(makeResponse(200, { deliveryOrders: [] }));
 
       await expect(service.pollAll()).resolves.not.toThrow();
+    });
+  });
+
+  // ── Geocoding integration ──────────────────────────────────────────────────
+
+  describe('geocoding', () => {
+    it('does NOT query for geocoding when no orders need it', async () => {
+      mockFetch
+        .mockReset()
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(
+          makeResponse(200, {
+            deliveryOrders: [
+              { id: 'iiko-with-coords', address: 'вул. Тестова 1', latitude: 50.0, longitude: 30.0 },
+            ],
+          }),
+        );
+
+      await service.pollEstablishment(EST_ID, VALID_CONFIG);
+
+      expect(mockOrder.findMany).not.toHaveBeenCalled();
+      expect(mockGeocodingService.enqueueGeocode).not.toHaveBeenCalled();
+    });
+
+    it('enqueues geocoding for orders without coordinates', async () => {
+      mockFetch
+        .mockReset()
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(
+          makeResponse(200, {
+            deliveryOrders: [
+              { id: 'iiko-no-coords', address: 'вул. Хрещатик 10' },
+            ],
+          }),
+        );
+      mockOrder.findMany.mockResolvedValue([{ id: 'db-order-id', address: 'вул. Хрещатик 10' }]);
+
+      await service.pollEstablishment(EST_ID, VALID_CONFIG);
+
+      expect(mockOrder.findMany).toHaveBeenCalledWith({
+        where: {
+          establishment_id: EST_ID,
+          external_id: { in: ['iiko-no-coords'] },
+          lat: null,
+        },
+        select: { id: true, address: true },
+      });
+      expect(mockGeocodingService.enqueueGeocode).toHaveBeenCalledWith(
+        'db-order-id',
+        'вул. Хрещатик 10',
+      );
+    });
+
+    it('does NOT enqueue geocoding when address is "Unknown"', async () => {
+      mockFetch
+        .mockReset()
+        .mockResolvedValueOnce(makeResponse(200))
+        .mockResolvedValueOnce(
+          makeResponse(200, {
+            deliveryOrders: [{ id: 'iiko-unknown', address: undefined }],
+          }),
+        );
+
+      await service.pollEstablishment(EST_ID, VALID_CONFIG);
+
+      expect(mockGeocodingService.enqueueGeocode).not.toHaveBeenCalled();
     });
   });
 });

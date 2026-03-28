@@ -1,0 +1,47 @@
+import { Logger, Inject } from '@nestjs/common';
+import { Processor, Process } from '@nestjs/bull';
+import type { Job } from 'bull';
+import type Redis from 'ioredis';
+import { PrismaService } from '../../prisma/prisma.service.js';
+import { GeocodingService, GeocodeJob } from '../geocoding.service.js';
+import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from '../geocoding.constants.js';
+
+export const GEOCODING_DONE_CHANNEL = 'geocoding:done';
+
+export interface GeocodingDonePayload {
+  orderId: string;
+  lat: number;
+  lng: number;
+}
+
+@Processor(GEOCODING_QUEUE)
+export class GeocodingProcessor {
+  private readonly logger = new Logger(GeocodingProcessor.name);
+
+  constructor(
+    private readonly geocodingService: GeocodingService,
+    private readonly prisma: PrismaService,
+    @Inject(GEOCODING_REDIS_CLIENT) private readonly redis: Redis,
+  ) {}
+
+  @Process()
+  async handle(job: Job<GeocodeJob>): Promise<void> {
+    const { orderId, address } = job.data;
+
+    const coords = await this.geocodingService.geocode(address);
+    if (!coords) {
+      this.logger.warn(`Geocoding returned null for order ${orderId}, address: "${address}"`);
+      return; // order stays with lat=null; no Redis event
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { lat: coords.lat, lng: coords.lng },
+    });
+
+    const payload: GeocodingDonePayload = { orderId, lat: coords.lat, lng: coords.lng };
+    await this.redis.publish(GEOCODING_DONE_CHANNEL, JSON.stringify(payload));
+
+    this.logger.log(`Geocoded order ${orderId}: ${coords.lat},${coords.lng}`);
+  }
+}

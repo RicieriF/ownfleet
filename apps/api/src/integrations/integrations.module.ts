@@ -6,9 +6,10 @@ import { IntegrationsController } from './integrations.controller.js';
 import { IntegrationsService } from './integrations.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { EstablishmentsModule } from '../establishments/establishments.module.js';
+import { GeocodingModule } from '../geocoding/geocoding.module.js';
 
 @Module({
-  imports: [PrismaModule, EstablishmentsModule],
+  imports: [PrismaModule, EstablishmentsModule, GeocodingModule],
   controllers: [PosterController, IntegrationsController],
   providers: [PosterService, IikoService, IntegrationsService],
 })

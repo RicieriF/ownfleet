@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { GeocodingService } from '../geocoding/geocoding.service.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
 
 const POLL_INTERVAL_CRON = '*/2 * * * *'; // every 2 minutes
@@ -27,7 +28,10 @@ export class IikoService {
   // In-memory backoff state per establishment — reset on restart (acceptable for 2-min cron)
   private readonly backoff = new Map<string, BackoffState>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly geocodingService: GeocodingService,
+  ) {}
 
   @Cron(POLL_INTERVAL_CRON, { name: 'iiko-poll', timeZone: 'UTC' })
   async pollAll(): Promise<void> {
@@ -86,6 +90,24 @@ export class IikoService {
 
         if (result.count > 0) {
           this.logger.log(`[iiko:${establishmentId}] ingested ${result.count} new orders`);
+        }
+
+        // Enqueue geocoding for orders that have no coordinates in the iiko payload
+        const needsGeocode = orders.filter(
+          (o) => !o.latitude && !o.longitude && o.address && o.address !== 'Unknown',
+        );
+        if (needsGeocode.length > 0) {
+          const forGeocode = await this.prisma.order.findMany({
+            where: {
+              establishment_id: establishmentId,
+              external_id: { in: needsGeocode.map((o) => o.id) },
+              lat: null,
+            },
+            select: { id: true, address: true },
+          });
+          for (const order of forGeocode) {
+            void this.geocodingService.enqueueGeocode(order.id, order.address);
+          }
         }
       }
     } catch (err: unknown) {
