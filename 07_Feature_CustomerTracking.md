@@ -733,20 +733,32 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## План реалізації
 
-### Фаза 0 — GeocodingModule доповнення (блокер для PublicTrackingModule)
+### Фаза 0 — GeocodingModule (передумова для Phase 1)
 
-**GeocodingModule вже реалізований** (`✅` в CLAUDE.md). Фаза 0 додає тільки:
-1. Після успішного `UPDATE orders SET lat,lng`: `redis.publish('geocoding:done', JSON.stringify({ orderId, lat, lng }))` — в `GeocodingService`
-2. `PublicTrackingModule` підписується на `geocoding:done` при старті → емітить `order:coords_ready` в WS кімнату `order:{orderId}:public`
-3. Тест: Nominatim success → `geocoding:done` опубліковано → підписник отримав → WS event емітовано
+**GeocodingModule в коді відсутній** — незважаючи на `✅` в CLAUDE.md. `PosterService` зберігає `lat/lng` напряму з webhook payload; якщо координат немає — вони залишаються `null` назавжди. Nominatim не викликається. Це технічний борг `IntegrationsModule`, не пов'язаний з CustomerTracking — але CustomerTracking залежить від нього.
 
-Без цього: клієнт, що відкрив трекер до завершення геокодування (cache miss), ніколи не побачить карту.
+**Повна реалізація GeocodingModule:**
+1. `GeocodingService` — виклик Nominatim API для geocoding адреси, timeout 2с (замовлення зберігається без блокування якщо Nominatim не відповів)
+2. Redis cache з TTL 30 днів — однакові адреси не йдуть в Nominatim двічі
+3. Bull queue з rate limit 1 req/s — Nominatim публічний, не перевантажуємо
+4. Інтеграція в `PosterService` і `iiko`: якщо координати вже є в payload — Nominatim не викликається; якщо немає — ставимо job в чергу
+5. Після успішного `UPDATE orders SET lat,lng` в `GeocodingService`: `redis.publish('geocoding:done', JSON.stringify({ orderId, lat, lng }))`
+6. `PublicTrackingModule` підписується на `geocoding:done` → емітить `order:coords_ready` в `order:{orderId}:public`
+7. Тест: Nominatim success → `geocoding:done` опубліковано → WS event емітовано; Nominatim timeout → замовлення збережено без координат, WS event не емітується
+
+Без цього: замовлення без координат у payload назавжди залишаться без карти навіть якщо адреса є.
 
 ### Фаза 1 — Бекенд
+0. **Shared `RedisModule`** (`apps/api/src/shared/redis/`) — `@Global()` модуль, експортує `REDIS_CLIENT` (один publisher IORedis для всіх модулів) і `RedisSubscriberFactory` (factory що створює окремий IORedis client на кожну підписку — IORedis вимагає окреме з'єднання на subscriber). `TrackingModule` мігрується одночасно: видалити локальні Redis провайдери, підключити `RedisModule`. Всі наступні модулі (GeocodingModule, PublicTrackingModule, OrdersModule) використовують той самий `@InjectRedis()` / `factory.createSubscriber()` патерн.
 1. Міграція: `establishments.hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`, `ON DELETE CASCADE`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`, `UNIQUE(key_prefix)`) таблиці + `CREATE INDEX idx_deliveries_status ON deliveries(status)` (потрібен для ETA cron і OrdersModule dispatch)
 2. `ApiKeysModule` — авто-генерація ключа при збереженні сайту (HMAC-SHA256 key_hash, env: `API_KEY_SECRET`); toggle is_active; `allowed_domains` заповнюється автоматично з поля "Адреса сайту" в /settings; **авто-www**: при збереженні домену `pizza.com` → `['pizza.com', 'www.pizza.com']`
-3. `PublicTrackingModule` — endpoints + багаторівневий rate limiting (per-IP + per-key + per-token)
-4. Domain restriction middleware: перевірка `Origin` header проти `allowed_domains`
+3. `PublicTrackingModule` — endpoints з `ApiKeyGuard` що виконує весь validation pipeline в одному місці:
+   - Витягує `key` з query → знаходить запис по `key_prefix` (перші 8 символів) → `timingSafeEqual` HMAC перевірка
+   - Перевіряє `is_active = true`
+   - Перевіряє `Origin` header проти `allowed_domains`
+   - Throttle унікальних `external_id`: `SADD throttle:api:{keyPrefix}:{minuteBucket} {externalId}` → `SCARD > 10` → 429; `EXPIRE 120s`. Рахує саме унікальні order_ids — 15 retries одного замовлення = 1, не 15.
+   - Декорує request об'єктом `apiKey` для подальшого використання в handler
+   > Всі ці перевірки — одна відповідальність (хто і звідки запитує). Розділяти їх по різних guards/middlewares — зайве.
 5. Лінива генерація токена: два флоу — від віджету (публічний endpoint: scope `WHERE external_id AND establishment_id`) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують catch P2002 + findUnique паттерн
 6. Публічний WebSocket namespace `/public`
 7. TrackingModule: SET `courier:active_order:{courier_id}` при delivery assign; DEL при complete/failed/cancelled/reassign; Haversine route deviation detection з **`route:recalc_cooldown:{delivery_id}` TTL=60s** (обмеження OSRM до 1 виклику/хв на доставку); публікація в Redis pub/sub
@@ -755,7 +767,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 10. RetentionModule: cron для очищення `tracking_tokens` де `expires_at < NOW()` (простий DELETE, без JOIN)
 
 ### Фаза 2 — Embed сторінка
-1. `/embed/track/[token]` — Next.js route
+1. `/embed/track/[token]` — Next.js route, поза `(dashboard)` route group, власний `layout.tsx` без dark theme
 2. **6 станів UI** (State 0–5) + TOKEN_EXPIRED state + loading skeleton
 3. Leaflet карта + анімований маркер курʼєра (тільки State 2 з coords)
 4. OSRM маршрут курʼєр → клієнт
@@ -763,9 +775,23 @@ Referrer-Policy: strict-origin-when-cross-origin
 6. WebSocket підключення для real-time + reconnect → snapshot
 7. Show/Minimize toggle + sessionStorage persist
 8. Standalone режим (hosted page) vs iframe режим
+9. **i18n — власний `t()` без бібліотек** (`apps/web/src/embed/i18n/translations.ts`):
+   ```typescript
+   export const messages = {
+     uk: { waiting: 'Підбираємо курʼєра...', delivered: 'Доставлено!', ... },
+     en: { waiting: 'Finding courier...', delivered: 'Delivered!', ... },
+   } satisfies Record<Locale, Messages>;
+   export type Locale = keyof typeof messages;
+   export const t = (key: keyof Messages, locale: Locale) => messages[locale][key];
+   ```
+   `satisfies` гарантує що всі ключі перекладені в обох мовах — TypeScript помилка при compile якщо щось пропущено. Бібліотека не потрібна: embed має ~25 рядків UI, locale приходить з API response а не з URL. `next-intl` / `react-i18next` вирішують іншу задачу (URL routing) і додають зайві кілобайти в бандл.
 
 ### Фаза 3 — tracker.js + hosted page + дашборд
-1. `tracker.js` loader — vanilla JS, без залежностей; включаючи retry логіку (2с × 15 спроб = 30с)
+1. `tracker.js` loader — **TypeScript + esbuild**, вихідний файл `apps/web/src/tracker/index.ts`; build командою:
+   ```
+   esbuild src/tracker/index.ts --bundle --minify --target=es2017 --outfile=public/tracker.js
+   ```
+   Додати в `package.json`: `"build": "npm run build:tracker && next build"`. esbuild вже є в node_modules через Next.js — окрема залежність не потрібна. Target `es2017` покриває 98%+ реальних браузерів. TypeScript strict mode — як весь проект. Включаючи retry логіку (2с × 15 спроб = 30с).
 2. Iframe оверлей логіка (show/minimize)
 3. Hosted page: `/embed/track/[token]` в standalone режимі + `/t/[token]` redirect (short URL) — реалізується як Next.js route handler `apps/web/app/t/[token]/route.ts` → `redirect('/embed/track/${token}', 301)`
 4. Секція в /settings — завжди видима: генерація API ключа + copy-paste код + пояснювальна фраза про hosted page (умовна: тільки якщо `hosted_tracking_enabled = true`)
