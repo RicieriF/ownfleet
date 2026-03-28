@@ -117,7 +117,22 @@ tracking_tokens (
 -- Виняток із правила multi-tenancy — токен сам є ключем ізоляції (122 bits entropy).
 ```
 
-Токен створюється **ліниво** — при першому запиті від віджету (`GET /api/v1/public/order/:externalId/token`). Якщо токен для цього замовлення вже існує — повертається існуючий. `UNIQUE(order_id)` гарантує ідемпотентність навіть при паралельних запитах через `INSERT ... ON CONFLICT (order_id) DO NOTHING`. Прив'язаний до `order_id`, а не до `delivery_id`, бо доставка ще може не існувати в момент першого запиту. Термін дії — `NOW() + 4 години` від моменту створення.
+Токен створюється **ліниво** — при першому запиті від віджету (`GET /api/v1/public/order/:externalId/token`). Якщо токен для цього замовлення вже існує — повертається існуючий. `UNIQUE(order_id)` гарантує ідемпотентність навіть при паралельних запитах.
+
+**Ідемпотентна реалізація (Prisma):**
+```typescript
+try {
+  return await prisma.trackingToken.create({ data: { order_id, token, expires_at } });
+} catch (e) {
+  if (e.code === 'P2002') { // UNIQUE conflict
+    return prisma.trackingToken.findUnique({ where: { order_id } });
+  }
+  throw e;
+}
+```
+`INSERT ... ON CONFLICT DO NOTHING RETURNING` повертає порожній рядок при конфлікті в Postgres — НЕ використовувати напряму.
+
+Прив'язаний до `order_id`, а не до `delivery_id`, бо доставка ще може не існувати в момент першого запиту. Термін дії — `NOW() + 4 години` від моменту створення.
 
 ### Нова таблиця: api_keys
 
@@ -125,8 +140,13 @@ tracking_tokens (
 api_keys (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   establishment_id  UUID NOT NULL REFERENCES establishments(id),
-  key_hash          TEXT NOT NULL,           -- bcrypt hash повного ключа
-  key_prefix        TEXT NOT NULL,           -- перші 8 символів для відображення в UI
+  key_hash          TEXT NOT NULL,           -- HMAC-SHA256(key, API_KEY_SECRET) — НЕ bcrypt
+                                             -- bcrypt занадто повільний (~100ms) для API ключів, призначений для паролів.
+                                             -- HMAC-SHA256 — стандарт індустрії (Stripe, Google, Twilio).
+                                             -- Перевірка: crypto.timingSafeEqual(hmac(input, secret), stored_hash)
+                                             -- API_KEY_SECRET — env variable, rotate 90 days
+  key_prefix        TEXT NOT NULL UNIQUE,    -- перші 8 символів для швидкого lookup без full scan
+                                             -- UNIQUE гарантує: findFirst по prefix = завжди один рядок
   name              TEXT NOT NULL,           -- "Основний сайт", "Мобільний додаток"
   is_active         BOOLEAN NOT NULL DEFAULT TRUE,
   allowed_domains   TEXT[] NOT NULL DEFAULT '{}',
@@ -184,7 +204,7 @@ POST /api/v1/orders/:id/tracking-token
 Відповідь: `{ url: "https://weego.app/t/TOKEN" }` — готове посилання для клієнта.
 Ця URL копіюється в буфер при натисканні кнопки "Копіювати посилання клієнту" в дашборді.
 
-Реалізація ідентична токенам від віджету: `INSERT ... ON CONFLICT (order_id) DO NOTHING`.
+Реалізація ідентична токенам від віджету: catch P2002 + findUnique (описано вище).
 Одна таблиця `tracking_tokens`, той самий `expires_at = NOW() + 4h`, та сама `/embed/track/TOKEN` сторінка.
 
 ### PublicTrackingModule (NestJS)
@@ -248,8 +268,8 @@ Read-only. Клієнт підписується тільки на свою до
   routeGeometry: GeoJSON | null,
   //   OSRM маршрут від ПОТОЧНОЇ позиції курʼєра (з Redis) до orderLat/orderLng.
   //   null якщо: delivery не в in_progress, немає GPS пінгів, або orderLat/orderLng=null.
-  //   Кешується в Redis: ключ `route:{delivery_id}`, TTL 10с.
-  //   Перераховується через OSRM при кожному запиті якщо кеш протух.
+  //   null якщо OSRM timeout (2с) — graceful degradation, НЕ 500.
+  //   Кешується в Redis: ключ `route:{delivery_id}`, TTL 60с (не 10с — snapshot рідкий, потрібен довший кеш).
   //   Через WS оновлюється подією delivery:route тільки коли курʼєр відхилився >50м від попереднього маршруту.
 
   slaDeadline: string | null,
@@ -269,11 +289,13 @@ Read-only. Клієнт підписується тільки на свою до
 
 **Валідація API ключа (endpoint `/api/v1/public/order/:externalId/token`):**
 1. Отримати `key` з query string
-2. За `key_prefix` (перші 8 символів) знайти запис у `api_keys` — уникаємо повного скану таблиці
-3. `bcrypt.compare(key, key_hash)` — перевірка хешу
+2. За `key_prefix` (перші 8 символів) знайти запис у `api_keys` — `UNIQUE(key_prefix)` гарантує один рядок
+3. `crypto.timingSafeEqual(hmac(key, API_KEY_SECRET), stored_hash)` — HMAC-SHA256, мікросекунди (НЕ bcrypt)
 4. Перевірити `is_active = true`
 5. Перевірити `Origin` header запиту проти `allowed_domains` — якщо немає збігу → `403 Forbidden`
-6. Оновити `last_used_at` і `last_used_domain` (fire-and-forget, без блокування відповіді)
+6. **Scope запиту:** пошук замовлення `WHERE external_id = :id AND establishment_id = api_key.establishment_id`
+   — critical: external_id унікальний тільки в межах establishment, без цього scope — витік між тенантами
+7. Оновити `last_used_at` і `last_used_domain` (fire-and-forget, без блокування відповіді)
 
 **Rate limiting (багаторівневий):**
 - **60 req/хв на IP** — захист від простих ботів і DDoS
@@ -305,15 +327,35 @@ io('/public', { auth: { token: 'TRACKING_TOKEN' } })
 
 `courier:location` і `delivery:route` — розділені навмисно: location пушиться на кожен пінг (легкий), route перераховується через OSRM тільки при значному відхиленні (важкий). Клієнт оновлює маркер на кожен location, але не перемальовує маршрут.
 
-**TrackingModule** при кожному GPS пінгу публікує в Redis канал `order:{order_id}:public` → PublicTrackingModule пушить `courier:location`. Раз на 60с (окремий Redis timer) пушить `delivery:eta`. При значному зсуві маршруту — пушить `delivery:route`.
+**TrackingModule** при кожному GPS пінгу:
+1. Читає Redis key `courier:active_order:{courier_id}` → отримує `order_id` (O(1), мікросекунди)
+2. Якщо ключ відсутній (TTL протух або delivery завершена) → пропускає WS публікацію, `Logger.warn` — НЕ ламає пінг
+3. Публікує в Redis канал `order:{order_id}:public` → PublicTrackingModule пушить `courier:location`
+4. Обчислює Haversine відстань між поточною позицією та `route:origin:{delivery_id}` (Redis)
+5. Якщо відхилення >50м → OSRM перерахунок → пушить `delivery:route` → оновлює `route:origin:{delivery_id}`
+
+**Lifecycle Redis keys (критично):**
+- `courier:active_order:{courier_id}` — SET при delivery assign (TTL=8год як safety net), DEL при: complete, failed, cancelled, reassign
+- `route:origin:{delivery_id}` — SET при першому OSRM розрахунку, DEL при delivery complete/failed/cancelled
+- `route:{delivery_id}` — TTL 60с (автоматично протухає), DEL при delivery complete як cleanup
+
+**ETA push:** PublicTrackingModule (або EtaModule) містить `@Cron('*/60 * * * * *')` — раз на 60с шукає всі deliveries з status `in_progress`, пушить `delivery:eta` у відповідні WS кімнати. **НЕ** в RetentionModule (RetentionModule — cleanup, не real-time events).
+
+**Міжмодульна комунікація (GeocodingModule → WS):**
+- `GeocodingService` після успішного `UPDATE orders SET lat,lng` публікує: `redis.publish('geocoding:done', { orderId, lat, lng })`
+- `PublicTrackingModule` підписується на `geocoding:done` → `server.to('order:${orderId}:public').emit('order:coords_ready', { lat, lng })`
+- Модулі не імпортують один одного — тільки через Redis pub/sub (відповідно до архітектурного правила)
 
 **Lifecycle WS при завершенні доставки:**
 1. OrdersModule змінює `delivery.status → completed`
-2. Публікує в Redis `delivery:{id}:public` подію `delivery:status`
-3. PublicTrackingModule пушить клієнту `delivery:status { deliveryStatus: 'completed' }`
-4. Клієнт показує "Доставлено!" екран
-5. Через 15 хвилин після `delivery.completed_at` → сервер надсилає `error: TOKEN_EXPIRED` і розриває WS (`socket.disconnect(true)`). Таймер реалізується як Bull delayed job (`queue.add({ orderId }, { delay: 15 * 60 * 1000 })`) — переживає рестарт сервера, гарантовано спрацює
-6. Snapshot endpoint `GET /api/v1/public/track/:token` повертає 404 через 15 хвилин після `delivery.completed_at` — незалежно від `token.expires_at`
+2. В **тій самій транзакції**: `UPDATE tracking_tokens SET expires_at = NOW() + INTERVAL '15 minutes' WHERE order_id = :orderId`
+   — токен закінчується рівно через 15хв з моменту completion. Snapshot і retention тепер перевіряють тільки `expires_at < NOW()` — ніяких JOIN з deliveries.
+3. Публікує в Redis `delivery:{id}:public` подію `delivery:status`
+4. PublicTrackingModule пушить клієнту `delivery:status { deliveryStatus: 'completed' }`
+5. Клієнт показує "Доставлено!" екран
+6. OrdersModule schedules Bull delayed job: `queue.add({ orderId, action: 'disconnect_ws' }, { delay: 15 * 60 * 1000 })` — переживає рестарт сервера (Redis-backed)
+7. Bull job спрацьовує: `server.to('order:${orderId}:public').emit('error', { type: 'TOKEN_EXPIRED' })` → `socket.disconnect(true)`. DEL Redis keys: `courier:active_order`, `route:origin:{delivery_id}`, `route:{delivery_id}`
+8. Snapshot `GET /api/v1/public/track/:token` повертає 404 як тільки `expires_at < NOW()` — без додаткових JOIN
 
 **Reconnection — поведінка tracker.js при розриві зʼєднання:**
 
@@ -338,7 +380,7 @@ socket.on('connect', () => {
 
 Next.js route, рендериться всередині iframe. Мобайл-фьорст.
 
-**Мова інтерфейсу:** відповідає мові дашборду закладу (`establishments.settings.locale`). Поточно підтримується: українська (default), польська, російська — відповідно до `ALLOWED_TIMEZONES` логіки. Всі рядки UI embed-сторінки мають бути i18n-ready з першого дня (навіть якщо зараз тільки одна мова) — це виключає дорогий рефакторинг при додаванні наступної.
+**Мова інтерфейсу:** відповідає мові дашборду закладу (`establishments.settings.locale`). Поточно підтримується: українська (default), польська, англійська — відповідно до `ALLOWED_TIMEZONES` логіки. Всі рядки UI embed-сторінки мають бути i18n-ready з першого дня (навіть якщо зараз тільки одна мова) — це виключає дорогий рефакторинг при додаванні наступної.
 
 **Дизайн: світла тема** — окрема від темного дашборду менеджера. Embed відображається на сайтах ресторанів (здебільшого світлі) і бачиться клієнтами закладу, а не менеджерами. Білий фон, нейтральні кольори, наш sage акцент (`#3d7a5a`) для інтерактивних елементів.
 
@@ -366,11 +408,11 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 │  Ваше замовлення збирається.     │
 │  Курʼєр: Іван                   │
 │                                  │
-│  [карта з маркером закладу]      │
-│                                  │
 │  ⏳ Очікуємо виїзду курʼєра...   │
 └─────────────────────────────────┘
 ```
+
+Карта **не показується** в State 1 — курʼєр ще не виїхав, GPS координат немає, показувати лише маркер закладу без маршруту заплутало б клієнта. Карта з'являється тільки в State 2 (in_progress).
 
 ### Стан 2 — курʼєр виїхав (delivery: in_progress)
 
@@ -455,6 +497,10 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
   - State 2: `🛵 Іван · ~12 хв`
   - State 3: `✅ Доставлено!`
 - Кнопка ˄/˅ в кутку віджета для перемикання між режимами
+- State 4 (cancelled) мінімізований: `❌ Замовлення скасовано`
+- State 5 (failed) мінімізований: `⚠️ Не вдалось доставити`
+- **TOKEN_EXPIRED state:** після disconnect (`TOKEN_EXPIRED` WS event або snapshot 404) — статичний рядок без кнопок, без WS: `⏱ Трекінг завершено`. Мінімізований вигляд такий самий.
+- **Show/Minimize persistence:** стан зберігається в `sessionStorage` — зберігається при navigate в межах тієї ж вкладки, скидається при закритті вкладки (наступного разу клієнт знову бачить повний віджет).
 
 **UX деталі:**
 - Маркер курʼєра анімується при зміні позиції (плавне переміщення)
@@ -501,7 +547,7 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 
 **Сторінка /settings — секція "Tracking Widget":**
 
-Менеджер бачить мінімум — один екран, три дії:
+Менеджер бачить мінімум — один екран, дві дії (ввести сайт + скопіювати код):
 
 ```
 ┌─ Трекінг для клієнтів ─────────────────────────────┐
@@ -511,6 +557,7 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 │                                                      │
 │  Адреса вашого сайту                                │
 │  [ pizza-vezuviy.com.ua              ]              │
+│  Збережено ✓          ← зʼявляється на 2с після blur │
 │                                                      │
 │  Код для вашого розробника           [Копіювати 📋]  │
 │  ┌──────────────────────────────────────────────┐   │
@@ -518,6 +565,8 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 │  │   ?key=wg_xxxxxxxx" async></script>          │   │
 │  │ <script>Weego.track('ORDER_ID')</script>     │   │
 │  └──────────────────────────────────────────────┘   │
+│  Остання активність: сьогодні о 14:23               │  ← дрібний сірий текст
+│  (або: "Ще не використовувався" якщо last_used_at=null) │
 │                                                      │
 │  ─ ─ ─ якщо hosted_tracking_enabled = true ─ ─ ─   │
 │  Немає сайту? Копіюйте посилання для кожного         │
@@ -526,27 +575,31 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 │  Telegram-сповіщення при призначенні курʼєра         │
 │  Надсилати посилання в Telegram автоматично  [●]    │
 │  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-│                                                      │
-│                              [Вимкнути віджет]       │
 └──────────────────────────────────────────────────────┘
 ```
 
 **Логіка UI:**
-- Менеджер вводить адресу сайту один раз → система автоматично заповнює `allowed_domains`
+- Менеджер вводить адресу сайту один раз → **auto-save on blur** → з'являється код + toast "Збережено ✓" на 2 секунди. Жодної кнопки "Зберегти" — одне поле = одна дія.
+- **Авто-www:** при збереженні сервер автоматично додає обидва варіанти: `pizza-vezuviy.com.ua` → `['pizza-vezuviy.com.ua', 'www.pizza-vezuviy.com.ua']`. Менеджер не знає що таке Origin header — не треба щоб знав.
+- Якщо домен невалідний (не схожий на URL) → inline error під полем: "Перевірте адресу сайту". Код не з'являється.
 - API ключ генерується автоматично при першому збереженні сайту — менеджер його не бачить окремо, він вже вшитий у готовий код
+- **Copy feedback:** кнопка "Копіювати 📋" при кліку змінює текст на "Скопійовано ✓" на 2 секунди, повертається до "Копіювати 📋". Стосується як кнопки embed-коду, так і кнопки "Посилання клієнту" в таблиці доставок.
+- **Остання активність:** під блоком коду — дрібний сірий текст з `api_keys.last_used_at` у форматі "сьогодні о 14:23" / "вчора о 09:15" / "Ще не використовувався". Менеджер без дзвінків у підтримку розуміє що трекінг працює.
 - Копіює код → дає розробнику сайту → більше нічого не потрібно
 - "Надсилати посилання в Telegram" — зберігається в `establishments.settings.tracking_telegram_notify` (boolean, default `false`). Тогл видимий тільки якщо `hosted_tracking_enabled = true`
-- "Вимкнути" — soft disable (`is_active = false`); ключ і налаштування зберігаються. Вже активні tracking sessions не переривається
+- **Кнопки "Вимкнути" немає.** Менеджер не може вимкнути трекінговий віджет — він завжди активний. Це захист від ненавмисного відключення фічі платформи. Керування `is_active` (екстрені випадки) — виключно через super admin panel.
 
 **Головна сторінка `/` — таблиця активних доставок:**
 
-Коли `hosted_tracking_enabled = true` і delivery в статусі `in_progress` — у рядку доставки з'являється кнопка:
+Коли `hosted_tracking_enabled = true` і delivery в статусі `assigned` або `in_progress` — у рядку доставки з'являється кнопка:
 
 ```
 [📋 Посилання клієнту]
 ```
 
 Тап → копіює `https://weego.app/t/TOKEN` в буфер. Менеджер пересилає клієнту у Telegram/Viber/SMS. Токен генерується ліниво при першому натисканні.
+
+Кнопка активна з моменту `assigned` (не тільки `in_progress`) — менеджер може одразу поділитись посиланням після призначення курʼєра. Клієнт побачить State 1 ("Ваше замовлення збирається") — вже корисна інформація.
 
 Для закладів без сайту — це єдиний спосіб ділитись трекінгом. Для закладів з віджетом — додатковий канал (наприклад, для замовлень по телефону).
 
@@ -570,7 +623,7 @@ API ключ — **публічний за дизайном**, як Stripe publi
 **Рівень 2 — Tracking token як ізоляція:**
 Навіть знаючи API ключ і `external_id` замовлення — зловмисник отримає tracking token прив'язаний тільки до цього одного замовлення. UUID v4 (122 bits entropy) — перебір нереальний.
 
-**Рівень 4 — Захист від перебору `external_id`:**
+**Рівень 3 — Захист від перебору `external_id`:**
 
 Poster і iiko використовують **послідовні числові** номери замовлень (`external_id`: 1001, 1002, 1003...). Теоретично зловмисник з валідним API ключем може перебирати їх і отримувати tracking tokens для всіх замовлень закладу.
 
@@ -583,7 +636,7 @@ Poster і iiko використовують **послідовні числов�
 
 Прийнята залишкова ризик: зловмисник з терпінням може повільно перебирати (1 запит на 6 сек, 10/хв) і знаходити активні замовлення. Але отримані дані (позиція курʼєра) мають TTL доставки і не несуть критичної цінності.
 
-**Рівень 3 — Багаторівневий rate limit:**
+**Рівень 4 — Багаторівневий rate limit:**
 - 60 req/хв на IP (базовий захист від ботів)
 - 300 req/хв на API ключ (захист від зловживання конкретним ключем)
 - 10 req/хв на tracking token (захист від скрейпінгу)
@@ -592,13 +645,14 @@ Poster і iiko використовують **послідовні числов�
 
 ```
 Токен створено: expires_at = created_at + 4h
-Доставка завершена: delivery.completed_at встановлено
+Доставка завершена: expires_at SET TO NOW() + 15min (в тій самій DB транзакції)
 
-Ефективний TTL = min(token.expires_at, delivery.completed_at + 15min)
+Ефективний TTL = expires_at (вже враховує completion + 15min — ніякого JOIN потрібно)
 
 Через 15 хв після completed_at:
-  → GET /api/v1/public/track/:token → 404
-  → WS: сервер надсилає { error: 'TOKEN_EXPIRED' } → socket.disconnect(true)
+  → Bull job: emit TOKEN_EXPIRED → socket.disconnect(true)
+  → GET /api/v1/public/track/:token → 404 (expires_at < NOW())
+  → Retention cron: DELETE FROM tracking_tokens WHERE expires_at < NOW()
 ```
 
 15 хвилин після завершення — достатньо щоб клієнт побачив "Доставлено!" і закрив вікно.
@@ -646,22 +700,26 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## План реалізації
 
-### Фаза 0 — GeocodingModule (блокер, робиться першим)
-1. `GeocodingModule` — `GeocodingService` з Nominatim + Redis кеш + Bull черга
-2. Інтеграція в `IntegrationsModule` — geocode при обробці Poster і iiko webhook
-3. Міграція-скрипт для геокодування існуючих `orders` з `lat = null`
-4. Тести: geocode успішно → координати збережені; Nominatim timeout → null, без блокування; кеш hit → Nominatim не викликається
+### Фаза 0 — GeocodingModule доповнення (блокер для PublicTrackingModule)
+
+**GeocodingModule вже реалізований** (`✅` в CLAUDE.md). Фаза 0 додає тільки:
+1. Після успішного `UPDATE orders SET lat,lng`: `redis.publish('geocoding:done', JSON.stringify({ orderId, lat, lng }))` — в `GeocodingService`
+2. `PublicTrackingModule` підписується на `geocoding:done` при старті → емітить `order:coords_ready` в WS кімнату `order:{orderId}:public`
+3. Тест: Nominatim success → `geocoding:done` опубліковано → підписник отримав → WS event емітовано
+
+Без цього: клієнт, що відкрив трекер до завершення геокодування (cache miss), ніколи не побачить карту.
 
 ### Фаза 1 — Бекенд
-1. Міграція: `establishments.hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`) таблиці
-2. `ApiKeysModule` — авто-генерація ключа при збереженні сайту; toggle is_active; `allowed_domains` заповнюється автоматично з поля "Адреса сайту" в /settings
+1. Міграція: `establishments.hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE` + `tracking_tokens` (з `UNIQUE(order_id)`) + `api_keys` (з `is_active`, `allowed_domains`, `last_used_domain`, `UNIQUE(key_prefix)`) таблиці
+2. `ApiKeysModule` — авто-генерація ключа при збереженні сайту (HMAC-SHA256 key_hash, env: `API_KEY_SECRET`); toggle is_active; `allowed_domains` заповнюється автоматично з поля "Адреса сайту" в /settings
 3. `PublicTrackingModule` — endpoints + багаторівневий rate limiting (per-IP + per-key + per-token)
 4. Domain restriction middleware: перевірка `Origin` header проти `allowed_domains`
-5. Лінива генерація токена: два флоу — від віджету (публічний endpoint з API ключем) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують `INSERT ... ON CONFLICT (order_id) DO NOTHING` в одну таблицю
+5. Лінива генерація токена: два флоу — від віджету (публічний endpoint: scope `WHERE external_id AND establishment_id`) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують catch P2002 + findUnique паттерн
 6. Публічний WebSocket namespace `/public`
-7. TrackingModule: публікація GPS пінгів в `delivery:{id}:public` Redis канал
-8. WS lifecycle: disconnect через 15 хв після `delivery.completed_at`
-9. RetentionModule: cron для очищення `tracking_tokens` де `min(expires_at, completed_at + 15min) < NOW()`
+7. TrackingModule: SET `courier:active_order:{courier_id}` при delivery assign; DEL при complete/failed/cancelled/reassign; Haversine route deviation detection; публікація в Redis pub/sub
+8. EtaModule або PublicTrackingModule: `@Cron('*/60 * * * * *')` для `delivery:eta` push (НЕ RetentionModule)
+9. WS lifecycle: Bull delayed job при delivery completion — оновлює `expires_at = NOW() + 15min` (в тій самій транзакції), DEL Redis keys, disconnect через 15хв
+10. RetentionModule: cron для очищення `tracking_tokens` де `expires_at < NOW()` (простий DELETE, без JOIN)
 
 ### Фаза 2 — Embed сторінка
 1. `/embed/track/[token]` — Next.js route
@@ -674,14 +732,18 @@ Referrer-Policy: strict-origin-when-cross-origin
 ### Фаза 3 — tracker.js + hosted page + дашборд
 1. `tracker.js` loader — vanilla JS, без залежностей; включаючи retry логіку (2с × 15 спроб = 30с)
 2. Iframe оверлей логіка (show/minimize)
-3. Hosted page: `/embed/track/[token]` в standalone режимі + `/t/[token]` redirect (short URL)
+3. Hosted page: `/embed/track/[token]` в standalone режимі + `/t/[token]` redirect (short URL) — реалізується як Next.js route handler `apps/web/app/t/[token]/route.ts` → `redirect('/embed/track/${token}', 301)`
 4. Секція в /settings — завжди видима: генерація API ключа + copy-paste код + пояснювальна фраза про hosted page (умовна: тільки якщо `hosted_tracking_enabled = true`)
 5. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок — умовна (тільки якщо `hosted_tracking_enabled = true` і delivery `in_progress`)
 6. Super admin panel: тогл `hosted_tracking_enabled` per-establishment
 7. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
+8. Cache-Control: в `next.config.js` додати header `Cache-Control: public, max-age=3600` для `/tracker.js` — заклад вставляє script tag один раз і ніколи не оновлює його, браузер оновлює скрипт автоматично щогодини.
 
 ### Фаза 4 — Тести
-**API ключ і domain restriction:**
+
+**API ключ генерація і валідація:**
+- HMAC-SHA256 key_hash генерується при створенні, timingSafeEqual при валідації
+- `key_prefix` UNIQUE — спроба створити дублікат prefix викликає помилку
 - Валідний ключ + домен в `allowed_domains` → 200
 - Валідний ключ + домен НЕ в `allowed_domains` → 403
 - Валідний ключ + `allowed_domains: []` → 403
@@ -691,31 +753,65 @@ Referrer-Policy: strict-origin-when-cross-origin
 - Rate limit per-key → 429 після 300 req/хв
 - `last_used_domain` оновлюється після успішного запиту
 
+**Multi-tenant isolation (критично):**
+- Token endpoint: заклад A не може отримати токен для замовлення закладу B (scope за establishment_id з API ключа)
+- `POST /api/v1/orders/:id/tracking-token`: менеджер закладу B отримує 403 для замовлення закладу A
+
 **Захист від перебору external_id:**
 - 10 послідовних 404 від одного ключа за хвилину → ключ заблокований на 5 хв
 - Після розблокування: повторення → 15 хв, потім 1 год
 - Легітимний запит (один 404 потім 200) → throttle не спрацьовує
 
-**Tracking token:**
-- Ідемпотентність: паралельні запити повертають той самий токен (UNIQUE + ON CONFLICT)
+**Tracking token — ідемпотентність і lifecycle:**
+- Паралельні запити для одного order_id → ті самий токен (catch P2002 + findUnique)
 - Expired token (`expires_at < NOW()`) → 404
-- Токен після `delivery.completed_at + 15min` → 404 (незалежно від `expires_at`)
-- Токен доставки в `in_progress` → коректний snapshot
+- Bull job при delivery completion: `expires_at = NOW() + 15min` оновлено в тій самій транзакції
+- 15хв після completion: snapshot → 404, WS → TOKEN_EXPIRED + disconnect
 - Rate limit per-token → 429 після 10 req/хв
+
+**Snapshot — всі стани:**
+- State 0: order=pending, delivery=null → `{deliveryStatus: null, courierName: null, routeGeometry: null}`
+- State 1: delivery=assigned → ETA з deliveries.eta_seconds, без courierLat/Lng
+- State 2: in_progress з координатами → routeGeometry не null
+- State 2: in_progress без координат (geocoding failed) → `{orderLat: null, routeGeometry: null}`
+- State 3: completed → `{deliveryStatus: 'completed'}`
+- State 4: order=cancelled → `{orderStatus: 'cancelled'}`
+- State 5: delivery=failed (остання delivery failed, нової ще немає) → правильний стан
+- Reassignment: повертається найновіша delivery (`ORDER BY assigned_at DESC LIMIT 1 WHERE status != 'failed'`)
+- OSRM timeout при snapshot → `{routeGeometry: null}` (НЕ 500)
+
+**Redis keys lifecycle:**
+- `courier:active_order:{courier_id}` SET при assign, DEL при complete/failed/cancelled/reassign
+- `route:origin:{delivery_id}` SET при першому OSRM, DEL при delivery complete
+- Haversine: відхилення >50м → OSRM recalc + delivery:route push
+- Haversine: відхилення <50м → NO recalc, NO push
 
 **WebSocket:**
 - Невалідний tracking token → відхилення при підключенні
-- Після `delivery:completed` → клієнт отримує `delivery:status` подію
-- Через 15 хв після `delivery.completed_at` → WS розривається з `TOKEN_EXPIRED`
-- Reconnect: клієнт переконнектується → snapshot оновлюється
-
-**Multi-tenant і ізоляція:**
-- Токен замовлення A не дає доступу до даних замовлення B
-- `delivery_id` не повертається в жодному публічному endpoint
+- `courier:location` event при GPS пінгу (тест що courier:active_order lookup працює)
+- `delivery:eta` event від cron кожні 60с
+- `delivery:route` event при route deviation >50м
+- `delivery:status` при зміні статусу
+- TOKEN_EXPIRED через 15хв після completion
+- Reconnect → snapshot оновлюється
+- `order:coords_ready`: geocoding:done Redis publish → WS event received
 
 **Retention:**
-- Expired tokens прибираються cron-ом
+- `DELETE tracking_tokens WHERE expires_at < NOW()` — простий запит, без JOIN
 - `delivery_proofs` при цьому не чіпаються (незмінна вимога)
+
+---
+
+## Failure Modes і Fallback поведінка
+
+| Failure | Симптом | Fallback | Тест |
+|---------|---------|----------|------|
+| `courier:active_order` key відсутній (TTL/DEL race) | GPS пінг не досягає WS кімнати | `Logger.warn`, пінг пропускається без помилки | ✓ мусить бути тест |
+| OSRM timeout при snapshot | routeGeometry не розраховано | Повертати `{routeGeometry: null}`, НЕ 500 | ✓ мусить бути тест |
+| Nominatim timeout при geocoding | Замовлення без координат | `lat=null`, Logger.warn, WS `order:coords_ready` ніколи не прийде для цього замовлення — embed покаже текстовий режим | ✓ є в GeocodingModule tests |
+| Bull delayed job пережив рестарт | Рестарт сервера між delivery.completed_at і +15хв | Bull Redis-backed job виконається після оживлення з правильним delay | ✓ документувати в тесті (verify Bull job persists across restart) |
+| all deliveries для order мають status = 'failed' | Snapshot не знаходить active delivery | Показувати State 5 (delivery failed) | ✓ мусить бути тест |
+| tracker.js timeout (30с, 15 retry, всі 404) | Замовлення не знайдено — webhook не дійшов | Показати "Замовлення не знайдено. Спробуйте оновити сторінку." | ✓ мусить бути тест |
 
 ---
 
@@ -727,3 +823,18 @@ Referrer-Policy: strict-origin-when-cross-origin
       → Поки: тільки назва закладу текстом
 - [ ] Що показувати якщо замовлення ще в статусі `pending` (не assigned)?
       → Поки: "Замовлення прийнято, очікуємо призначення курʼєра"
+
+---
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 2 | CLEAR | mode: HOLD_SCOPE, 0 critical gaps |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 10 findings, all resolved in plan |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 4 | CLEAR (PLAN) | 17 issues, 0 critical gaps remaining |
+| Design Review | `/plan-design-review` | UI/UX gaps | 2 | CLEAR | 12 issues found, all resolved in plan |
+
+**UNRESOLVED:** 0 decisions outstanding
+
+**VERDICT:** CEO + ENG + DESIGN CLEARED — всі архітектурні та UX рішення зафіксовані в плані. Готово до реалізації.
