@@ -733,6 +733,8 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## План реалізації
 
+> **Порядок обовʼязковий.** Кожна фаза залежить від попередньої. Всередині фази — числа теж означають послідовність: наступний пункт не починається поки попередній не закомічений і тести зелені.
+
 ### Фаза 0 — GeocodingModule (передумова для Phase 1)
 
 **GeocodingModule в коді відсутній** — незважаючи на `✅` в CLAUDE.md. `PosterService` зберігає `lat/lng` напряму з webhook payload; якщо координат немає — вони залишаються `null` назавжди. Nominatim не викликається. Це технічний борг `IntegrationsModule`, не пов'язаний з CustomerTracking — але CustomerTracking залежить від нього.
@@ -759,12 +761,12 @@ Referrer-Policy: strict-origin-when-cross-origin
    - Throttle унікальних `external_id`: `SADD throttle:api:{keyPrefix}:{minuteBucket} {externalId}` → `SCARD > 10` → 429; `EXPIRE 120s`. Рахує саме унікальні order_ids — 15 retries одного замовлення = 1, не 15.
    - Декорує request об'єктом `apiKey` для подальшого використання в handler
    > Всі ці перевірки — одна відповідальність (хто і звідки запитує). Розділяти їх по різних guards/middlewares — зайве.
-5. Лінива генерація токена: два флоу — від віджету (публічний endpoint: scope `WHERE external_id AND establishment_id`) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують catch P2002 + findUnique паттерн
-6. Публічний WebSocket namespace `/public`
-7. TrackingModule: SET `courier:active_order:{courier_id}` при delivery assign; DEL при complete/failed/cancelled/reassign; Haversine route deviation detection з **`route:recalc_cooldown:{delivery_id}` TTL=60s** (обмеження OSRM до 1 виклику/хв на доставку); публікація в Redis pub/sub
-8. EtaModule або PublicTrackingModule: `@Cron('*/60 * * * * *')` для `delivery:eta` push (НЕ RetentionModule)
-9. WS lifecycle: OrdersModule емітує `delivery.completed` event → PublicTrackingModule handler **асинхронно** оновлює `expires_at = NOW() + 15min` (НЕ в тій самій транзакції — дотримання module isolation); Bull delayed job для disconnect через 15хв; DEL Redis keys
-10. RetentionModule: cron для очищення `tracking_tokens` де `expires_at < NOW()` (простий DELETE, без JOIN)
+4. Лінива генерація токена: два флоу — від віджету (публічний endpoint: scope `WHERE external_id AND establishment_id`) та від менеджера (`POST /api/v1/orders/:id/tracking-token`, JwtAuthGuard). Обидва використовують catch P2002 + findUnique паттерн
+5. Публічний WebSocket namespace `/public`
+6. TrackingModule: SET `courier:active_order:{courier_id}` при delivery assign; DEL при complete/failed/cancelled/reassign; Haversine route deviation detection з **`route:recalc_cooldown:{delivery_id}` TTL=60s** (обмеження OSRM до 1 виклику/хв на доставку); публікація в Redis pub/sub
+7. EtaModule або PublicTrackingModule: `@Cron('*/60 * * * * *')` для `delivery:eta` push (НЕ RetentionModule)
+8. WS lifecycle: OrdersModule емітує `delivery.completed` event → PublicTrackingModule handler **асинхронно** оновлює `expires_at = NOW() + 15min` (НЕ в тій самій транзакції — дотримання module isolation); Bull delayed job для disconnect через 15хв; DEL Redis keys
+9. RetentionModule: cron для очищення `tracking_tokens` де `expires_at < NOW()` (простий DELETE, без JOIN)
 
 ### Фаза 2 — Embed сторінка
 1. `/embed/track/[token]` — Next.js route, поза `(dashboard)` route group, власний `layout.tsx` без dark theme
