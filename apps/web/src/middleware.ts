@@ -5,12 +5,18 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login'];
 // Public embed routes — no auth required, iframeable by any site
 const EMBED_PATHS = ['/embed/track/', '/t/'];
 
+// Restrict WSS to the known API origin. Falls back to 'wss:' if env var is not set
+// (dev only — in production NEXT_PUBLIC_WS_URL must always be set).
+const wsOrigin = process.env.NEXT_PUBLIC_WS_URL
+  ? process.env.NEXT_PUBLIC_WS_URL.replace(/^http/, 'ws').replace(/\/$/, '')
+  : 'wss:';
+
 const EMBED_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com",
-  "connect-src 'self' wss: https://*.openstreetmap.org https://*.basemaps.cartocdn.com",
+  `connect-src 'self' ${wsOrigin} https://*.openstreetmap.org https://*.basemaps.cartocdn.com`,
   "frame-ancestors *",
 ].join('; ');
 

@@ -28,17 +28,13 @@ export function EtaBar({ etaSeconds: initialEta, slaDeadline, locale }: Props) {
     }
   }, [initialEta]);
 
-  // Client-side countdown between WS sync events
+  // Client-side countdown between WS sync events — single interval for component lifetime
   useEffect(() => {
-    if (remaining <= 0) return;
     const timer = setInterval(() => {
-      setRemaining((prev) => {
-        const next = prev - 1;
-        return next <= 0 ? 0 : next;
-      });
+      setRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [remaining]);
+  }, []);
 
   const etaMin = Math.ceil(remaining / 60);
   const progress =

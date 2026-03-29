@@ -59,11 +59,14 @@ export class ApiKeyGuard implements CanActivate {
     const referer = req.headers['referer'] as string | undefined;
     const requestDomain = this.extractDomain(origin ?? referer ?? '');
 
-    if (keyRecord.allowed_domains.length === 0) {
+    // localhost is always allowed for development/testing (spec: "крім localhost для тестування")
+    const isLocalhost = requestDomain === 'localhost' || requestDomain === '127.0.0.1';
+
+    if (keyRecord.allowed_domains.length === 0 && !isLocalhost) {
       throw new ForbiddenException('No allowed domains configured for this API key');
     }
 
-    const domainAllowed = keyRecord.allowed_domains.some((d) => {
+    const domainAllowed = isLocalhost || keyRecord.allowed_domains.some((d) => {
       // Exact match or suffix match (sub.pizza.com allowed if pizza.com is in list)
       return requestDomain === d || requestDomain.endsWith(`.${d}`);
     });

@@ -8,6 +8,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
+import type { Map, Marker, Polyline } from 'leaflet';
 import type { GeoJsonLineString } from './types';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   courierLat: number | null;
   courierLng: number | null;
   routeGeometry: GeoJsonLineString | null;
+  transportIcon: string;
 }
 
 function makeOrderMarkerHtml(): string {
@@ -29,7 +31,7 @@ function makeOrderMarkerHtml(): string {
   ">📍</div>`;
 }
 
-function makeCourierMarkerHtml(): string {
+function makeCourierMarkerHtml(icon: string): string {
   return `<div style="
     width:32px;height:32px;border-radius:50%;
     background:#3d7a5a;
@@ -38,17 +40,14 @@ function makeCourierMarkerHtml(): string {
     display:flex;align-items:center;justify-content:center;
     font-size:16px;
     transition:all 0.8s ease;
-  ">🛵</div>`;
+  ">${icon}</div>`;
 }
 
-export function MapView({ orderLat, orderLng, courierLat, courierLng, routeGeometry }: Props) {
+export function MapView({ orderLat, orderLng, courierLat, courierLng, routeGeometry, transportIcon }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const leafletRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const courierMarkerRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const routeLayerRef = useRef<any>(null);
+  const leafletRef = useRef<Map | null>(null);
+  const courierMarkerRef = useRef<Marker | null>(null);
+  const routeLayerRef = useRef<Polyline | null>(null);
 
   // Initialize map once
   useEffect(() => {
@@ -84,7 +83,7 @@ export function MapView({ orderLat, orderLng, courierLat, courierLng, routeGeome
       // Courier marker if available
       if (courierLat != null && courierLng != null) {
         const courierIcon = L.divIcon({
-          html: makeCourierMarkerHtml(),
+          html: makeCourierMarkerHtml(transportIcon),
           className: '',
           iconSize: [32, 32],
           iconAnchor: [16, 16],
@@ -119,6 +118,10 @@ export function MapView({ orderLat, orderLng, courierLat, courierLng, routeGeome
 
     return () => {
       mounted = false;
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+        leafletRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,7 +137,7 @@ export function MapView({ orderLat, orderLng, courierLat, courierLng, routeGeome
       } else {
         // First courier position received after map init
         const courierIcon = L.divIcon({
-          html: makeCourierMarkerHtml(),
+          html: makeCourierMarkerHtml(transportIcon),
           className: '',
           iconSize: [32, 32],
           iconAnchor: [16, 16],

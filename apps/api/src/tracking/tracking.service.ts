@@ -197,10 +197,13 @@ export class TrackingService {
     );
 
     // Set route:origin to establishment coordinates if available
+    // TTL 8h matches active_order — prevents unbounded Redis growth if clearActiveOrder fails
     if (establishmentLat !== null && establishmentLng !== null) {
       await this.redis.set(
         `route:origin:${deliveryId}`,
         JSON.stringify({ lat: establishmentLat, lng: establishmentLng }),
+        'EX',
+        8 * 3600,
       );
     }
   }

@@ -100,7 +100,19 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
     });
     socketRef.current = socket;
 
+    // Track last disconnect time to debounce snapshot re-fetches on rapid reconnects.
+    // Avoids thundering herd: 20 reconnect attempts × HTTP fetch during API downtime.
+    let lastDisconnectAt = 0;
+
+    socket.on('disconnect', () => {
+      lastDisconnectAt = Date.now();
+    });
+
     socket.on('connect', async () => {
+      // Skip re-fetch if reconnect happened < 5s after disconnect (transient blip).
+      // On first connect lastDisconnectAt is 0, so the gap is always > 5s.
+      if (Date.now() - lastDisconnectAt < 5_000) return;
+
       // Re-fetch snapshot on (re)connect to fill any gap
       const fresh = await fetchSnapshot(token);
       if (fresh) {
@@ -348,6 +360,7 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
             courierLat={courierPos?.lat ?? snapshot?.courierLat ?? null}
             courierLng={courierPos?.lng ?? snapshot?.courierLng ?? null}
             routeGeometry={liveRoute}
+            transportIcon={transportIcon}
           />
         ) : (
           <p className="text-xs text-gray-400">{t('noCoords', locale)}</p>
