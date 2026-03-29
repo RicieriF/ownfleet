@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { ApiKeysService } from './api-keys.service.js';
 import { CreateApiKeyDto } from './dto/create-api-key.dto.js';
+import { UpdateDomainsDto } from './dto/update-domains.dto.js';
 import type { Request } from 'express';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 
@@ -36,5 +37,15 @@ export class ApiKeysController {
   @Patch(':id/toggle')
   toggleActive(@Param('id') id: string, @Req() req: Request) {
     return this.apiKeysService.toggleActive(id, req.user as AuthenticatedUser);
+  }
+
+  /** Updates allowed_domains from settings website URL field. Auto-www expansion applied. */
+  @Patch(':id/domains')
+  updateDomains(
+    @Param('id') id: string,
+    @Body() dto: UpdateDomainsDto,
+    @Req() req: Request,
+  ) {
+    return this.apiKeysService.updateDomains(id, dto.website_url, req.user as AuthenticatedUser);
   }
 }

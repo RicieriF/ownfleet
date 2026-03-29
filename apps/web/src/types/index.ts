@@ -32,6 +32,20 @@ export interface Establishment {
   lng?: number | null;
   dispatch_mode: 'manual' | 'recommend' | 'auto';
   ready_at?: string | null;
+  hosted_tracking_enabled: boolean;
+}
+
+// ── API Keys ───────────────────────────────────────────────────────────────
+
+export interface ApiKeyMeta {
+  id: string;
+  key_prefix: string;
+  name: string;
+  is_active: boolean;
+  allowed_domains: string[];
+  last_used_at: string | null;
+  last_used_domain: string | null;
+  created_at: string;
 }
 
 // ── Couriers ───────────────────────────────────────────────────────────────

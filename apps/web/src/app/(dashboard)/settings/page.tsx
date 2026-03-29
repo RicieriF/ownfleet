@@ -1,7 +1,8 @@
 import { apiFetch } from '@/lib/api';
-import { Establishment } from '@/types';
+import { Establishment, ApiKeyMeta } from '@/types';
 import { SettingsForm } from './settings-form';
 import { TelegramSettings } from './telegram-settings';
+import { TrackingWidgetSection } from './tracking-widget-section';
 
 const PLAN_LABELS: Record<string, string> = {
   pilot:    'Pilot',
@@ -69,9 +70,10 @@ interface TelegramStatus {
 }
 
 export default async function SettingsPage() {
-  const [establishment, telegramStatus] = await Promise.all([
+  const [establishment, telegramStatus, apiKey] = await Promise.all([
     apiFetch<Establishment>('/api/v1/establishments/me'),
     apiFetch<TelegramStatus>('/api/v1/telegram/status').catch(() => ({ connected: false, prefs: {} })),
+    apiFetch<ApiKeyMeta | null>('/api/v1/establishments/api-key').catch(() => null),
   ]);
 
   return (
@@ -115,6 +117,12 @@ export default async function SettingsPage() {
         initialLat={establishment.lat ?? null}
         initialLng={establishment.lng ?? null}
         initialDispatchMode={establishment.dispatch_mode ?? 'manual'}
+      />
+
+      {/* Tracking widget */}
+      <TrackingWidgetSection
+        initialApiKey={apiKey}
+        hostedTrackingEnabled={establishment.hosted_tracking_enabled ?? false}
       />
 
       {/* Telegram notifications */}
