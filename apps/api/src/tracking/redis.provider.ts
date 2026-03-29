@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
+import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
 
-export const REDIS_CLIENT = 'REDIS_CLIENT';
-export const REDIS_SUBSCRIBER = 'REDIS_SUBSCRIBER';
+// Re-export shared constant so TrackingService can use @InjectRedis() decorator
+export { REDIS_CLIENT };
 
 export const InjectRedis = (): ParameterDecorator => Inject(REDIS_CLIENT);
-export const InjectRedisSubscriber = (): ParameterDecorator => Inject(REDIS_SUBSCRIBER);

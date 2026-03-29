@@ -2,7 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { getQueueToken } from '@nestjs/bull';
 import { GeocodingService } from '../geocoding.service.js';
-import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from '../geocoding.constants.js';
+import { GEOCODING_QUEUE } from '../geocoding.constants.js';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
 // ── fetch mock ──────────────────────────────────────────────────────────────
 const mockFetch = jest.fn();
@@ -31,7 +32,7 @@ describe('GeocodingService', () => {
       providers: [
         GeocodingService,
         { provide: getQueueToken(GEOCODING_QUEUE), useValue: mockQueue },
-        { provide: GEOCODING_REDIS_CLIENT, useValue: mockRedis },
+        { provide: REDIS_CLIENT, useValue: mockRedis },
         {
           provide: ConfigService,
           useValue: { get: () => undefined, getOrThrow: () => 'redis://localhost' },

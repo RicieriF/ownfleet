@@ -1,12 +1,11 @@
-import { Module, Logger } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
-import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
 import { GeocodingService } from './geocoding.service.js';
 import { GeocodingProcessor } from './processors/geocoding.processor.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
-import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from './geocoding.constants.js';
+import { GEOCODING_QUEUE } from './geocoding.constants.js';
 
+// Redis (REDIS_CLIENT) is provided globally by SharedRedisModule in AppModule
 @Module({
   imports: [
     PrismaModule,
@@ -20,20 +19,7 @@ import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from './geocoding.constants.j
       },
     }),
   ],
-  providers: [
-    GeocodingService,
-    GeocodingProcessor,
-    {
-      provide: GEOCODING_REDIS_CLIENT,
-      useFactory: (config: ConfigService) => {
-        const logger = new Logger('GeocodingRedisClient');
-        const client = new Redis(config.getOrThrow<string>('REDIS_URL'));
-        client.on('error', (err) => logger.error('Geocoding Redis error', err));
-        return client;
-      },
-      inject: [ConfigService],
-    },
-  ],
+  providers: [GeocodingService, GeocodingProcessor],
   exports: [GeocodingService],
 })
 export class GeocodingModule {}

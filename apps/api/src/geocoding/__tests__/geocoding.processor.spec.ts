@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { GeocodingProcessor, GEOCODING_DONE_CHANNEL } from '../processors/geocoding.processor.js';
 import { GeocodingService } from '../geocoding.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { GEOCODING_REDIS_CLIENT } from '../geocoding.constants.js';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 import type { Job } from 'bull';
 import type { GeocodeJob } from '../geocoding.service.js';
 
@@ -23,7 +23,7 @@ describe('GeocodingProcessor', () => {
         GeocodingProcessor,
         { provide: GeocodingService, useValue: mockGeocodingService },
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: GEOCODING_REDIS_CLIENT, useValue: mockRedis },
+        { provide: REDIS_CLIENT, useValue: mockRedis },
       ],
     }).compile();
 

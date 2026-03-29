@@ -2,9 +2,10 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bull';
-import type Redis from 'ioredis';
+import type IORedis from 'ioredis';
 import * as crypto from 'node:crypto';
-import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from './geocoding.constants.js';
+import { GEOCODING_QUEUE } from './geocoding.constants.js';
+import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
 
 export interface GeocodeJob {
   orderId: string;
@@ -26,7 +27,7 @@ export class GeocodingService {
 
   constructor(
     @InjectQueue(GEOCODING_QUEUE) private readonly queue: Queue<GeocodeJob>,
-    @Inject(GEOCODING_REDIS_CLIENT) private readonly redis: Redis,
+    @Inject(REDIS_CLIENT) private readonly redis: IORedis,
     config: ConfigService,
   ) {
     this.nominatimUrl =

@@ -1,10 +1,11 @@
 import { Logger, Inject } from '@nestjs/common';
 import { Processor, Process } from '@nestjs/bull';
 import type { Job } from 'bull';
-import type Redis from 'ioredis';
+import type IORedis from 'ioredis';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GeocodingService, GeocodeJob } from '../geocoding.service.js';
-import { GEOCODING_QUEUE, GEOCODING_REDIS_CLIENT } from '../geocoding.constants.js';
+import { GEOCODING_QUEUE } from '../geocoding.constants.js';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
 export const GEOCODING_DONE_CHANNEL = 'geocoding:done';
 
@@ -21,7 +22,7 @@ export class GeocodingProcessor {
   constructor(
     private readonly geocodingService: GeocodingService,
     private readonly prisma: PrismaService,
-    @Inject(GEOCODING_REDIS_CLIENT) private readonly redis: Redis,
+    @Inject(REDIS_CLIENT) private readonly redis: IORedis,
   ) {}
 
   @Process()

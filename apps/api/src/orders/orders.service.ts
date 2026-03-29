@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
@@ -20,6 +21,9 @@ import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { assertOrderTransition } from './order-state-machine.js';
 import { EtaService } from '../eta/eta.service.js';
 import { TrackingGateway } from '../tracking/tracking.gateway.js';
+import { TrackingService } from '../tracking/tracking.service.js';
+import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL } from '../shared/redis/redis.constants.js';
+import type IORedis from 'ioredis';
 
 const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 
@@ -71,8 +75,10 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
     private readonly eta: EtaService,
     private readonly gateway: TrackingGateway,
+    private readonly trackingService: TrackingService,
     private readonly couriersService: CouriersService,
     @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
+    @Inject(REDIS_CLIENT) private readonly redis: IORedis,
   ) {}
 
   async findAll(user: AuthenticatedUser, statuses?: OrderStatus[]) {
@@ -236,6 +242,31 @@ export class OrdersService {
       'delivery_assigned',
     ).catch(() => {});
 
+    // Set courier:active_order Redis key for public tracking
+    const createdDelivery = await this.prisma.delivery.findFirst({
+      where: { order_id: id },
+      select: { id: true },
+      orderBy: { assigned_at: 'desc' },
+    });
+    if (createdDelivery) {
+      this.trackingService.setActiveOrder(
+        dto.courier_id,
+        id,
+        createdDelivery.id,
+        order.lat,
+        order.lng,
+        courier.transport_mode,
+        establishment.lat,
+        establishment.lng,
+      ).catch((err) => this.logger.warn('setActiveOrder failed after assign', err));
+    }
+
+    // Publish delivery status for public WS
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
+    ).catch(() => {});
+
     // Invalidate workload cache — fire-and-forget
     this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
       this.logger.warn('Failed to invalidate workload cache after assign', err),
@@ -338,6 +369,29 @@ export class OrdersService {
     this.webhooks.dispatch(user.establishment_id, 'order.assigned', { order_id: orderId }).catch(
       (err) => this.logger.warn('webhook dispatch failed for order.assigned', err),
     );
+
+    // Set courier:active_order Redis key for public tracking
+    const claimedDelivery = await this.prisma.delivery.findFirst({
+      where: { order_id: orderId },
+      select: { id: true },
+      orderBy: { assigned_at: 'desc' },
+    });
+    if (claimedDelivery) {
+      this.trackingService.setActiveOrder(
+        user.courier_id!,
+        orderId,
+        claimedDelivery.id,
+        order.lat,
+        order.lng,
+        courier.transport_mode,
+        est.lat,
+        est.lng,
+      ).catch((err) => this.logger.warn('setActiveOrder failed after claim', err));
+    }
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
+    ).catch(() => {});
 
     return result;
   }
@@ -599,6 +653,29 @@ export class OrdersService {
       )
       .catch(() => {});
 
+    // Set courier:active_order Redis key for public tracking
+    const assignedDelivery = await this.prisma.delivery.findFirst({
+      where: { order_id: orderId },
+      select: { id: true },
+      orderBy: { assigned_at: 'desc' },
+    });
+    if (assignedDelivery) {
+      this.trackingService.setActiveOrder(
+        courierId,
+        orderId,
+        assignedDelivery.id,
+        order.lat,
+        order.lng,
+        courier.transport_mode,
+        establishment.lat,
+        establishment.lng,
+      ).catch((err) => this.logger.warn('setActiveOrder failed after assignCourier', err));
+    }
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
+    ).catch(() => {});
+
     // Invalidate workload cache — fire-and-forget
     this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
       this.logger.warn('Failed to invalidate workload cache after assignCourier', err),
@@ -693,6 +770,37 @@ export class OrdersService {
       this.logger.warn('WS broadcast failed for delivery:reassigned', err);
     }
 
+    // DEL old courier active_order, SET new courier active_order
+    this.trackingService.clearActiveOrder(oldCourierId, deliveryId).catch(() => {});
+
+    // Fetch order + establishment coords for new active_order key
+    void this.prisma.order.findUnique({
+      where: { id: delivery.order_id },
+      select: { lat: true, lng: true, establishment: { select: { lat: true, lng: true } } },
+    }).then((ord) => {
+      if (!ord) return;
+      return this.prisma.courier.findUnique({
+        where: { id: newCourierId },
+        select: { transport_mode: true },
+      }).then((c) => {
+        return this.trackingService.setActiveOrder(
+          newCourierId,
+          delivery.order_id,
+          deliveryId,
+          ord.lat,
+          ord.lng,
+          c?.transport_mode ?? null,
+          ord.establishment.lat,
+          ord.establishment.lng,
+        );
+      });
+    }).catch((err) => this.logger.warn('setActiveOrder failed after reassign', err));
+
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
+    ).catch(() => {});
+
     // Invalidate workload cache — fire-and-forget
     this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
       this.logger.warn('Failed to invalidate workload cache after reassignDelivery', err),
@@ -753,10 +861,30 @@ export class OrdersService {
     const order = await this.assertBelongs(id, user.establishment_id);
     assertOrderTransition(order.status, OrderStatus.cancelled);
 
+    // Fetch active delivery before cancellation (for Redis cleanup)
+    const activeDelivery = await this.prisma.delivery.findFirst({
+      where: { order_id: id, status: { in: ['assigned', 'in_progress'] } },
+      select: { id: true, courier_id: true },
+    });
+
     const updated = await this.prisma.order.update({
       where: { id },
       data: { status: OrderStatus.cancelled },
     });
+
+    // DEL Redis keys if an active delivery existed
+    if (activeDelivery) {
+      this.trackingService
+        .clearActiveOrder(activeDelivery.courier_id, activeDelivery.id)
+        .catch(() => {});
+    }
+
+    // Publish order:cancelled for public WS
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: id, orderStatus: 'cancelled', deliveryStatus: null }),
+    ).catch(() => {});
+
     this.webhooks.dispatch(user.establishment_id, 'order.cancelled', { order_id: id }).catch(
       (err) => this.logger.warn('webhook dispatch failed for order.cancelled', err),
     );

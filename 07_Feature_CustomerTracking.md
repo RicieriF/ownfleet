@@ -202,9 +202,9 @@ Webhook ніколи не чекає Nominatim. Order зберігається �
 ```
 POST /api/v1/orders/:id/tracking-token
 ```
-Захищений `JwtAuthGuard` + `PlanAccessGuard` + перевірка `establishment_id` + перевірка `hosted_tracking_enabled = true` (якщо `false` → `403 Forbidden`).
+Захищений `JwtAuthGuard` + `PlanAccessGuard` + перевірка `establishment_id`.
 Генерує (або повертає існуючий) tracking token для замовлення.
-> **Чому guard на API:** hosted_tracking_enabled — feature gate, не тільки UI toggle. Якщо super admin вимикає фічу → endpoint повністю недоступний, не тільки кнопка в дашборді прихована.
+> **`hosted_tracking_enabled` — UX-тогл, не feature gate.** Ховає кнопку "Копіювати посилання клієнту" в дашборді для закладів у яких є власний сайт (вони використовують embed iframe і ця кнопка їм не потрібна). API endpoint при цьому НЕ блокується — перевірка `hosted_tracking_enabled` на рівні API відсутня навмисно.
 Відповідь: `{ url: "https://weego.app/t/TOKEN" }` — готове посилання для клієнта.
 Ця URL копіюється в буфер при натисканні кнопки "Копіювати посилання клієнту" в дашборді.
 

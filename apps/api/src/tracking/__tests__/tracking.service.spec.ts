@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { getQueueToken } from '@nestjs/bull';
 import { TrackingService, PING_PERSIST_QUEUE } from '../tracking.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -41,6 +42,7 @@ describe('TrackingService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: REDIS_CLIENT, useValue: mockRedis },
         { provide: getQueueToken(PING_PERSIST_QUEUE), useValue: mockPingQueue },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
       ],
     }).compile();
     service = module.get<TrackingService>(TrackingService);

@@ -5,10 +5,12 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
+import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
@@ -16,6 +18,7 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
 import { OrderStatus, DeliveryStatus } from '@prisma/client';
+import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL, PUBLIC_DELIVERY_COMPLETED_CHANNEL } from '../shared/redis/redis.constants.js';
 
 const GEO_RADIUS_METERS = 300;
 const PRESIGNED_URL_TTL_SEC = 300; // 5 min
@@ -31,6 +34,7 @@ export class ProofOfDeliveryService {
     private readonly webhooks: WebhooksService,
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
+    @Inject(REDIS_CLIENT) private readonly redis: IORedis,
   ) {
     this.s3 = new S3Client({
       endpoint: config.get<string>('S3_ENDPOINT'),
@@ -116,6 +120,12 @@ export class ProofOfDeliveryService {
         data: { status: OrderStatus.in_progress },
       });
     });
+
+    // Publish delivery:status for public WS
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'in_progress', deliveryStatus: 'in_progress' }),
+    ).catch(() => {});
 
     // Return full delivery object so mobile can render InProgressState immediately
     return this.prisma.delivery.findUniqueOrThrow({
@@ -238,6 +248,25 @@ export class ProofOfDeliveryService {
       'delivery_completed',
     ).catch(() => {});
 
+    // Publish delivery:status for public WS (before lifecycle event so client sees completed first)
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'completed', deliveryStatus: 'completed' }),
+    ).catch(() => {});
+
+    // Publish delivery:completed lifecycle event → PublicTrackingGateway shortens token TTL + schedules disconnect
+    this.redis.publish(
+      PUBLIC_DELIVERY_COMPLETED_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, deliveryId, courierId: delivery.courier_id }),
+    ).catch(() => {});
+
+    // DEL Redis tracking keys — fire-and-forget
+    this.redis.del(
+      `courier:active_order:${delivery.courier_id}`,
+      `route:origin:${deliveryId}`,
+      `route:${deliveryId}`,
+    ).catch(() => {});
+
     return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
   }
 
@@ -313,6 +342,21 @@ export class ProofOfDeliveryService {
       'delivery_force_closed',
     ).catch(() => {});
 
+    // Publish delivery:status + lifecycle events for public WS
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'completed', deliveryStatus: 'completed' }),
+    ).catch(() => {});
+    this.redis.publish(
+      PUBLIC_DELIVERY_COMPLETED_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, deliveryId, courierId: delivery.courier_id }),
+    ).catch(() => {});
+    this.redis.del(
+      `courier:active_order:${delivery.courier_id}`,
+      `route:origin:${deliveryId}`,
+      `route:${deliveryId}`,
+    ).catch(() => {});
+
     return { status: DeliveryStatus.completed, force_closed: true };
   }
 
@@ -342,6 +386,17 @@ export class ProofOfDeliveryService {
       user.establishment_id,
       `❌ Доставку провалено`,
       'delivery_failed',
+    ).catch(() => {});
+
+    // Publish delivery:status for public WS + DEL Redis keys
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'failed', deliveryStatus: 'failed' }),
+    ).catch(() => {});
+    this.redis.del(
+      `courier:active_order:${delivery.courier_id}`,
+      `route:origin:${deliveryId}`,
+      `route:${deliveryId}`,
     ).catch(() => {});
 
     return { status: DeliveryStatus.failed };

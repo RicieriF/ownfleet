@@ -193,6 +193,22 @@ export class RetentionService {
   }
 
   /**
+   * Runs every 30 minutes.
+   * Deletes expired tracking_tokens (expires_at < NOW()).
+   * Simple DELETE — no JOIN needed, no establishment_id.
+   * delivery_proofs are never deleted regardless.
+   */
+  @Cron('0 */30 * * * *', { name: 'tracking-tokens-cleanup', timeZone: 'UTC' })
+  async cleanupExpiredTrackingTokens(): Promise<void> {
+    const result = await this.prisma.$executeRaw`
+      DELETE FROM tracking_tokens WHERE expires_at < NOW()
+    `;
+    if ((result as number) > 0) {
+      this.logger.log(`Tracking tokens cleanup: deleted ${result as number} expired token(s)`);
+    }
+  }
+
+  /**
    * Runs daily at 03:00 UTC.
    * Deletes old terminal orders and location_pings per establishment.
    * delivery_proofs are NEVER deleted — retention exempt by design.
