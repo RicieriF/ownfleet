@@ -11,7 +11,7 @@
  *   Weego.track({ apiKey: 'wgo_xxx', orderId: '1234' });
  *
  * What it does:
- * 1. Calls POST /api/v1/public/token to get a tracking token for the order
+ * 1. Calls GET /api/v1/public/order/:externalId/token?key=API_KEY to get a tracking token
  * 2. Injects a fixed-position iframe that shows the tracking widget
  * 3. Retries up to 15 times (every 2s) if the order isn't found yet
  *    (handles the race between POS webhook and customer page load)
@@ -45,10 +45,10 @@ const ERROR_MSG: Record<Lang, string> = {
 
 function injectIframe(token: string, lang: Lang): void {
   // Avoid double injection
-  if (document.getElementById('weego-tracking-iframe')) return;
+  if (document.getElementById('weego-tracking-wrapper')) return;
 
   const wrapper = document.createElement('div');
-  wrapper.id = 'weego-tracking-iframe';
+  wrapper.id = 'weego-tracking-wrapper';
   wrapper.style.cssText = [
     'position:fixed',
     'bottom:16px',
@@ -83,14 +83,8 @@ function injectIframe(token: string, lang: Lang): void {
 
 async function fetchToken(apiKey: string, orderId: string): Promise<string | null> {
   try {
-    const res = await fetch(`${BASE_URL}/api/v1/public/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': apiKey,
-      },
-      body: JSON.stringify({ external_id: orderId }),
-    });
+    const url = `${BASE_URL}/api/v1/public/order/${encodeURIComponent(orderId)}/token?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url);
 
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -103,11 +97,11 @@ async function fetchToken(apiKey: string, orderId: string): Promise<string | nul
 }
 
 function showError(lang: Lang): void {
-  const existing = document.getElementById('weego-tracking-iframe');
+  const existing = document.getElementById('weego-tracking-wrapper') ?? document.getElementById('weego-tracking-error');
   if (existing) existing.remove();
 
   const el = document.createElement('div');
-  el.id = 'weego-tracking-iframe';
+  el.id = 'weego-tracking-error';
   el.style.cssText = [
     'position:fixed',
     'bottom:16px',

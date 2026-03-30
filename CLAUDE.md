@@ -380,6 +380,7 @@ BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY
 WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
 OSRM_URL             (optional; default: https://router.project-osrm.org)
 API_KEY_SECRET       (HMAC-SHA256 key for API key hashing; rotate 90 days — app crashes on startup if unset)
+NEXT_PUBLIC_APP_URL  (web app public URL, e.g. https://weego.app; used in tracker.js base URL fallback and embed code generation in /settings)
 ```
 
 Ніяких `.env` файлів у репозиторії. `.gitignore` + pre-commit hook.

@@ -12,8 +12,8 @@
  * - "Generate key" button when no key exists yet
  */
 
-import { useState, useRef } from 'react';
-import { apiPost, apiPatch } from '@/lib/api-client';
+import { useState, useRef, useEffect } from 'react';
+import { apiGet, apiPost, apiPatch } from '@/lib/api-client';
 import { ApiKeyMeta } from '@/types';
 
 interface Props {
@@ -61,8 +61,14 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
   const [error, setError] = useState('');
   const domainBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (domainBlurTimeout.current) clearTimeout(domainBlurTimeout.current);
+    };
+  }, []);
+
   const embedCode = apiKey
-    ? `<script src="${BASE_URL}/tracker.js"\n  data-api-key="${apiKey.key_prefix}..."\n  data-order-id="ORDER_ID"\n  data-lang="uk"></script>`
+    ? `<script src="${BASE_URL}/tracker.js"\n  data-api-key="YOUR_FULL_API_KEY"\n  data-order-id="ORDER_ID"\n  data-lang="uk"></script>`
     : '';
 
   async function handleGenerateKey(): Promise<void> {
@@ -75,10 +81,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
       );
       setNewKeyValue(res.key);
       // Refresh metadata (key is returned once, metadata via GET)
-      const meta = await fetch('/api/v1/establishments/api-key').then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json() as Promise<ApiKeyMeta>;
-      });
+      const meta = await apiGet<ApiKeyMeta>('/api/v1/establishments/api-key');
       setApiKey(meta);
     } catch {
       setError('Не вдалось згенерувати ключ');
@@ -294,6 +297,8 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
               </div>
               <p className="text-xs" style={{ color: 'var(--t4)' }}>
                 Вставте перед {'</body>'} на сторінках з замовленнями. Замініть{' '}
+                <code style={{ fontFamily: 'var(--font-mono)' }}>YOUR_FULL_API_KEY</code> на ваш повний
+                ключ (показується лише раз при генерації) та{' '}
                 <code style={{ fontFamily: 'var(--font-mono)' }}>ORDER_ID</code> на номер замовлення з вашої CRM.
               </p>
             </div>

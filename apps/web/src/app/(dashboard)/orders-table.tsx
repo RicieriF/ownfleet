@@ -124,7 +124,9 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
     navigator.clipboard.writeText(url).then(() => {
       setCopiedTrackingId(orderId);
       setTimeout(() => setCopiedTrackingId(null), 2000);
-    }).catch(() => {});
+    }).catch(() => {
+      setActionError('Не вдалось скопіювати посилання');
+    });
   }
 
   return (
