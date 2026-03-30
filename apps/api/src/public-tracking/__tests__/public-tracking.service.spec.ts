@@ -373,5 +373,81 @@ describe('PublicTrackingService', () => {
       const result = await service.getSnapshot('valid-token');
       expect(result!.slaDeadline).toBeNull();
     });
+
+    it('State 3 — delivery completed: deliveryStatus=completed, routeGeometry=null', async () => {
+      mockTrackingToken.findUnique.mockResolvedValue(validToken);
+      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'completed' });
+      mockDelivery.findFirst.mockResolvedValue({
+        id: 'del-1',
+        status: 'completed',
+        eta_seconds: null,
+        eta_started_at: null,
+        courier: { name: 'Іван', transport_mode: 'car' },
+      });
+
+      const result = await service.getSnapshot('valid-token');
+      expect(result!.orderStatus).toBe('completed');
+      expect(result!.deliveryStatus).toBe('completed');
+      expect(result!.etaSeconds).toBeNull();
+      // Route geometry is only fetched for in_progress deliveries
+      expect(result!.routeGeometry).toBeNull();
+      expect(mockRedis.get).not.toHaveBeenCalled();
+    });
+
+    it('State 4 — order cancelled: orderStatus=cancelled, deliveryStatus=null', async () => {
+      mockTrackingToken.findUnique.mockResolvedValue(validToken);
+      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'cancelled' });
+      mockDelivery.findFirst.mockResolvedValue(null);
+
+      const result = await service.getSnapshot('valid-token');
+      expect(result!.orderStatus).toBe('cancelled');
+      expect(result!.deliveryStatus).toBeNull();
+      expect(result!.courierName).toBeNull();
+      expect(result!.etaSeconds).toBeNull();
+    });
+
+    it('State 5 — all deliveries failed: deliveryStatus=null (non-failed query returns null)', async () => {
+      // Order is still in_progress (waiting for reassignment), but no non-failed delivery exists
+      mockTrackingToken.findUnique.mockResolvedValue(validToken);
+      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'in_progress' });
+      // findFirst(status: { not: 'failed' }) returns null — all deliveries are failed
+      mockDelivery.findFirst.mockResolvedValue(null);
+
+      const result = await service.getSnapshot('valid-token');
+      expect(result!.orderStatus).toBe('in_progress');
+      expect(result!.deliveryStatus).toBeNull(); // no active delivery
+      expect(result!.courierName).toBeNull();
+      expect(result!.etaSeconds).toBeNull();
+      expect(result!.routeGeometry).toBeNull();
+      // Verify the query excludes failed deliveries
+      expect(mockDelivery.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: { not: 'failed' } }),
+        }),
+      );
+    });
+
+    it('State 2 without coords — orderLat/orderLng null, routeGeometry null', async () => {
+      mockTrackingToken.findUnique.mockResolvedValue(validToken);
+      // Order geocoding failed — no coordinates
+      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, lat: null, lng: null });
+      mockDelivery.findFirst.mockResolvedValue({
+        id: 'del-1',
+        status: 'in_progress',
+        eta_seconds: 600,
+        eta_started_at: null,
+        courier: { name: 'Іван', transport_mode: 'bicycle' },
+      });
+      // Redis has no route cached (geocoding never succeeded)
+      mockRedis.get.mockResolvedValue(null);
+
+      const result = await service.getSnapshot('valid-token');
+      expect(result!.orderLat).toBeNull();
+      expect(result!.orderLng).toBeNull();
+      // routeGeometry is null (Redis miss) — embed shows text mode
+      expect(result!.routeGeometry).toBeNull();
+      // ETA is still present even without coords
+      expect(result!.etaSeconds).toBe(600);
+    });
   });
 });

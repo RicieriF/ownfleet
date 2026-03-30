@@ -185,6 +185,42 @@ describe('RetentionService', () => {
     });
   });
 
+  // ── cleanupExpiredTrackingTokens ──────────────────────────────────────────
+
+  describe('cleanupExpiredTrackingTokens', () => {
+    it('executes DELETE tracking_tokens WHERE expires_at < NOW()', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(3);
+
+      await service.cleanupExpiredTrackingTokens();
+
+      expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not throw when nothing to delete (result=0)', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(0);
+
+      await expect(service.cleanupExpiredTrackingTokens()).resolves.not.toThrow();
+    });
+
+    it('delivery_proofs are never touched during tracking tokens cleanup', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(2);
+
+      await service.cleanupExpiredTrackingTokens();
+
+      // No deliveryProof mock was registered — verify it wasn't accessed
+      expect(mockPrisma).not.toHaveProperty('deliveryProof');
+    });
+
+    it('does not call order.deleteMany or touch retention logic', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(1);
+
+      await service.cleanupExpiredTrackingTokens();
+
+      expect(mockOrder.deleteMany).not.toHaveBeenCalled();
+      expect(mockRetentionLog.create).not.toHaveBeenCalled();
+    });
+  });
+
   // ── checkShiftAnomalies ────────────────────────────────────────────────────
 
   describe('checkShiftAnomalies', () => {

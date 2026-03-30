@@ -43,7 +43,7 @@ const ERROR_MSG: Record<Lang, string> = {
   en: 'Order not found. Try refreshing the page.',
 };
 
-function injectIframe(token: string, lang: Lang): void {
+export function injectIframe(token: string, lang: Lang): void {
   // Avoid double injection
   if (document.getElementById('weego-tracking-wrapper')) return;
 
@@ -56,16 +56,16 @@ function injectIframe(token: string, lang: Lang): void {
     'z-index:2147483647',
     'width:360px',
     'max-width:calc(100vw - 32px)',
-    'max-height:80vh',
     'overflow:hidden',
     'border-radius:12px',
     'box-shadow:0 8px 32px rgba(0,0,0,0.18)',
-    'transition:opacity 0.2s',
+    'transition:height 0.2s,opacity 0.2s',
   ].join(';');
 
   const src = `${BASE_URL}/embed/track/${encodeURIComponent(token)}?lang=${lang}`;
 
   const iframe = document.createElement('iframe');
+  iframe.id = 'weego-tracking-iframe';
   iframe.src = src;
   iframe.setAttribute('allow', 'geolocation');
   iframe.setAttribute('loading', 'eager');
@@ -77,11 +77,39 @@ function injectIframe(token: string, lang: Lang): void {
     'display:block',
   ].join(';');
 
+  // Minimize / expand toggle button
+  const minimizeBtn = document.createElement('button');
+  minimizeBtn.id = 'weego-minimize-btn';
+  minimizeBtn.setAttribute('aria-label', 'Згорнути');
+  minimizeBtn.style.cssText = [
+    'position:absolute',
+    'top:8px',
+    'right:8px',
+    'width:24px',
+    'height:24px',
+    'border:none',
+    'border-radius:50%',
+    'background:rgba(0,0,0,0.25)',
+    'color:#fff',
+    'font-size:16px',
+    'cursor:pointer',
+    'line-height:1',
+  ].join(';');
+  minimizeBtn.textContent = '−';
+
+  minimizeBtn.addEventListener('click', () => {
+    const isMin = wrapper.classList.toggle('weego-minimized');
+    minimizeBtn.textContent = isMin ? '+' : '−';
+    minimizeBtn.setAttribute('aria-label', isMin ? 'Розгорнути' : 'Згорнути');
+    iframe.style.display = isMin ? 'none' : 'block';
+  });
+
+  wrapper.appendChild(minimizeBtn);
   wrapper.appendChild(iframe);
   document.body.appendChild(wrapper);
 }
 
-async function fetchToken(apiKey: string, orderId: string): Promise<string | null> {
+export async function fetchToken(apiKey: string, orderId: string): Promise<string | null> {
   try {
     const url = `${BASE_URL}/api/v1/public/order/${encodeURIComponent(orderId)}/token?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url);
@@ -96,7 +124,7 @@ async function fetchToken(apiKey: string, orderId: string): Promise<string | nul
   }
 }
 
-function showError(lang: Lang): void {
+export function showError(lang: Lang): void {
   const existing = document.getElementById('weego-tracking-wrapper') ?? document.getElementById('weego-tracking-error');
   if (existing) existing.remove();
 
@@ -125,7 +153,7 @@ function showError(lang: Lang): void {
   setTimeout(() => el.remove(), 10_000);
 }
 
-async function track(options: TrackOptions): Promise<void> {
+export async function track(options: TrackOptions): Promise<void> {
   const { apiKey, orderId, lang = 'uk' } = options;
 
   let attempts = 0;

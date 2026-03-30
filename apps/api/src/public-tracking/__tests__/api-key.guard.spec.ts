@@ -176,4 +176,62 @@ describe('ApiKeyGuard', () => {
     await guard.canActivate(ctx);
     expect(mockApiKeysService.updateLastUsed).toHaveBeenCalledWith('k1', 'pizza.com');
   });
+
+  // ── localhost always allowed ──────────────────────────────────────────────
+
+  it('allows localhost origin even when allowed_domains is empty', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue({
+      ...validKeyRecord,
+      allowed_domains: [],
+    });
+    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'http://localhost:3000' });
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+  });
+
+  it('allows 127.0.0.1 origin even when allowed_domains is empty', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue({
+      ...validKeyRecord,
+      allowed_domains: [],
+    });
+    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'http://127.0.0.1:8080' });
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+  });
+
+  // ── Throttle: same externalId 15 retries = 1 unique ──────────────────────
+
+  it('does not throttle 15 retries of the same externalId (SADD is set-idempotent)', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+    // SADD for a duplicate returns 0 (element already in set); SCARD stays at 1
+    mockRedis.multi.mockReturnValue({
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([[null, 0], [null, 1], [null, 1]]),
+    });
+
+    // Simulate the 15th retry of the same order — scard=1, well under limit
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
+    );
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+  });
+
+  it('reads externalId from path params (not query) — matches /public/order/:externalId/token route', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },          // query: only API key
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-from-path' }, // params: externalId from URL path
+    );
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+    // Redis throttle was invoked with the path param externalId
+    expect(mockRedis.multi).toHaveBeenCalled();
+  });
 });
