@@ -1040,6 +1040,31 @@ export class OrdersService {
       .dispatch(user.establishment_id, 'order.assigned', { order_id: id })
       .catch((err) => this.logger.warn('webhook dispatch failed for order.assigned', err));
 
+    // Set courier:active_order Redis key for public tracking
+    const createdDelivery = await this.prisma.delivery.findFirst({
+      where: { order_id: id },
+      select: { id: true },
+      orderBy: { assigned_at: 'desc' },
+    });
+    if (createdDelivery) {
+      this.trackingService.setActiveOrder(
+        courierId,
+        id,
+        createdDelivery.id,
+        order.lat,
+        order.lng,
+        courier.transport_mode,
+        establishment.lat,
+        establishment.lng,
+      ).catch((err) => this.logger.warn('setActiveOrder failed after assignRecommended', err));
+    }
+
+    // Publish delivery status for public WS
+    this.redis.publish(
+      PUBLIC_DELIVERY_STATUS_CHANNEL,
+      JSON.stringify({ orderId: id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
+    ).catch(() => {});
+
     // Invalidate workload cache — fire-and-forget
     this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
       this.logger.warn('Failed to invalidate workload cache after assignRecommended', err),
