@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -104,7 +105,12 @@ export class ApiKeysService {
       throw new NotFoundException('API key not found');
     }
 
-    const allowedDomains = websiteUrl.trim() ? this.expandDomains(websiteUrl) : [];
+    let allowedDomains: string[];
+    try {
+      allowedDomains = websiteUrl.trim() ? this.expandDomains(websiteUrl) : [];
+    } catch {
+      throw new BadRequestException('Invalid website URL — must be a valid domain (e.g. pizza.com)');
+    }
     await this.prisma.apiKey.update({
       where: { id },
       data: { allowed_domains: allowedDomains },
@@ -186,6 +192,13 @@ export class ApiKeysService {
     // Strip protocol and path
     host = host.replace(/^https?:\/\//, '').split('/')[0]!;
     if (!host) return [];
+
+    // Validate: must be a proper hostname (letters, digits, hyphens, dots; at least one dot; valid TLD ≥ 2 chars)
+    // Rejects: localhost, IPs, spaces, special chars, single-label domains
+    const HOSTNAME_RE = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+    if (!HOSTNAME_RE.test(host)) {
+      throw new Error(`Invalid domain: "${host}"`);
+    }
 
     const domains = new Set<string>([host]);
     if (host.startsWith('www.')) {
