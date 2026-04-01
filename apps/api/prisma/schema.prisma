@@ -264,7 +264,6 @@ model Delivery {
   courier_id            String
   status                DeliveryStatus @default(assigned)
   assigned_at           DateTime       @default(now())
-  assignment_timeout_at DateTime?
   started_at            DateTime?
   completed_at          DateTime?
   order_closed_at       DateTime?

@@ -122,7 +122,6 @@ export interface Delivery {
   courier_id: string;
   status: DeliveryStatus;
   assigned_at: string;
-  assignment_timeout_at: string | null;
   started_at: string | null;
   completed_at: string | null;
   eta_seconds: number | null;

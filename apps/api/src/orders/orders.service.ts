@@ -25,7 +25,6 @@ import { TrackingService } from '../tracking/tracking.service.js';
 import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL } from '../shared/redis/redis.constants.js';
 import type IORedis from 'ioredis';
 
-const ASSIGNMENT_TIMEOUT_MS = 5 * 60_000; // courier has 5 min to accept
 
 // Distance tiers for dispatch algorithm (in meters)
 const ZONE_1_METERS = 150;
@@ -218,7 +217,6 @@ export class OrdersService {
           order_id: id,
           courier_id: dto.courier_id,
           status: 'assigned',
-          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
           ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
         },
       }).catch((err) => {
@@ -347,7 +345,6 @@ export class OrdersService {
           order_id: orderId,
           courier_id: user.courier_id!,
           status: 'assigned',
-          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
           ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
         },
       });
@@ -621,7 +618,6 @@ export class OrdersService {
           order_id: orderId,
           courier_id: courierId,
           status: 'assigned',
-          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
           ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
         },
       });
@@ -997,7 +993,6 @@ export class OrdersService {
           order_id: id,
           courier_id: courierId,
           status: 'assigned',
-          assignment_timeout_at: new Date(Date.now() + ASSIGNMENT_TIMEOUT_MS),
           ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
         },
       }).catch((err) => {
