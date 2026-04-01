@@ -17,6 +17,8 @@ CREATE TABLE "tracking_tokens" (
 );
 CREATE UNIQUE INDEX "tracking_tokens_order_id_key" ON "tracking_tokens"("order_id");
 CREATE UNIQUE INDEX "tracking_tokens_token_key"    ON "tracking_tokens"("token");
+-- Index for retention cron: DELETE WHERE expires_at < NOW() needs a range scan
+CREATE        INDEX "tracking_tokens_expires_at_idx" ON "tracking_tokens"("expires_at");
 ALTER TABLE "tracking_tokens"
   ADD CONSTRAINT "tracking_tokens_order_id_fkey"
   FOREIGN KEY ("order_id") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;

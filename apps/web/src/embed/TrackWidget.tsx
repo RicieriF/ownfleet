@@ -58,8 +58,6 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
     typeof window !== 'undefined' && window.self !== window.top;
 
   const socketRef = useRef<Socket | null>(null);
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
 
   // Overlay cursor coordinates onto snapshot for real-time courier position
   const [courierPos, setCourierPos] = useState<{ lat: number; lng: number } | null>(

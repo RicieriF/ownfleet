@@ -25,6 +25,7 @@ import {
   PUBLIC_DELIVERY_STATUS_CHANNEL,
   PUBLIC_DELIVERY_COMPLETED_CHANNEL,
   TRACKING_TOKEN_POST_DELIVERY_MINUTES,
+  TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES,
 } from './public-tracking.constants.js';
 import { GEOCODING_DONE_CHANNEL, GeocodingDonePayload } from '../geocoding/processors/geocoding.processor.js';
 import { Processor, Process } from '@nestjs/bull';
@@ -129,6 +130,23 @@ export class PublicTrackingGateway
               orderStatus: payload.orderStatus,
               deliveryStatus: payload.deliveryStatus,
             });
+
+          // Schedule delayed disconnect for terminal order states so the client
+          // has time to render the final UI state before the WS room is closed.
+          if (payload.orderStatus === 'cancelled' || payload.orderStatus === 'failed') {
+            this.disconnectQueue
+              .add(
+                { orderId: payload.orderId, deliveryId: '' },
+                {
+                  delay: TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES * 60 * 1000,
+                  jobId: `disconnect:${payload.orderId}`,
+                  removeOnComplete: true,
+                },
+              )
+              .catch((err) =>
+                this.logger.warn('Failed to schedule WS disconnect (terminal state)', err),
+              );
+          }
           return;
         }
 

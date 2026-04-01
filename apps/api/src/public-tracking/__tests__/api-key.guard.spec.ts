@@ -101,11 +101,12 @@ describe('ApiKeyGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('falls back to Referer header when Origin is absent', async () => {
+  it('denies request when Origin is absent (Referer is not trusted for domain check)', async () => {
+    // Security fix: Referer can be spoofed by server-side requests; only Origin is trusted.
+    // A missing Origin with no localhost fallback must be denied.
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
     const ctx = makeCtx({ key: 'wgo_validkey' }, { referer: 'https://pizza.com/menu' });
-    const result = await guard.canActivate(ctx);
-    expect(result).toBe(true);
+    await expect(guard.canActivate(ctx)).rejects.toThrow('Domain not allowed for this API key');
   });
 
   // ── Throttle ──────────────────────────────────────────────────────────────

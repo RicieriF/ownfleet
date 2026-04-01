@@ -8,3 +8,5 @@ export { PUBLIC_DELIVERY_STATUS_CHANNEL, PUBLIC_DELIVERY_COMPLETED_CHANNEL } fro
 export const TRACKING_TOKEN_TTL_HOURS = 4;
 /** Shortened TTL after delivery completion */
 export const TRACKING_TOKEN_POST_DELIVERY_MINUTES = 15;
+/** Delay before disconnecting WS room for terminal states: cancelled / failed */
+export const TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES = 2;

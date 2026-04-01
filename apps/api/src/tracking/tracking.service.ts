@@ -132,12 +132,13 @@ export class TrackingService {
 
       if (distance < ROUTE_DEVIATION_THRESHOLD_M) return;
 
-      // Check cooldown
+      // Atomic cooldown: SET NX EX prevents TOCTOU race where concurrent pings
+      // both see hasCooldown=0 and both trigger OSRM before the first sets cooldown.
       const cooldownKey = `route:recalc_cooldown:${deliveryId}`;
-      const hasCooldown = await this.redis.exists(cooldownKey);
-      if (hasCooldown) return;
+      const acquired = await this.redis.set(cooldownKey, '1', 'EX', 60, 'NX');
+      if (!acquired) return;
 
-      // OSRM route recalc
+      // OSRM route recalc (cooldown is already set atomically above)
       const routeGeometry = await this.fetchRouteGeometry(
         lat, lng, orderLat, orderLng, transportProfile,
       );
@@ -154,9 +155,6 @@ export class TrackingService {
         `route:origin:${deliveryId}`,
         JSON.stringify({ lat, lng }),
       );
-
-      // Set cooldown TTL=60s
-      await this.redis.set(cooldownKey, '1', 'EX', 60);
     } catch (err) {
       this.logger.warn('handlePublicTracking error — non-fatal', err);
     }

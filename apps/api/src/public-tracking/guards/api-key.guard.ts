@@ -55,9 +55,12 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     // ── 3. Origin check ─────────────────────────────────────────────────────
+    // Only Origin header is trusted for domain restriction — Referer can be spoofed
+    // by server-side requests (curl, fetch from attacker's backend). Missing Origin
+    // (same-origin browser request) is treated as empty domain → denied unless
+    // allowed_domains is empty (which throws on line 65) or localhost.
     const origin = req.headers['origin'] as string | undefined;
-    const referer = req.headers['referer'] as string | undefined;
-    const requestDomain = this.extractDomain(origin ?? referer ?? '');
+    const requestDomain = this.extractDomain(origin ?? '');
 
     // localhost is always allowed for development/testing (spec: "крім localhost для тестування")
     const isLocalhost = requestDomain === 'localhost' || requestDomain === '127.0.0.1';
@@ -83,6 +86,12 @@ export class ApiKeyGuard implements CanActivate {
     const externalId =
       (req.params['externalId'] as string | undefined) ??
       (req.query['externalId'] as string | undefined);
+
+    // Guard against excessively long externalIds that would bloat Redis SET members
+    if (externalId && externalId.length > 128) {
+      throw new HttpException('externalId too long', HttpStatus.BAD_REQUEST);
+    }
+
     if (externalId) {
       const minuteBucket = Math.floor(Date.now() / 60_000);
       const throttleKey = `throttle:api:${keyRecord.key_prefix}:${minuteBucket}`;
