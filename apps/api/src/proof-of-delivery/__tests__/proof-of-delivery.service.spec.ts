@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { ConfigService } from '@nestjs/config';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
 const EST_A = 'est-a';
 const userA: any = { id: 'u1', establishment_id: EST_A, role: 'manager', courier_id: 'c1', is_platform_admin: false };
@@ -57,6 +58,7 @@ describe('ProofOfDeliveryService', () => {
         { provide: WebhooksService, useValue: mockWebhooksService },
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: REDIS_CLIENT, useValue: { publish: jest.fn().mockResolvedValue(1), del: jest.fn().mockResolvedValue(1) } },
       ],
     }).compile();
     service = module.get<ProofOfDeliveryService>(ProofOfDeliveryService);

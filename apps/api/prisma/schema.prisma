@@ -106,6 +106,7 @@ model Establishment {
   delivery_sla_minutes Int?
   lat               Float?
   lng               Float?
+  hosted_tracking_enabled Boolean  @default(false)
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt
 
@@ -118,6 +119,7 @@ model Establishment {
   invite_tokens  InviteToken[]
   retention_logs RetentionLog[]
   billing_events BillingEvent[]
+  api_keys       ApiKey[]
 
   @@map("establishments")
 }
@@ -241,8 +243,9 @@ model Order {
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
 
-  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
-  delivery      Delivery?
+  establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  delivery       Delivery?
+  tracking_token TrackingToken?
 
   @@unique([external_id, establishment_id])
   @@index([establishment_id])
@@ -261,7 +264,6 @@ model Delivery {
   courier_id            String
   status                DeliveryStatus @default(assigned)
   assigned_at           DateTime       @default(now())
-  assignment_timeout_at DateTime?
   started_at            DateTime?
   completed_at          DateTime?
   order_closed_at       DateTime?
@@ -277,7 +279,7 @@ model Delivery {
 
   @@index([courier_id])
   @@index([courier_id, status])
-  @@index([status])
+  @@index([status], map: "idx_deliveries_status")
   @@map("deliveries")
 }
 
@@ -419,4 +421,45 @@ model BillingEvent {
 
   @@index([establishment_id])
   @@map("billing_events")
+}
+
+// ─────────────────────────────────────────
+// Tracking Tokens (customer tracking widget)
+// No establishment_id — intentional multi-tenancy exception.
+// Access only via UUID token (122 bits entropy).
+// ─────────────────────────────────────────
+
+model TrackingToken {
+  id         String   @id @default(uuid())
+  order_id   String   @unique
+  token      String   @unique @default(uuid())
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("tracking_tokens")
+}
+
+// ─────────────────────────────────────────
+// API Keys (for customer tracking widget)
+// Public key by design. Protected by domain restriction + HMAC hash.
+// ─────────────────────────────────────────
+
+model ApiKey {
+  id               String    @id @default(uuid())
+  establishment_id String
+  key_hash         String
+  key_prefix       String    @unique
+  name             String    @default("Default")
+  is_active        Boolean   @default(true)
+  allowed_domains  String[]  @default([])
+  last_used_at     DateTime?
+  last_used_domain String?
+  created_at       DateTime  @default(now())
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@map("api_keys")
 }

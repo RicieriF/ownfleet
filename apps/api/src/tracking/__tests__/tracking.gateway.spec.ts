@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TrackingGateway } from '../tracking.gateway.js';
-import { REDIS_SUBSCRIBER } from '../redis.provider.js';
+import { RedisSubscriberFactory } from '../../shared/redis/redis-subscriber.factory.js';
 
 const mockSocket = (token?: string) => ({
   id: 'socket-1',
@@ -31,7 +31,7 @@ describe('TrackingGateway', () => {
         TrackingGateway,
         { provide: JwtService, useValue: mockJwt },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: REDIS_SUBSCRIBER, useValue: mockRedisSub },
+        { provide: RedisSubscriberFactory, useValue: { create: jest.fn().mockReturnValue(mockRedisSub) } },
       ],
     }).compile();
     gateway = module.get<TrackingGateway>(TrackingGateway);

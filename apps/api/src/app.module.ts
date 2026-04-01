@@ -20,6 +20,10 @@ import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { ShiftsModule } from './shifts/shifts.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { TelegramModule } from './telegram/telegram.module.js';
+import { GeocodingModule } from './geocoding/geocoding.module.js';
+import { SharedRedisModule } from './shared/redis/redis.module.js';
+import { ApiKeysModule } from './api-keys/api-keys.module.js';
+import { PublicTrackingModule } from './public-tracking/public-tracking.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -33,6 +37,7 @@ import { HealthController } from './health/health.controller.js';
         redis: config.getOrThrow<string>('REDIS_URL'),
       }),
     }),
+    SharedRedisModule,
     PrismaModule,
     AuthModule,
     EstablishmentsModule,
@@ -49,6 +54,9 @@ import { HealthController } from './health/health.controller.js';
     ShiftsModule,
     PlatformModule,
     TelegramModule,
+    GeocodingModule,
+    ApiKeysModule,
+    PublicTrackingModule,
   ],
   controllers: [HealthController],
   providers: [

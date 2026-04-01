@@ -9,8 +9,8 @@ import { Server, Socket } from 'socket.io';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRedisSubscriber } from './redis.provider.js';
-import type { Redis } from 'ioredis';
+import { RedisSubscriberFactory } from '../shared/redis/redis-subscriber.factory.js';
+import type IORedis from 'ioredis';
 import type { JwtPayload } from '../auth/auth.types.js';
 import type { CourierMovedEvent } from './tracking.service.js';
 
@@ -25,24 +25,21 @@ export class TrackingGateway
   private server!: Server;
 
   private readonly logger = new Logger(TrackingGateway.name);
+  private redisSub!: IORedis;
 
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-    @InjectRedisSubscriber() private readonly redisSub: Redis,
+    private readonly redisSubscriberFactory: RedisSubscriberFactory,
   ) {}
 
   afterInit(server: Server): void {
-    // Apply CORS after init so we can read the env variable.
-    // ALLOWED_ORIGINS is a comma-separated list, e.g. "https://app.weego.ua,https://admin.weego.ua"
     const raw = this.config.get<string>('ALLOWED_ORIGINS') ?? '';
     const origins = raw
       .split(',')
       .map((o) => o.trim())
       .filter(Boolean);
 
-    // server.engine may not be available in all Socket.IO versions / adapter combos.
-    // When present, apply CORS dynamically; otherwise the decorator-level CORS applies.
     const engine = (server as unknown as { engine?: { opts?: Record<string, unknown> } }).engine;
     if (engine?.opts) {
       engine.opts['cors'] = {
@@ -55,7 +52,8 @@ export class TrackingGateway
   }
 
   onModuleInit(): void {
-    // Subscribe to Redis pub/sub once on startup
+    this.redisSub = this.redisSubscriberFactory.create();
+
     this.redisSub.subscribe(PUBSUB_CHANNEL, (err) => {
       if (err) this.logger.error('Redis subscribe failed', err);
     });
@@ -63,7 +61,6 @@ export class TrackingGateway
     this.redisSub.on('message', (_channel: string, message: string) => {
       try {
         const event = JSON.parse(message) as CourierMovedEvent;
-        // Fan-out only to the room of the relevant establishment
         const room = `est:${event.establishment_id}`;
         this.server.to(room).emit('courier_moved', {
           courier_id: event.courier_id,

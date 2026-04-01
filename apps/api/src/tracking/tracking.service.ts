@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, ForbiddenException, Logger, Inject } from '@nestjs/common';
 import { InjectRedis } from './redis.provider.js';
 import { InjectQueue } from '@nestjs/bull';
 import type { Redis } from 'ioredis';
@@ -6,9 +6,19 @@ import type { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { PingDto } from './dto/ping.dto.js';
+import { TransportMode } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 
 const LOCATION_TTL_SEC = 5 * 60; // 5 min cache in Redis
 const PUBSUB_CHANNEL = 'courier_moved';
+const ROUTE_DEVIATION_THRESHOLD_M = 50;
+const OSRM_PROFILE: Record<TransportMode, string> = {
+  car: 'driving',
+  moto_gas: 'driving',
+  moto_electric: 'driving',
+  bicycle: 'cycling',
+  walking: 'foot',
+};
 
 export const PING_PERSIST_QUEUE = 'ping-persist';
 
@@ -28,15 +38,28 @@ export interface CourierMovedEvent {
   ts: number;
 }
 
+/** Value stored in courier:active_order:{courierId} */
+export interface ActiveOrderCache {
+  orderId: string;
+  deliveryId: string;
+  orderLat: number | null;
+  orderLng: number | null;
+  transportProfile: string;
+}
+
 @Injectable()
 export class TrackingService {
   private readonly logger = new Logger(TrackingService.name);
+  private readonly osrmUrl: string;
 
   constructor(
     private readonly prisma: PrismaService,
     @InjectRedis() private readonly redis: Redis,
     @InjectQueue(PING_PERSIST_QUEUE) private readonly pingQueue: Queue<PingJob>,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.osrmUrl = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
+  }
 
   async handlePing(dto: PingDto, user: AuthenticatedUser): Promise<void> {
     if (!user.courier_id) {
@@ -45,8 +68,7 @@ export class TrackingService {
 
     const courierId = user.courier_id;
 
-    // Cache last known position in Redis (TTL 5 min)
-    // Failure is non-fatal — DB is source of truth, cache miss is recovered next ping
+    // ── Cache last known location ──────────────────────────────────────────
     const redisKey = `courier:location:${courierId}`;
     try {
       await this.redis.setex(
@@ -58,8 +80,7 @@ export class TrackingService {
       this.logger.warn('Redis setex failed for ping cache — continuing', err);
     }
 
-    // Publish to Redis Pub/Sub → TrackingGateway fans out to WS room
-    // Fire-and-forget: Redis drop must not cause a 500 to the courier
+    // ── Pub/Sub to manager dashboard ───────────────────────────────────────
     const event: CourierMovedEvent = {
       courier_id: courierId,
       establishment_id: user.establishment_id,
@@ -68,16 +89,145 @@ export class TrackingService {
       battery: dto.battery ?? null,
       ts: Date.now(),
     };
-
     this.redis.publish(PUBSUB_CHANNEL, JSON.stringify(event)).catch((err) =>
       this.logger.warn('Redis publish failed for courier_moved event', err),
     );
 
-    // Enqueue async DB persist — decouples HTTP response from Postgres write
+    // ── Public tracking: location + route deviation ────────────────────────
+    void this.handlePublicTracking(courierId, dto.lat, dto.lng);
+
+    // ── Async DB persist ───────────────────────────────────────────────────
     await this.pingQueue.add(
       { courier_id: courierId, lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null },
       { removeOnComplete: 100, removeOnFail: 50 },
     );
+  }
+
+  private async handlePublicTracking(
+    courierId: string,
+    lat: number,
+    lng: number,
+  ): Promise<void> {
+    try {
+      const raw = await this.redis.get(`courier:active_order:${courierId}`);
+      if (!raw) return; // courier has no active delivery
+
+      const active = JSON.parse(raw) as ActiveOrderCache;
+      const { orderId, deliveryId, orderLat, orderLng, transportProfile } = active;
+
+      // Publish location to public WS channel
+      this.redis.publish(
+        `order:${orderId}:public`,
+        JSON.stringify({ type: 'location', lat, lng, ts: Date.now() }),
+      ).catch(() => {});
+
+      // Route deviation check
+      if (orderLat === null || orderLng === null) return;
+
+      const originRaw = await this.redis.get(`route:origin:${deliveryId}`);
+      if (!originRaw) return;
+
+      const origin = JSON.parse(originRaw) as { lat: number; lng: number };
+      const distance = this.haversineMeters(lat, lng, origin.lat, origin.lng);
+
+      if (distance < ROUTE_DEVIATION_THRESHOLD_M) return;
+
+      // Atomic cooldown: SET NX EX prevents TOCTOU race where concurrent pings
+      // both see hasCooldown=0 and both trigger OSRM before the first sets cooldown.
+      const cooldownKey = `route:recalc_cooldown:${deliveryId}`;
+      const acquired = await this.redis.set(cooldownKey, '1', 'EX', 60, 'NX');
+      if (!acquired) return;
+
+      // OSRM route recalc (cooldown is already set atomically above)
+      const routeGeometry = await this.fetchRouteGeometry(
+        lat, lng, orderLat, orderLng, transportProfile,
+      );
+      if (!routeGeometry) return;
+
+      // Publish route to public WS channel
+      this.redis.publish(
+        `order:${orderId}:public`,
+        JSON.stringify({ type: 'route', routeGeometry }),
+      ).catch(() => {});
+
+      // Cache route geometry for snapshot requests (reconnects, page reloads).
+      // TTL 8h matches active_order — overwritten on each recalc, DEL'd on delivery end.
+      await this.redis.set(
+        `route:${deliveryId}`,
+        JSON.stringify(routeGeometry),
+        'EX',
+        8 * 3600,
+      );
+
+      // Update route:origin to current position — keep existing TTL via GETEX not possible,
+      // so re-set with full 8h TTL to prevent the key becoming persistent.
+      await this.redis.set(
+        `route:origin:${deliveryId}`,
+        JSON.stringify({ lat, lng }),
+        'EX',
+        8 * 3600,
+      );
+    } catch (err) {
+      this.logger.warn('handlePublicTracking error — non-fatal', err);
+    }
+  }
+
+  // ── Redis key management for active deliveries ─────────────────────────
+
+  /**
+   * Called by OrdersService when a delivery is assigned.
+   * Sets the courier:active_order key and route:origin key.
+   */
+  async setActiveOrder(
+    courierId: string,
+    orderId: string,
+    deliveryId: string,
+    orderLat: number | null,
+    orderLng: number | null,
+    transportMode: TransportMode | null,
+    establishmentLat: number | null,
+    establishmentLng: number | null,
+  ): Promise<void> {
+    const transportProfile = transportMode ? (OSRM_PROFILE[transportMode] ?? 'driving') : 'driving';
+
+    const activeOrder: ActiveOrderCache = {
+      orderId,
+      deliveryId,
+      orderLat,
+      orderLng,
+      transportProfile,
+    };
+
+    // TTL 8h as safety net — DEL'd explicitly on complete/cancel/reassign
+    await this.redis.set(
+      `courier:active_order:${courierId}`,
+      JSON.stringify(activeOrder),
+      'EX',
+      8 * 3600,
+    );
+
+    // Set route:origin to establishment coordinates if available
+    // TTL 8h matches active_order — prevents unbounded Redis growth if clearActiveOrder fails
+    if (establishmentLat !== null && establishmentLng !== null) {
+      await this.redis.set(
+        `route:origin:${deliveryId}`,
+        JSON.stringify({ lat: establishmentLat, lng: establishmentLng }),
+        'EX',
+        8 * 3600,
+      );
+    }
+  }
+
+  /**
+   * Called by OrdersService / ProofOfDeliveryService when delivery ends.
+   * Clears the courier:active_order and route keys.
+   */
+  async clearActiveOrder(courierId: string, deliveryId: string): Promise<void> {
+    await Promise.all([
+      this.redis.del(`courier:active_order:${courierId}`),
+      this.redis.del(`route:origin:${deliveryId}`),
+      this.redis.del(`route:${deliveryId}`),
+    ]).catch((err) => this.logger.warn('clearActiveOrder Redis error', err));
   }
 
   async getLastKnownPosition(
@@ -111,6 +261,52 @@ export class TrackingService {
       return { lat: p.lat, lng: p.lng, battery: typeof p.battery === 'number' ? p.battery : null, ts: p.ts };
     } catch {
       this.logger.warn(`Failed to parse Redis location for courier ${courierId}`);
+      return null;
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6_371_000;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  private async fetchRouteGeometry(
+    fromLat: number,
+    fromLng: number,
+    toLat: number,
+    toLng: number,
+    profile: string,
+  ): Promise<unknown | null> {
+    const url =
+      `${this.osrmUrl}/route/v1/${profile}/${fromLng},${fromLat};${toLng},${toLat}` +
+      `?overview=simplified&geometries=geojson`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'weego-cmi/1.0' },
+      });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+
+      const data = (await res.json()) as {
+        code: string;
+        routes?: Array<{ geometry: unknown }>;
+      };
+      return data.routes?.[0]?.geometry ?? null;
+    } catch {
+      clearTimeout(timer);
       return null;
     }
   }

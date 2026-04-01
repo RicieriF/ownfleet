@@ -13,8 +13,10 @@ import { WebhooksService } from '../../webhooks/webhooks.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { EtaService } from '../../eta/eta.service.js';
 import { TrackingGateway } from '../../tracking/tracking.gateway.js';
+import { TrackingService } from '../../tracking/tracking.service.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
 import { CouriersService } from '../../couriers/couriers.service.js';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
 const EST_A = 'est-a';
 
@@ -147,9 +149,11 @@ describe('OrdersService — dispatch algorithm', () => {
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TrackingGateway, useValue: mockGateway },
+        { provide: TrackingService, useValue: { setActiveOrder: jest.fn().mockResolvedValue(undefined), clearActiveOrder: jest.fn().mockResolvedValue(undefined) } },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
+        { provide: REDIS_CLIENT, useValue: { publish: jest.fn().mockResolvedValue(1) } },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);

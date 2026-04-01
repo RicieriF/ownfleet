@@ -57,14 +57,14 @@ B2B SaaS платформа для управління власними кур�
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
 | `RetentionModule` | Cron: очищення orders + location_pings + tracking_tokens (де expires_at < NOW()); авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (5 cron jobs, кожні 5–30 хв) |
 | `EtaModule` | Розрахунок ETA через OSRM, детекція виїзду курʼєра (100м), cron-алерти про запізнення |
-| `GeocodingModule` | Геокодування адрес через Nominatim; Redis кеш; Bull черга (rate limit 1 req/s); викликається з `IntegrationsModule` при отриманні POS webhook. Якщо координати вже є в payload — Nominatim не викликається. Timeout 2с — замовлення зберігається без блокування |
+| `GeocodingModule` | Геокодування адрес через Nominatim; Redis кеш TTL 30 днів; Bull queue rate limit 1 req/s; якщо координати вже є в payload — Nominatim не викликається; timeout 2с — замовлення зберігається без блокування; після успішного geocoding: `redis.publish('geocoding:done', ...)` → PublicTrackingModule емітить `order:coords_ready` |
 | `IntegrationsModule` | Poster POS webhook + iiko polling; при отриманні замовлення без координат → виклик `GeocodingService` |
 | `WebhooksModule` | Outbound webhooks з HMAC, Bull retry queue |
 | `NotificationsModule` | FCM push + Telegram (завжди fire-and-forget) |
 | `OnboardingModule` | Invite tokens для курʼєрів, onboarding статус, збереження transport_mode |
 | `AnalyticsModule` | Статистика доставок та ефективності |
-| `ApiKeysModule` | 🔲 PLANNED: API ключі для закладів (customer tracking widget); таблиця `api_keys` з `is_active` для soft-disable без втрати audit history |
-| `PublicTrackingModule` | 🔲 PLANNED: Публічні endpoints без auth для customer tracking widget; окремий WS namespace `/public`; кімнати `order:{order_id}:public` (прив'язані до order, не delivery — delivery може ще не існувати при State 0) |
+| `ApiKeysModule` | API ключі для закладів (customer tracking widget); HMAC-SHA256 key_hash; `is_active` для soft-disable; `allowed_domains` + auto-www; `last_used_domain` аудит; `ApiKeyGuard` з throttle унікальних external_id |
+| `PublicTrackingModule` | Публічні endpoints без auth для customer tracking widget; `ApiKeyGuard`; окремий WS namespace `/public`; кімнати `order:{order_id}:public`; snapshot всіх 6 станів; hosted tracking + `/t/[token]` redirect |
 
 ---
 
@@ -119,7 +119,6 @@ webhooks        (id, establishment_id, url, secret, events TEXT[], active,
 invite_tokens   (id, establishment_id, token, courier_id, expires_at, used_at)
 retention_logs  (id, establishment_id, deleted_orders, deleted_pings, run_at)
 billing_events  (id, establishment_id, type, amount_usd, notes, created_at)
--- 🔲 PLANNED (customer tracking widget):
 tracking_tokens (id, order_id UNIQUE, token UNIQUE, expires_at, created_at)
                 -- expires_at = created_at + 4h; без establishment_id — навмисний виняток з multi-tenancy;
                 -- доступ тільки через UUID token (122 bits entropy); UNIQUE(order_id) гарантує ідемпотентність
@@ -308,9 +307,9 @@ FCM push при `invalid_registration` → автоматично видалит
 
 ## Статус реалізації
 
-Всі заплановані компоненти реалізовані та закомічені в `main`.
+Всі заплановані компоненти реалізовані та закомічені в `main`. Customer Tracking Widget (фази 0–3) реалізований та закомічений в `feat/geocoding-module`.
 
-**API (NestJS) — ✅ 14/14 модулів:**
+**API (NestJS) — ✅ 17/17 модулів:**
 ```
 ✅  1. Prisma schema + migrations
 ✅  2. AuthModule (JWT + refresh tokens)
@@ -320,15 +319,18 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  6. TrackingModule (GPS пінги + Redis + WebSocket + departure detection)
 ✅  7. ProofOfDeliveryModule
 ✅  8. NotificationsModule (FCM + Telegram)
-✅  9. RetentionModule (cron jobs, включаючи ETA overdue alerts)
+✅  9. RetentionModule (cron jobs, включаючи ETA overdue alerts + tracking_tokens cleanup)
 ✅ 10. IntegrationsModule (Poster webhook + iiko polling)
 ✅ 11. OnboardingModule (invite tokens + transport_mode)
 ✅ 12. AnalyticsModule
 ✅ 13. WebhooksModule (outbound HMAC + Bull retry)
 ✅ 14. EtaModule (OSRM розрахунок, детекція виїзду 100м, 5 типів транспорту)
+✅ 15. GeocodingModule (Nominatim + Redis cache + Bull queue + geocoding:done pub/sub)
+✅ 16. ApiKeysModule (HMAC key gen, domain restriction, toggle, last_used audit)
+✅ 17. PublicTrackingModule (ApiKeyGuard, /public WS namespace, snapshot, hosted tracking)
 ```
 
-**Web Dashboard (Next.js) — ✅ 7/7 сторінок:**
+**Web Dashboard (Next.js) — ✅ 8/8 сторінок + embed:**
 ```
 ✅  /               — KPI + активні доставки + статус курʼєрів
 ✅  /couriers       — список курʼєрів + invite panel
@@ -336,7 +338,9 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  /analytics      — summary KPIs + per-courier breakdown
 ✅  /integrations   — Poster + iiko config cards
 ✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + timezone + retention config + ETA/SLA налаштування (координати, SLA, алерти) + dispatch_mode selector (manual/recommend/auto)
+✅  /settings       — дані закладу + timezone + retention + ETA/SLA + dispatch_mode + Tracking Widget секція
+✅  /embed/track/[token] — публічна сторінка трекінгу (6 станів + TOKEN_EXPIRED + Leaflet + WS)
+✅  /t/[token]      — short URL redirect → /embed/track/[token]
 ```
 
 **Mobile App (React Native + Expo) — ✅ реалізовано:**
@@ -350,7 +354,9 @@ FCM push при `invalid_registration` → автоматично видалит
 ✅  Zustand stores (auth + shift з AsyncStorage persistence)
 ```
 
-**Тести — ✅ 324 тестів / 21 суїт / all green**
+**tracker.js** — TypeScript + esbuild → `public/tracker.js`; `Weego.track({apiKey, orderId})`; retry 2с × 15; auto-init з `data-api-key` атрибуту.
+
+**Тести — ✅ 432 тестів / 27 суїт / all green**
 
 ---
 
@@ -379,6 +385,8 @@ S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET
 BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY
 WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
 OSRM_URL             (optional; default: https://router.project-osrm.org)
+API_KEY_SECRET       (HMAC-SHA256 key for API key hashing; rotate 90 days — app crashes on startup if unset)
+NEXT_PUBLIC_APP_URL  (web app public URL, e.g. https://weego.app; used in tracker.js base URL fallback and embed code generation in /settings)
 ```
 
 Ніяких `.env` файлів у репозиторії. `.gitignore` + pre-commit hook.

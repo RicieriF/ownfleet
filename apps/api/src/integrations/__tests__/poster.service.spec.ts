@@ -3,6 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { PosterService } from '../poster.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { GeocodingService } from '../../geocoding/geocoding.service.js';
 
 const EST_ID = 'est-poster-1';
 const APP_SECRET = 'super-secret-key';
@@ -30,6 +31,7 @@ const mockOrder = {
   create: jest.fn(),
 };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
+const mockGeocodingService = { enqueueGeocode: jest.fn().mockResolvedValue(undefined) };
 
 describe('PosterService', () => {
   let service: PosterService;
@@ -39,6 +41,7 @@ describe('PosterService', () => {
       providers: [
         PosterService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: GeocodingService, useValue: mockGeocodingService },
       ],
     }).compile();
     service = module.get<PosterService>(PosterService);
@@ -167,6 +170,71 @@ describe('PosterService', () => {
           source: 'poster',
         }),
       });
+    });
+  });
+
+  // ── Geocoding integration ──────────────────────────────────────────────────
+
+  describe('geocoding', () => {
+    it('does NOT enqueue geocoding when payload has coordinates', async () => {
+      const rawBody = makeRawBody(basePayload); // has lat/lng
+      const sig = makeSignature(APP_SECRET, rawBody);
+
+      await service.handleWebhook(EST_ID, rawBody, sig);
+
+      expect(mockGeocodingService.enqueueGeocode).not.toHaveBeenCalled();
+    });
+
+    it('enqueues geocoding when payload has no coordinates', async () => {
+      const payloadNoCoords = {
+        ...basePayload,
+        data: { address: 'вул. Хрещатик 1', comment: null },
+      };
+      mockOrder.create.mockResolvedValue({ id: 'order-uuid', external_id: 'ext-order-42' });
+
+      const rawBody = makeRawBody(payloadNoCoords);
+      const sig = makeSignature(APP_SECRET, rawBody);
+
+      await service.handleWebhook(EST_ID, rawBody, sig);
+
+      expect(mockGeocodingService.enqueueGeocode).toHaveBeenCalledWith(
+        'order-uuid',
+        'вул. Хрещатик 1',
+      );
+    });
+
+    it('does NOT enqueue geocoding for a duplicate (existing) order', async () => {
+      const existingOrder = { id: 'existing-id', external_id: 'ext-order-42' };
+      mockOrder.findFirst.mockResolvedValue(existingOrder);
+
+      const payloadNoCoords = {
+        ...basePayload,
+        data: { address: 'вул. Хрещатик 1' },
+      };
+      const rawBody = makeRawBody(payloadNoCoords);
+      const sig = makeSignature(APP_SECRET, rawBody);
+
+      await service.handleWebhook(EST_ID, rawBody, sig);
+
+      expect(mockGeocodingService.enqueueGeocode).not.toHaveBeenCalled();
+    });
+
+    it('enqueues geocoding when payload has lat=0, lng=0 (POS sentinel for missing coords)', async () => {
+      const payloadZeroCoords = {
+        ...basePayload,
+        data: { address: 'вул. Хрещатик 1', delivery: { lat: 0, lng: 0 } },
+      };
+      mockOrder.create.mockResolvedValue({ id: 'order-uuid', external_id: 'ext-order-42' });
+
+      const rawBody = makeRawBody(payloadZeroCoords);
+      const sig = makeSignature(APP_SECRET, rawBody);
+
+      await service.handleWebhook(EST_ID, rawBody, sig);
+
+      expect(mockGeocodingService.enqueueGeocode).toHaveBeenCalledWith(
+        'order-uuid',
+        'вул. Хрещатик 1',
+      );
     });
   });
 });

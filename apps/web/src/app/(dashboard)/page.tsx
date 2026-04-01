@@ -104,7 +104,11 @@ export default async function OrdersPage() {
       </div>
 
       <Suspense fallback={<div className="text-sm text-[var(--t4)]">Завантаження...</div>}>
-        <OrdersTable orders={orders} couriers={couriers} />
+        <OrdersTable
+          orders={orders}
+          couriers={couriers}
+          hostedTrackingEnabled={establishment.hosted_tracking_enabled ?? false}
+        />
       </Suspense>
     </div>
   );

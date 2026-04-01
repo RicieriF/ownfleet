@@ -60,14 +60,19 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 interface Props {
   orders: Order[];
   couriers: CourierWithStatus[];
+  hostedTrackingEnabled: boolean;
 }
 
-export function OrdersTable({ orders, couriers }: Props) {
+export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [assignModalOrder, setAssignModalOrder] = useState<Order | null>(null);
   const [selectedCourierId, setSelectedCourierId] = useState('');
   const [actionError, setActionError] = useState('');
+  // orderId → tracking token (lazy, generated on first click)
+  const [trackingTokens, setTrackingTokens] = useState<Record<string, string>>({});
+  const [copiedTrackingId, setCopiedTrackingId] = useState<string | null>(null);
+  const [tokenLoadingId, setTokenLoadingId] = useState<string | null>(null);
 
   const activeCouriers = couriers.filter((c) => c.active && c.on_shift);
 
@@ -95,6 +100,35 @@ export function OrdersTable({ orders, couriers }: Props) {
     }
   }
 
+  async function handleCopyTrackingLink(orderId: string) {
+    // Use cached token if already fetched
+    let token = trackingTokens[orderId];
+    if (!token) {
+      setTokenLoadingId(orderId);
+      try {
+        const res = await apiPost<{ token: string }>(
+          `/api/v1/orders/${orderId}/tracking-token`,
+          {},
+        );
+        token = res.token;
+        setTrackingTokens((prev) => ({ ...prev, [orderId]: token! }));
+      } catch {
+        setActionError('Не вдалось отримати посилання');
+        setTokenLoadingId(null);
+        return;
+      }
+      setTokenLoadingId(null);
+    }
+
+    const url = `${window.location.origin}/t/${token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedTrackingId(orderId);
+      setTimeout(() => setCopiedTrackingId(null), 2000);
+    }).catch(() => {
+      setActionError('Не вдалось скопіювати посилання');
+    });
+  }
+
   return (
     <>
       {actionError && (
@@ -107,7 +141,7 @@ export function OrdersTable({ orders, couriers }: Props) {
         <table className="w-full text-sm">
           <thead className="border-b border-[var(--br)]">
             <tr>
-              {['Адреса', 'Статус', 'Курʼєр', 'Час', 'Дії'].map((h) => (
+              {['Адреса', 'Статус', 'Курʼєр', 'Час', ...(hostedTrackingEnabled ? ['Клієнт'] : []), 'Дії'].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]"
@@ -120,7 +154,7 @@ export function OrdersTable({ orders, couriers }: Props) {
           <tbody className="divide-y divide-[var(--br)]">
             {orders.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
+                <td colSpan={hostedTrackingEnabled ? 6 : 5} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
                   Активних замовлень немає
                 </td>
               </tr>
@@ -175,6 +209,31 @@ export function OrdersTable({ orders, couriers }: Props) {
                     })
                   )}
                 </td>
+                {hostedTrackingEnabled && (
+                  <td className="px-3 py-2.5">
+                    {(order.status === 'assigned' || order.status === 'in_progress') && (
+                      <button
+                        onClick={() => handleCopyTrackingLink(order.id)}
+                        disabled={tokenLoadingId === order.id || isPending}
+                        title="Копіювати посилання клієнту"
+                        className="px-2 py-1 text-xs rounded-[6px] transition-all disabled:opacity-40"
+                        style={{
+                          background: copiedTrackingId === order.id
+                            ? 'rgba(106,170,132,0.15)'
+                            : 'var(--s2)',
+                          color: copiedTrackingId === order.id ? 'var(--acm)' : 'var(--t3)',
+                          border: `1px solid ${copiedTrackingId === order.id ? 'rgba(106,170,132,0.3)' : 'var(--br)'}`,
+                        }}
+                      >
+                        {tokenLoadingId === order.id
+                          ? '…'
+                          : copiedTrackingId === order.id
+                            ? '✓ Скопійовано'
+                            : '📋 Посилання'}
+                      </button>
+                    )}
+                  </td>
+                )}
                 <td className="px-3 py-2.5">
                   <div className="flex gap-2">
                     {order.status === 'pending' && (

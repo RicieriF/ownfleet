@@ -24,7 +24,6 @@ export interface ActiveDelivery {
   order_id: string;
   status: DeliveryStatus;
   assigned_at: string;
-  assignment_timeout_at: string | null;
   started_at: string | null;
   order: {
     id: string;

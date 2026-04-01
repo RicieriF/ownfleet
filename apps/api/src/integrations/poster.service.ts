@@ -1,6 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { GeocodingService } from '../geocoding/geocoding.service.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
 
 interface PosterOrderPayload {
@@ -22,7 +23,10 @@ interface PosterOrderPayload {
 export class PosterService {
   private readonly logger = new Logger(PosterService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly geocodingService: GeocodingService,
+  ) {}
 
   /**
    * Validates Poster HMAC signature and upserts the order.
@@ -108,6 +112,11 @@ export class PosterService {
     });
 
     this.logger.log(`Poster order ingested: ${order.id} (ext: ${externalId})`);
+
+    if (!lat && !lng) {
+      void this.geocodingService.enqueueGeocode(order.id, address);
+    }
+
     return { received: true, order_id: order.id };
   }
 }
