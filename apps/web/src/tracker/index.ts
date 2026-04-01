@@ -69,6 +69,9 @@ export function injectIframe(token: string, lang: Lang): void {
   iframe.src = src;
   iframe.setAttribute('allow', 'geolocation');
   iframe.setAttribute('loading', 'eager');
+  // sandbox restricts the iframe to same-origin scripts only — prevents the embed
+  // page from accessing parent window or navigating the top frame
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
   iframe.style.cssText = [
     'width:100%',
     'height:520px',

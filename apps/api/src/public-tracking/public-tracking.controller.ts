@@ -42,6 +42,10 @@ export class PublicTrackingController {
    */
   @Get('public/track/:token')
   async getSnapshot(@Param('token') token: string) {
+    // Tokens are UUIDs (36 chars). Reject oversized values before hitting DB.
+    if (!token || token.length > 64) {
+      throw new NotFoundException('Tracking token not found or expired');
+    }
     const snapshot = await this.service.getSnapshot(token);
     if (!snapshot) {
       throw new NotFoundException('Tracking token not found or expired');

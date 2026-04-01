@@ -16,6 +16,7 @@ import { GEOCODING_QUEUE } from './geocoding.constants.js';
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: true,
+        removeOnFail: 50,
       },
     }),
   ],

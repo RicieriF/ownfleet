@@ -2,6 +2,7 @@ import { Logger, Inject } from '@nestjs/common';
 import { Processor, Process } from '@nestjs/bull';
 import type { Job } from 'bull';
 import type IORedis from 'ioredis';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GeocodingService, GeocodeJob } from '../geocoding.service.js';
 import { GEOCODING_QUEUE } from '../geocoding.constants.js';
@@ -35,10 +36,19 @@ export class GeocodingProcessor {
       return; // order stays with lat=null; no Redis event
     }
 
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: { lat: coords.lat, lng: coords.lng },
-    });
+    try {
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { lat: coords.lat, lng: coords.lng },
+      });
+    } catch (err) {
+      // P2025: order was deleted (e.g. by retention) between enqueue and processing — skip silently
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        this.logger.warn(`Geocoding skipped — order ${orderId} no longer exists`);
+        return;
+      }
+      throw err;
+    }
 
     const payload: GeocodingDonePayload = { orderId, lat: coords.lat, lng: coords.lng };
     await this.redis.publish(GEOCODING_DONE_CHANNEL, JSON.stringify(payload));
