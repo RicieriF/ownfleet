@@ -48,6 +48,9 @@ export function deriveWidgetState(snapshot: TrackSnapshot | null): WidgetState {
 
   if (orderStatus === 'completed') return 'state3';
   if (orderStatus === 'cancelled') return 'state4';
+  // Check order-level failed first: snapshot excludes failed deliveries (reassignment rule),
+  // so after reload deliveryStatus is null for a failed order — deriving from orderStatus is correct.
+  if (orderStatus === 'failed') return 'state5';
   if (deliveryStatus === 'failed') return 'state5';
   if (deliveryStatus === 'in_progress') return 'state2';
   if (deliveryStatus === 'assigned') return 'state1';

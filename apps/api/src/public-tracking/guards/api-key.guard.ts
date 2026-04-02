@@ -14,8 +14,11 @@ import { Inject } from '@nestjs/common';
 import { ApiKeysService } from '../../api-keys/api-keys.service.js';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
-// Unique external_id throttle: SADD per (keyPrefix + minuteBucket)
-const THROTTLE_UNIQUE_LIMIT = 10;
+// Unique external_id throttle: SADD per (keyPrefix + minuteBucket).
+// Purpose: brute-force guard only — not a business rate limit.
+// 60/min allows even a busy establishment's legitimate traffic (1 new customer/sec)
+// while still blocking obvious enumeration attacks (thousands/min).
+const THROTTLE_UNIQUE_LIMIT = 60;
 const THROTTLE_TTL_SEC = 120; // 2 min window
 
 export interface ApiKeyContext {
@@ -70,8 +73,10 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     const domainAllowed = isLocalhost || keyRecord.allowed_domains.some((d) => {
-      // Exact match or suffix match (sub.pizza.com allowed if pizza.com is in list)
-      return requestDomain === d || requestDomain.endsWith(`.${d}`);
+      // Exact match only. www is handled by expandDomains() which stores both
+      // "pizza.com" and "www.pizza.com". Wildcard subdomains are NOT allowed —
+      // any subdomain takeover (*.pizza.com) would otherwise grant full key access.
+      return requestDomain === d;
     });
 
     if (!domainAllowed) {

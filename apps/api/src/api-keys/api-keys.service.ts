@@ -6,6 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/auth.types.js';
@@ -33,30 +34,50 @@ export class ApiKeysService {
     dto: CreateApiKeyDto,
     user: AuthenticatedUser,
   ): Promise<{ key: string; id: string; key_prefix: string }> {
-    const rawBytes = crypto.randomBytes(24); // 192 bits of entropy
-    const key = API_KEY_PREFIX + rawBytes.toString('base64url');
-    const keyPrefix = key.slice(0, API_KEY_PREFIX_LENGTH);
-
-    const keyHash = crypto
-      .createHmac('sha256', this.apiKeySecret)
-      .update(key)
-      .digest('hex');
-
     const allowedDomains = dto.website_url ? this.expandDomains(dto.website_url) : [];
 
-    const record = await this.prisma.apiKey.create({
-      data: {
-        establishment_id: user.establishment_id,
-        key_hash: keyHash,
-        key_prefix: keyPrefix,
-        name: dto.name ?? 'Default',
-        is_active: true,
-        allowed_domains: allowedDomains,
-      },
-    });
+    // Retry up to 3 times on key_prefix collision (P2002 unique constraint).
+    // Probability per attempt is ~1/16M, but a retry loop makes failures impossible
+    // in practice rather than surfacing a 500 to the user.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const rawBytes = crypto.randomBytes(24); // 192 bits of entropy
+      const key = API_KEY_PREFIX + rawBytes.toString('base64url');
+      const keyPrefix = key.slice(0, API_KEY_PREFIX_LENGTH);
 
-    this.logger.log(`API key created for establishment ${user.establishment_id}: ${keyPrefix}...`);
-    return { key, id: record.id, key_prefix: keyPrefix };
+      const keyHash = crypto
+        .createHmac('sha256', this.apiKeySecret)
+        .update(key)
+        .digest('hex');
+
+      try {
+        const record = await this.prisma.apiKey.create({
+          data: {
+            establishment_id: user.establishment_id,
+            key_hash: keyHash,
+            key_prefix: keyPrefix,
+            name: dto.name ?? 'Default',
+            is_active: true,
+            allowed_domains: allowedDomains,
+          },
+        });
+
+        this.logger.log(`API key created for establishment ${user.establishment_id}: ${keyPrefix}...`);
+        return { key, id: record.id, key_prefix: keyPrefix };
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          attempt < 3
+        ) {
+          this.logger.warn(`key_prefix collision on attempt ${attempt}, retrying`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    // Unreachable — loop always returns or throws within 3 attempts.
+    throw new Error('Failed to generate a unique API key prefix');
   }
 
   /**

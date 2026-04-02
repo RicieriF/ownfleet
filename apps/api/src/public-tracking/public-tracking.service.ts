@@ -160,6 +160,7 @@ export class PublicTrackingService {
       orderBy: { assigned_at: 'desc' },
       select: {
         id: true,
+        courier_id: true,
         status: true,
         eta_seconds: true,
         eta_started_at: true,
@@ -177,6 +178,25 @@ export class PublicTrackingService {
         etaSeconds = Math.max(0, delivery.eta_seconds - elapsedSeconds);
       } else {
         etaSeconds = delivery.eta_seconds;
+      }
+    }
+
+    // Courier last known position from Redis (best-effort, null on miss/error).
+    // TrackingService caches each GPS ping under courier:location:{courierId} (TTL 5 min).
+    // Provides the initial marker position so the map doesn't appear empty on load/reconnect
+    // while waiting for the next 15s location ping via WebSocket.
+    let courierLat: number | null = null;
+    let courierLng: number | null = null;
+    if (delivery?.courier_id && delivery.status === 'in_progress') {
+      try {
+        const cached = await this.redis.get(`courier:location:${delivery.courier_id}`);
+        if (cached) {
+          const pos = JSON.parse(cached) as { lat: number; lng: number };
+          courierLat = pos.lat;
+          courierLng = pos.lng;
+        }
+      } catch {
+        // Redis unavailable or parse error — graceful degradation
       }
     }
 
@@ -210,8 +230,8 @@ export class PublicTrackingService {
       deliveryStatus: delivery?.status ?? null,
       courierName: delivery?.courier.name ?? null,
       courierTransportMode: delivery?.courier.transport_mode ?? null,
-      courierLat: null,  // real-time only via WS
-      courierLng: null,  // real-time only via WS
+      courierLat,
+      courierLng,
       orderLat: order.lat,
       orderLng: order.lng,
       etaSeconds,

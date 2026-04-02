@@ -151,21 +151,21 @@ export class TrackingService {
       ).catch(() => {});
 
       // Cache route geometry for snapshot requests (reconnects, page reloads).
-      // TTL 8h matches active_order — overwritten on each recalc, DEL'd on delivery end.
+      // TTL 4h matches tracking token TTL — after 4h the token expires and snapshot
+      // cannot be served anyway, so route data beyond 4h is unreachable stale memory.
       await this.redis.set(
         `route:${deliveryId}`,
         JSON.stringify(routeGeometry),
         'EX',
-        8 * 3600,
+        4 * 3600,
       );
 
-      // Update route:origin to current position — keep existing TTL via GETEX not possible,
-      // so re-set with full 8h TTL to prevent the key becoming persistent.
+      // Update route:origin to current position — re-set with same 4h TTL.
       await this.redis.set(
         `route:origin:${deliveryId}`,
         JSON.stringify({ lat, lng }),
         'EX',
-        8 * 3600,
+        4 * 3600,
       );
     } catch (err) {
       this.logger.warn('handlePublicTracking error — non-fatal', err);

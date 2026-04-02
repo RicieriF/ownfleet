@@ -3,12 +3,25 @@
  * The heavy lifting (WebSocket, real-time updates, state machine) happens
  * inside TrackWidget (client component).
  */
+import { headers } from 'next/headers';
 import { TrackWidget } from '@/embed/TrackWidget';
 import type { TrackSnapshot } from '@/embed/types';
 import { t } from '@/embed/i18n/translations';
 import type { Locale } from '@/embed/i18n/translations';
 
 const API_BASE = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
+
+/** Derive locale from browser's Accept-Language header when no snapshot is available.
+ *  Prefers 'en' only when Accept-Language explicitly starts with 'en' and 'uk' is absent. */
+async function getAcceptLocale(): Promise<Locale> {
+  try {
+    const accept = (await headers()).get('accept-language') ?? '';
+    const primary = accept.split(',')[0]?.split(';')[0]?.trim().toLowerCase() ?? '';
+    return primary.startsWith('en') ? 'en' : 'uk';
+  } catch {
+    return 'uk';
+  }
+}
 
 async function getSnapshot(token: string): Promise<TrackSnapshot | null> {
   try {
@@ -30,7 +43,7 @@ interface PageProps {
 export default async function EmbedTrackPage({ params }: PageProps) {
   const { token } = await params;
   const snapshot = await getSnapshot(token);
-  const locale = (snapshot?.locale as Locale | undefined) ?? 'uk';
+  const locale = (snapshot?.locale as Locale | undefined) ?? await getAcceptLocale();
 
   // Token not found or expired on initial load — show static message
   if (!snapshot) {

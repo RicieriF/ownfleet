@@ -26,6 +26,8 @@ const mockRedis = {
   setex: jest.fn().mockResolvedValue('OK'),
   publish: jest.fn().mockResolvedValue(1),
   get: jest.fn(),
+  set: jest.fn().mockResolvedValue('OK'),
+  del: jest.fn().mockResolvedValue(1),
 };
 
 const mockPingQueue = {
@@ -85,6 +87,144 @@ describe('TrackingService', () => {
         'courier_moved',
         expect.stringContaining('"establishment_id":"est-a"'),
       );
+    });
+  });
+
+  // ── handlePublicTracking ────────────────────────────────────────────────────
+
+  describe('handlePublicTracking (private — accessed directly)', () => {
+    const orderId = 'order-pub';
+    const deliveryId = 'del-pub';
+
+    const activeOrderCache = JSON.stringify({
+      orderId,
+      deliveryId,
+      orderLat: 50.45,
+      orderLng: 30.52,
+      transportProfile: 'driving',
+    });
+
+    function callHandlePublicTracking(svc: TrackingService, lat: number, lng: number) {
+      return (svc as any)['handlePublicTracking'].call(svc, 'c1', lat, lng) as Promise<void>;
+    }
+
+    beforeEach(() => {
+      // Default: no active order
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set = jest.fn().mockResolvedValue('OK');
+    });
+
+    it('returns early and does NOT publish when courier has no active order', async () => {
+      mockRedis.get.mockResolvedValue(null);
+      await callHandlePublicTracking(service, 50.45, 30.52);
+      expect(mockRedis.publish).not.toHaveBeenCalled();
+    });
+
+    it('publishes courier location to order public channel', async () => {
+      mockRedis.get.mockResolvedValueOnce(activeOrderCache); // courier:active_order
+      await callHandlePublicTracking(service, 50.45, 30.52);
+      expect(mockRedis.publish).toHaveBeenCalledWith(
+        `order:${orderId}:public`,
+        expect.stringContaining('"type":"location"'),
+      );
+    });
+
+    it('returns after publish when no route:origin key (no route recalc)', async () => {
+      mockRedis.get
+        .mockResolvedValueOnce(activeOrderCache) // courier:active_order
+        .mockResolvedValueOnce(null);             // route:origin → missing
+      const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
+      await callHandlePublicTracking(service, 50.45, 30.52);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips route recalc when courier is within deviation threshold (< 50m)', async () => {
+      // Same coordinates as origin → 0m distance → below threshold
+      const origin = JSON.stringify({ lat: 50.45, lng: 30.52 });
+      mockRedis.get
+        .mockResolvedValueOnce(activeOrderCache) // courier:active_order
+        .mockResolvedValueOnce(origin);          // route:origin
+      const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
+      await callHandlePublicTracking(service, 50.45, 30.52);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips route recalc when cooldown key exists (NX EX returns null)', async () => {
+      // Position far from origin (> 50m)
+      const origin = JSON.stringify({ lat: 49.0, lng: 29.0 });
+      mockRedis.get
+        .mockResolvedValueOnce(activeOrderCache) // courier:active_order
+        .mockResolvedValueOnce(origin);          // route:origin
+      // NX EX fails → cooldown already set
+      mockRedis.set = jest.fn().mockResolvedValue(null);
+      const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
+      await callHandlePublicTracking(service, 50.45, 30.52);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('recalculates route, caches it, and publishes when deviation > 50m and no cooldown', async () => {
+      const origin = JSON.stringify({ lat: 49.0, lng: 29.0 });
+      const fakeRoute = { type: 'LineString', coordinates: [[30.52, 50.45]] };
+      mockRedis.get
+        .mockResolvedValueOnce(activeOrderCache) // courier:active_order
+        .mockResolvedValueOnce(origin);          // route:origin
+      mockRedis.set = jest.fn().mockResolvedValue('OK'); // NX EX acquired
+      jest.spyOn(service as any, 'fetchRouteGeometry').mockResolvedValue(fakeRoute);
+
+      await callHandlePublicTracking(service, 50.45, 30.52);
+
+      // Route published to WS channel
+      expect(mockRedis.publish).toHaveBeenCalledWith(
+        `order:${orderId}:public`,
+        expect.stringContaining('"type":"route"'),
+      );
+      // Route cached with 4h TTL
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        `route:${deliveryId}`,
+        expect.any(String),
+        'EX',
+        4 * 3600,
+      );
+      // Origin key updated with 4h TTL
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        `route:origin:${deliveryId}`,
+        expect.any(String),
+        'EX',
+        4 * 3600,
+      );
+    });
+
+    it('does NOT cache or publish route when fetchRouteGeometry returns null', async () => {
+      const origin = JSON.stringify({ lat: 49.0, lng: 29.0 });
+      mockRedis.get
+        .mockResolvedValueOnce(activeOrderCache)
+        .mockResolvedValueOnce(origin);
+      mockRedis.set = jest.fn().mockResolvedValue('OK');
+      jest.spyOn(service as any, 'fetchRouteGeometry').mockResolvedValue(null);
+
+      await callHandlePublicTracking(service, 50.45, 30.52);
+
+      expect(mockRedis.set).toHaveBeenCalledTimes(1); // only the NX EX cooldown set
+      // Route NOT published
+      const routePublish = (mockRedis.publish as jest.Mock).mock.calls.find(
+        (c) => String(c[1]).includes('"type":"route"'),
+      );
+      expect(routePublish).toBeUndefined();
+    });
+  });
+
+  // ── clearActiveOrder ────────────────────────────────────────────────────────
+
+  describe('clearActiveOrder', () => {
+    beforeEach(() => {
+      mockRedis.del = jest.fn().mockResolvedValue(1);
+    });
+
+    it('DELs active_order, route:origin, and route keys', async () => {
+      await service.clearActiveOrder('c1', 'del-1');
+      expect(mockRedis.del).toHaveBeenCalledWith('courier:active_order:c1');
+      expect(mockRedis.del).toHaveBeenCalledWith('route:origin:del-1');
+      expect(mockRedis.del).toHaveBeenCalledWith('route:del-1');
     });
   });
 

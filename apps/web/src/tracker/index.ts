@@ -43,6 +43,14 @@ const ERROR_MSG: Record<Lang, string> = {
   en: 'Order not found. Try refreshing the page.',
 };
 
+const ARIA_LABELS: Record<Lang, { minimize: string; expand: string }> = {
+  uk: { minimize: 'Згорнути', expand: 'Розгорнути' },
+  en: { minimize: 'Minimize', expand: 'Expand' },
+};
+
+/** Thrown for errors where retrying will never help (bad key, forbidden, rate-limited). */
+class TerminalError extends Error {}
+
 export function injectIframe(token: string, lang: Lang): void {
   // Avoid double injection
   if (document.getElementById('weego-tracking-wrapper')) return;
@@ -83,7 +91,7 @@ export function injectIframe(token: string, lang: Lang): void {
   // Minimize / expand toggle button
   const minimizeBtn = document.createElement('button');
   minimizeBtn.id = 'weego-minimize-btn';
-  minimizeBtn.setAttribute('aria-label', 'Згорнути');
+  minimizeBtn.setAttribute('aria-label', ARIA_LABELS[lang].minimize);
   minimizeBtn.style.cssText = [
     'position:absolute',
     'top:8px',
@@ -103,7 +111,7 @@ export function injectIframe(token: string, lang: Lang): void {
   minimizeBtn.addEventListener('click', () => {
     const isMin = wrapper.classList.toggle('weego-minimized');
     minimizeBtn.textContent = isMin ? '+' : '−';
-    minimizeBtn.setAttribute('aria-label', isMin ? 'Розгорнути' : 'Згорнути');
+    minimizeBtn.setAttribute('aria-label', isMin ? ARIA_LABELS[lang].expand : ARIA_LABELS[lang].minimize);
     iframe.style.display = isMin ? 'none' : 'block';
   });
 
@@ -117,13 +125,18 @@ export async function fetchToken(apiKey: string, orderId: string): Promise<strin
     const url = `${BASE_URL}/api/v1/public/order/${encodeURIComponent(orderId)}/token?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url);
 
-    if (res.status === 404) return null;
+    if (res.status === 404) return null; // order not yet in DB — retryable
+    // Terminal: retrying won't help (invalid key, forbidden domain, rate-limited)
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      throw new TerminalError(`HTTP ${res.status}`);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = (await res.json()) as TokenResponse;
     return data.token;
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof TerminalError) throw err; // re-throw — stops retry loop
+    return null; // network errors are retryable
   }
 }
 
@@ -163,14 +176,21 @@ export async function track(options: TrackOptions): Promise<void> {
 
   async function attempt(): Promise<void> {
     attempts++;
-    const token = await fetchToken(apiKey, orderId);
+    let token: string | null;
+    try {
+      token = await fetchToken(apiKey, orderId);
+    } catch {
+      // TerminalError (401/403/429) — retrying won't help
+      showError(lang);
+      return;
+    }
 
     if (token) {
       injectIframe(token, lang);
       return;
     }
 
-    // 404 — order not yet in DB (POS webhook delay). Retry.
+    // null = 404 — order not yet in DB (POS webhook delay). Retry.
     if (attempts < MAX_RETRIES) {
       setTimeout(attempt, RETRY_DELAY_MS);
       return;

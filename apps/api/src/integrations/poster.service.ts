@@ -113,7 +113,9 @@ export class PosterService {
 
     this.logger.log(`Poster order ingested: ${order.id} (ext: ${externalId})`);
 
-    if (!lat && !lng) {
+    // Geocode when coords are absent (null) or the POS sentinel 0,0 (Poster sends 0,0 for
+    // orders without delivery address coordinates — physically impossible for Ukraine).
+    if (lat == null || lng == null || (lat === 0 && lng === 0)) {
       void this.geocodingService.enqueueGeocode(order.id, address);
     }
 

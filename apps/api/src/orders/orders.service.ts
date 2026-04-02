@@ -872,7 +872,7 @@ export class OrdersService {
     if (activeDelivery) {
       this.trackingService
         .clearActiveOrder(activeDelivery.courier_id, activeDelivery.id)
-        .catch(() => {});
+        .catch((err: unknown) => this.logger.warn('clearActiveOrder failed on cancel', err));
     }
 
     // Publish order:cancelled for public WS

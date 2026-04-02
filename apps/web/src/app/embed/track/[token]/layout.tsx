@@ -17,9 +17,34 @@ export const metadata: Metadata = {
   title: 'Відстеження замовлення',
 };
 
-export default function EmbedLayout({ children }: { children: React.ReactNode }) {
+const API_BASE = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
+
+/** Lightweight locale-only fetch — only reads locale field from snapshot. */
+async function getSnapshotLocale(token: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/v1/public/track/${encodeURIComponent(token)}`,
+      { cache: 'no-store' },
+    );
+    if (!res.ok) return 'uk';
+    const data = (await res.json()) as { locale?: string } | null;
+    return data?.locale ?? 'uk';
+  } catch {
+    return 'uk';
+  }
+}
+
+interface LayoutProps {
+  children: React.ReactNode;
+  params: Promise<{ token: string }>;
+}
+
+export default async function EmbedLayout({ children, params }: LayoutProps) {
+  const { token } = await params;
+  const lang = await getSnapshotLocale(token);
+
   return (
-    <html lang="uk" className={manrope.variable}>
+    <html lang={lang} className={manrope.variable}>
       <body
         style={{
           margin: 0,

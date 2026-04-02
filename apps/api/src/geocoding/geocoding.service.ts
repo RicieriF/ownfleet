@@ -57,8 +57,7 @@ export class GeocodingService {
     const cacheKey = `geocode:${crypto
       .createHash('sha256')
       .update(address.toLowerCase().trim())
-      .digest('hex')
-      .slice(0, 32)}`;
+      .digest('hex')}`;
 
     const cached = await this.redis.get(cacheKey);
     if (cached === 'null') return null; // negative cache hit

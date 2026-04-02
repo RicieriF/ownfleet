@@ -67,8 +67,10 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
     };
   }, []);
 
+  // Use the full key when it was just generated (newKeyValue), otherwise show placeholder
+  // (the key is only returned once by the API and cannot be retrieved later).
   const embedCode = apiKey
-    ? `<script src="${BASE_URL}/tracker.js"\n  data-api-key="YOUR_FULL_API_KEY"\n  data-order-id="ORDER_ID"\n  data-lang="uk"></script>`
+    ? `<script src="${BASE_URL}/tracker.js"\n  data-api-key="${newKeyValue ?? 'YOUR_FULL_API_KEY'}"\n  data-order-id="ORDER_ID"\n  data-lang="uk"></script>`
     : '';
 
   async function handleGenerateKey(): Promise<void> {

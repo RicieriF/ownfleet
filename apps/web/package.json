@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "npm run build:tracker && next dev --port 3001",
     "build:tracker": "esbuild src/tracker/index.ts --bundle --minify --target=es2017 --define:__WEEGO_BASE_URL__='\"https://weego.app\"' --outfile=public/tracker.js",
     "build": "npm run build:tracker && next build",
     "start": "next start --port 3001",

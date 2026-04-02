@@ -94,7 +94,7 @@ export class IikoService {
 
         // Enqueue geocoding for orders that have no coordinates in the iiko payload
         const needsGeocode = orders.filter(
-          (o) => !o.latitude && !o.longitude && o.address && o.address !== 'Unknown',
+          (o) => (o.latitude == null || o.longitude == null) && o.address && o.address !== 'Unknown',
         );
         if (needsGeocode.length > 0) {
           const forGeocode = await this.prisma.order.findMany({

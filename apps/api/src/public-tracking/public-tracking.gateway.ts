@@ -33,6 +33,12 @@ import { Processor, Process } from '@nestjs/bull';
 export interface DisconnectJob {
   orderId: string;
   deliveryId: string;
+  /** 'completed' → emit TOKEN_EXPIRED before disconnect (token TTL was shortened to 15 min).
+   *  'terminal' → silent disconnect (cancelled/failed: client already shows correct final state). */
+  reason: 'completed' | 'terminal';
+  /** Present only for reason='completed'. Allows fallback DEL of courier:active_order
+   *  if the primary clearActiveOrder call in ProofOfDeliveryService failed. */
+  courierId?: string;
 }
 
 export interface DeliveryStatusPayload {
@@ -136,7 +142,7 @@ export class PublicTrackingGateway
           if (payload.orderStatus === 'cancelled' || payload.orderStatus === 'failed') {
             this.disconnectQueue
               .add(
-                { orderId: payload.orderId, deliveryId: '' },
+                { orderId: payload.orderId, deliveryId: '', reason: 'terminal' },
                 {
                   delay: TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES * 60 * 1000,
                   jobId: `disconnect:${payload.orderId}`,
@@ -206,7 +212,7 @@ export class PublicTrackingGateway
   // ── Delivery completed lifecycle ────────────────────────────────────────
 
   private async handleDeliveryCompleted(payload: DeliveryCompletedPayload): Promise<void> {
-    const { orderId, deliveryId } = payload;
+    const { orderId, deliveryId, courierId } = payload;
 
     // Async update: shorten token TTL to 15 min post-completion.
     // Intentionally NOT in the same transaction as the delivery update (module isolation).
@@ -223,7 +229,7 @@ export class PublicTrackingGateway
     // Schedule Bull delayed disconnect after 15 min (survives server restarts)
     await this.disconnectQueue
       .add(
-        { orderId, deliveryId },
+        { orderId, deliveryId, reason: 'completed', courierId },
         {
           delay: TRACKING_TOKEN_POST_DELIVERY_MINUTES * 60 * 1000,
           jobId: `disconnect:${orderId}`,
@@ -237,23 +243,36 @@ export class PublicTrackingGateway
 
   @Process()
   async processDisconnect(job: Job<DisconnectJob>): Promise<void> {
-    const { orderId, deliveryId } = job.data;
+    const { orderId, deliveryId, reason, courierId } = job.data;
 
-    // Emit TOKEN_EXPIRED before disconnecting so client can show final state
-    this.server
-      .to(`order:${orderId}:public`)
-      .emit('error', { type: 'TOKEN_EXPIRED' });
+    // TOKEN_EXPIRED is only emitted for completed deliveries (where the TTL was
+    // shortened to 15 min). For cancelled/failed (reason='terminal'), the client
+    // already shows the correct final state from the delivery:status event —
+    // sending TOKEN_EXPIRED would replace "Order cancelled" with "Tracking ended",
+    // which is semantically wrong and confusing to the customer.
+    if (reason === 'completed') {
+      this.server
+        .to(`order:${orderId}:public`)
+        .emit('error', { type: 'TOKEN_EXPIRED' });
+    }
 
     // Disconnect all sockets in the room
     this.server.in(`order:${orderId}:public`).disconnectSockets(true);
 
-    // DEL Redis keys (route data)
-    await Promise.all([
-      this.redis.del(`route:origin:${deliveryId}`).catch(() => {}),
-      this.redis.del(`route:${deliveryId}`).catch(() => {}),
-    ]);
+    // Fallback cleanup for completed deliveries — guards against primary clearActiveOrder failure.
+    // For terminal states deliveryId/courierId are empty; primary cleanup is in OrdersService.
+    if (reason === 'completed' && deliveryId) {
+      const delOps: Promise<unknown>[] = [
+        this.redis.del(`route:origin:${deliveryId}`).catch(() => {}),
+        this.redis.del(`route:${deliveryId}`).catch(() => {}),
+      ];
+      if (courierId) {
+        delOps.push(this.redis.del(`courier:active_order:${courierId}`).catch(() => {}));
+      }
+      await Promise.all(delOps);
+    }
 
-    this.logger.log(`Disconnected public WS room for order ${orderId}`);
+    this.logger.log(`Disconnected public WS room for order ${orderId} (reason=${reason})`);
   }
 
   // ── ETA push cron (every 60s) ────────────────────────────────────────────

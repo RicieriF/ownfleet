@@ -49,4 +49,8 @@ export class UpdateSettingsDto {
   // ── Dispatch mode ────────────────────────────────────────────────────────
   @IsOptional() @IsEnum(DispatchMode)
   dispatch_mode?: DispatchMode;
+
+  // ── Tracking widget locale ────────────────────────────────────────────────
+  @IsOptional() @IsIn(['uk', 'en'])
+  locale?: string;
 }

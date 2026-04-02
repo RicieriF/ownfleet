@@ -252,20 +252,23 @@ export class ProofOfDeliveryService {
     this.redis.publish(
       PUBLIC_DELIVERY_STATUS_CHANNEL,
       JSON.stringify({ orderId: delivery.order_id, orderStatus: 'completed', deliveryStatus: 'completed' }),
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Failed to publish delivery:status (completed)', err));
 
-    // Publish delivery:completed lifecycle event → PublicTrackingGateway shortens token TTL + schedules disconnect
+    // Publish delivery:completed lifecycle event → PublicTrackingGateway shortens token TTL + schedules disconnect.
+    // Fire-and-forget with fallback: if this publish fails, the token retains its 4h TTL
+    // (vs. the intended 15 min post-delivery) and the WS room is not explicitly closed.
+    // RetentionModule cleans up the token after the 4h TTL regardless.
     this.redis.publish(
       PUBLIC_DELIVERY_COMPLETED_CHANNEL,
       JSON.stringify({ orderId: delivery.order_id, deliveryId, courierId: delivery.courier_id }),
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Failed to publish delivery:completed — token TTL shortening skipped', err));
 
     // DEL Redis tracking keys — fire-and-forget
     this.redis.del(
       `courier:active_order:${delivery.courier_id}`,
       `route:origin:${deliveryId}`,
       `route:${deliveryId}`,
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Redis DEL failed for delivery tracking keys', err));
 
     return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
   }

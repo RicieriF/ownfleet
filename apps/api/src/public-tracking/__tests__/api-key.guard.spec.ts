@@ -94,11 +94,12 @@ describe('ApiKeyGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('allows subdomain match (sub.pizza.com when pizza.com in list)', async () => {
+  it('denies subdomain not in allowed list (order.pizza.com when only pizza.com and www.pizza.com stored)', async () => {
+    // Wildcard subdomain matching was removed: subdomain takeover (*.pizza.com) must not
+    // grant access. expandDomains() stores exactly [host, www.host], nothing broader.
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
     const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://order.pizza.com' });
-    const result = await guard.canActivate(ctx);
-    expect(result).toBe(true);
+    await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
   it('denies request when Origin is absent (Referer is not trusted for domain check)', async () => {
@@ -113,12 +114,12 @@ describe('ApiKeyGuard', () => {
 
   it('throws TooManyRequestsException when unique externalId count exceeds limit', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    // Simulate 11 unique entries already present
+    // Simulate 61 unique entries already present (limit is 60)
     mockRedis.multi.mockReturnValue({
       sadd: jest.fn().mockReturnThis(),
       scard: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 1], [null, 11], [null, 1]]),
+      exec: jest.fn().mockResolvedValue([[null, 1], [null, 61], [null, 1]]),
     });
 
     const ctx = makeCtx(

@@ -49,7 +49,12 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
   const [snapshot, setSnapshot] = useState<TrackSnapshot | null>(initialSnapshot);
   const [isMinimized, setIsMinimized] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return sessionStorage.getItem(SESSION_KEY) === 'true';
+    try {
+      return sessionStorage.getItem(SESSION_KEY) === 'true';
+    } catch {
+      // sessionStorage unavailable (privacy mode / iframe sandbox policy)
+      return false;
+    }
   });
   const [isExpired, setIsExpired] = useState(false);
 
@@ -81,7 +86,11 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
   const handleMinimize = useCallback(() => {
     setIsMinimized((prev) => {
       const next = !prev;
-      sessionStorage.setItem(SESSION_KEY, String(next));
+      try {
+        sessionStorage.setItem(SESSION_KEY, String(next));
+      } catch {
+        // sessionStorage unavailable — minimize still works, just won't persist across reloads
+      }
       return next;
     });
   }, []);
@@ -100,6 +109,8 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
 
     // Track last disconnect time to debounce snapshot re-fetches on rapid reconnects.
     // Avoids thundering herd: 20 reconnect attempts × HTTP fetch during API downtime.
+    // 1s window: skips only truly instant blips, ensuring state missed during a real
+    // disconnect (e.g. cancelled/failed order transition) is recovered on reconnect.
     let lastDisconnectAt = 0;
 
     socket.on('disconnect', () => {
@@ -107,9 +118,9 @@ export function TrackWidget({ token, initialSnapshot }: Props) {
     });
 
     socket.on('connect', async () => {
-      // Skip re-fetch if reconnect happened < 5s after disconnect (transient blip).
-      // On first connect lastDisconnectAt is 0, so the gap is always > 5s.
-      if (Date.now() - lastDisconnectAt < 5_000) return;
+      // Skip re-fetch if reconnect happened < 1s after disconnect (transient blip).
+      // On first connect lastDisconnectAt is 0, so the gap is always > 1s.
+      if (Date.now() - lastDisconnectAt < 1_000) return;
 
       // Re-fetch snapshot on (re)connect to fill any gap
       const fresh = await fetchSnapshot(token);

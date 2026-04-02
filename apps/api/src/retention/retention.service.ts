@@ -181,7 +181,9 @@ export class RetentionService {
             { orderId: order.id, establishmentId: order.establishment_id, attempt: 1 },
             { jobId: `dispatch:${order.id}` },
           )
-          .catch(() => {});
+          .catch((err: unknown) =>
+            this.logger.warn(`Failed to re-enqueue stale order ${order.id}`, err),
+          );
       }
 
       if (staleOrders.length > 0) {

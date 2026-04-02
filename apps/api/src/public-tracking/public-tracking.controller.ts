@@ -8,6 +8,7 @@ import {
   Req,
   NotFoundException,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
@@ -39,7 +40,17 @@ export class PublicTrackingController {
   /**
    * Public: snapshot of current order/delivery state.
    * Requires a valid tracking token.
+   *
+   * Global IP throttle is skipped here intentionally: Next.js server-side components
+   * (layout.tsx, page.tsx) fetch this endpoint from the same server IP for ALL
+   * concurrent customers, so the 120/min global quota would aggregate across all
+   * tracking sessions and throttle legitimate traffic at peak load.
+   *
+   * Protection against abuse: the token is a 122-bit UUID (impossible to enumerate)
+   * and is validated against the DB on every request. Length check below provides
+   * a fast-path rejection before the DB query.
    */
+  @SkipThrottle()
   @Get('public/track/:token')
   async getSnapshot(@Param('token') token: string) {
     // Tokens are UUIDs (36 chars). Reject oversized values before hitting DB.
