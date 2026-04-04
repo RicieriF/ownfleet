@@ -1,15 +1,19 @@
 import { PublicTrackingGateway, DisconnectJob } from '../public-tracking.gateway.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { RedisSubscriberFactory } from '../../shared/redis/redis-subscriber.factory.js';
+import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
 import type { Queue, Job } from 'bull';
 
 // ── Minimal mocks ─────────────────────────────────────────────────────────────
 
 const toChain = { emit: jest.fn() };
+const localToChain = { emit: jest.fn() };
 const inChain = { disconnectSockets: jest.fn() };
 const mockServer = {
   to: jest.fn().mockReturnValue(toChain),
   in: jest.fn().mockReturnValue(inChain),
+  // server.local is used by pub/sub handlers to avoid duplicate events in multi-instance
+  local: { to: jest.fn().mockReturnValue(localToChain) },
 };
 
 const mockRedis = {
@@ -43,12 +47,18 @@ function makeJob(data: DisconnectJob): Job<DisconnectJob> {
   return { data } as Job<DisconnectJob>;
 }
 
+// Call-through lock mock: lock is always acquired and fn executes immediately
+const mockLock = {
+  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) => fn()),
+} as unknown as DistributedLockService;
+
 function makeGateway(): PublicTrackingGateway {
   const gw = new PublicTrackingGateway(
     mockPrisma as unknown as PrismaService,
     mockRedisSubscriberFactory as unknown as RedisSubscriberFactory,
     mockRedis as any,
     mockQueue,
+    mockLock,
   );
   // Inject the mocked WS server
   (gw as any).server = mockServer;
@@ -65,6 +75,7 @@ describe('PublicTrackingGateway.processDisconnect', () => {
     jest.clearAllMocks();
     mockServer.to.mockReturnValue(toChain);
     mockServer.in.mockReturnValue(inChain);
+    mockServer.local.to.mockReturnValue(localToChain);
     mockRedis.del.mockResolvedValue(1);
   });
 
@@ -124,6 +135,7 @@ describe('PublicTrackingGateway — handleDeliveryCompleted side effects', () =>
   beforeEach(() => {
     gw = makeGateway();
     jest.clearAllMocks();
+    mockServer.local.to.mockReturnValue(localToChain);
     mockQueue.add = jest.fn().mockResolvedValue({});
     mockPrisma.trackingToken.updateMany.mockResolvedValue({ count: 1 });
   });

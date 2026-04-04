@@ -10,6 +10,7 @@ export class IntegrationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     return this.prisma.integration.findMany({
       where: { establishment_id: user.establishment_id },
       orderBy: { created_at: 'asc' },

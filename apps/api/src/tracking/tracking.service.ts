@@ -99,7 +99,7 @@ export class TrackingService {
     // ── Async DB persist ───────────────────────────────────────────────────
     await this.pingQueue.add(
       { courier_id: courierId, lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null },
-      { removeOnComplete: 100, removeOnFail: 50 },
+      {},
     );
   }
 
@@ -119,7 +119,7 @@ export class TrackingService {
       this.redis.publish(
         `order:${orderId}:public`,
         JSON.stringify({ type: 'location', lat, lng, ts: Date.now() }),
-      ).catch(() => {});
+      ).catch((err: unknown) => this.logger.warn('Redis publish failed (location_update)', err));
 
       // Route deviation check
       if (orderLat === null || orderLng === null) return;
@@ -148,7 +148,7 @@ export class TrackingService {
       this.redis.publish(
         `order:${orderId}:public`,
         JSON.stringify({ type: 'route', routeGeometry }),
-      ).catch(() => {});
+      ).catch((err: unknown) => this.logger.warn('Redis publish failed (route_update)', err));
 
       // Cache route geometry for snapshot requests (reconnects, page reloads).
       // TTL 4h matches tracking token TTL — after 4h the token expires and snapshot

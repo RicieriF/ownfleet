@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import IORedis from 'ioredis';
 import { REDIS_CLIENT } from './redis.constants.js';
 import { RedisSubscriberFactory } from './redis-subscriber.factory.js';
+import { DistributedLockService } from './distributed-lock.service.js';
 
 @Global()
 @Module({
@@ -18,7 +19,8 @@ import { RedisSubscriberFactory } from './redis-subscriber.factory.js';
       inject: [ConfigService],
     },
     RedisSubscriberFactory,
+    DistributedLockService,
   ],
-  exports: [REDIS_CLIENT, RedisSubscriberFactory],
+  exports: [REDIS_CLIENT, RedisSubscriberFactory, DistributedLockService],
 })
 export class SharedRedisModule {}

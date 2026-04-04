@@ -29,8 +29,18 @@ async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => 'Unknown error');
-    throw new Error(`${res.status}: ${body}`);
+    const body = await res.text().catch(() => '');
+    let message = `Помилка ${res.status}`;
+    if (body) {
+      try {
+        const json = JSON.parse(body) as { message?: unknown; error?: string };
+        const raw = json.message;
+        message = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw : json.error ?? message);
+      } catch {
+        message = body;
+      }
+    }
+    throw new Error(message);
   }
 
   if (res.status === 204) return undefined as T;
@@ -69,8 +79,18 @@ export const apiPostForm = async <T>(path: string, form: FormData): Promise<T> =
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => 'Unknown error');
-    throw new Error(`${res.status}: ${body}`);
+    const body = await res.text().catch(() => '');
+    let message = `Помилка ${res.status}`;
+    if (body) {
+      try {
+        const json = JSON.parse(body) as { message?: unknown; error?: string };
+        const raw = json.message;
+        message = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw : json.error ?? message);
+      } catch {
+        message = body;
+      }
+    }
+    throw new Error(message);
   }
 
   if (res.status === 204) return undefined as T;

@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   Logger,
   UnprocessableEntityException,
@@ -58,7 +59,7 @@ export class ShiftsService {
       user.establishment_id,
       `🟢 ${shift.courier.name} вийшов на зміну`,
       'courier_shift_started',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_started)', err));
     return shift;
   }
 
@@ -93,7 +94,7 @@ export class ShiftsService {
       updated.establishment_id,
       `⚫ ${shift.courier.name} завершив зміну`,
       'courier_shift_ended',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_courier)', err));
     return updated;
   }
 
@@ -111,6 +112,10 @@ export class ShiftsService {
   // ── Manager: end any courier shift ───────────────────────────────────────
 
   async endShiftByManager(shiftId: string, user: JwtPayload) {
+    if (user.courier_id) {
+      throw new ForbiddenException('Only managers and owners can end other couriers\' shifts');
+    }
+
     const shift = await this.prisma.shift.findFirst({
       where: { id: shiftId, establishment_id: user.establishment_id },
       include: { courier: { select: { name: true } } },
@@ -134,13 +139,17 @@ export class ShiftsService {
       updated.establishment_id,
       `⚫ ${shift.courier.name} — зміну завершено менеджером`,
       'courier_shift_ended',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_manager)', err));
     return updated;
   }
 
   // ── Manager: update planned_end_at ────────────────────────────────────────
 
   async updatePlannedEnd(shiftId: string, user: JwtPayload, dto: UpdatePlannedEndDto) {
+    if (user.courier_id) {
+      throw new ForbiddenException('Only managers and owners can update planned end time');
+    }
+
     const shift = await this.prisma.shift.findFirst({
       where: { id: shiftId, establishment_id: user.establishment_id, ended_at: null },
     });
@@ -156,9 +165,13 @@ export class ShiftsService {
 
   // ── Manager: get all active shifts for establishment ─────────────────────
 
-  async getActiveShiftsForEstablishment(establishmentId: string) {
+  async getActiveShiftsForEstablishment(user: JwtPayload) {
+    if (user.courier_id) {
+      throw new ForbiddenException('Only managers and owners can view all active shifts');
+    }
+
     return this.prisma.shift.findMany({
-      where: { establishment_id: establishmentId, ended_at: null },
+      where: { establishment_id: user.establishment_id, ended_at: null },
       include: {
         courier: { select: { id: true, name: true, phone: true } },
       },
@@ -222,7 +235,7 @@ export class ShiftsService {
         s.establishment_id,
         `🕐 Зміну ${courierName} закрито автоматично (> 16 год без GPS-пінгу)`,
         'courier_shift_auto_closed',
-      ).catch(() => {});
+      ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_auto_closed)', err));
     }
 
     this.logger.log(`Auto-closed ${staleShifts.length} stale shift(s)`);

@@ -4,9 +4,10 @@ import { CouriersList } from './couriers-list';
 import { InvitePanel } from './invite-panel';
 
 export default async function CouriersPage() {
-  const [couriers, invites] = await Promise.all([
+  const [couriers, invites, settings] = await Promise.all([
     apiFetch<CourierWithStatus[]>('/api/v1/couriers/status'),
     apiFetch<InviteToken[]>('/api/v1/onboarding/invites'),
+    apiFetch<{ timezone: string }>('/api/v1/establishments/me/settings'),
   ]);
 
   const onShift = couriers.filter((c) => c.on_shift).length;
@@ -20,7 +21,7 @@ export default async function CouriersPage() {
           {onShift} на зміні з {couriers.length}
         </span>
       </div>
-      <CouriersList couriers={couriers} />
+      <CouriersList couriers={couriers} establishmentTimezone={settings.timezone} />
       <InvitePanel
         couriers={activeCouriers.map((c) => ({ id: c.id, name: c.name }))}
         initialInvites={invites}

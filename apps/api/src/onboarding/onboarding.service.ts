@@ -29,6 +29,7 @@ export class OnboardingService {
   // ── Manager: create invite ──────────────────────────────────────────────
 
   async createInvite(courierId: string, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     const courier = await this.prisma.courier.findUnique({
       where: { id: courierId },
     });
@@ -66,6 +67,7 @@ export class OnboardingService {
   // ── Manager: list invites ───────────────────────────────────────────────
 
   async listInvites(user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     return this.prisma.inviteToken.findMany({
       where: { establishment_id: user.establishment_id },
       select: {
@@ -84,6 +86,7 @@ export class OnboardingService {
   // ── Manager: revoke invite ──────────────────────────────────────────────
 
   async revokeInvite(inviteId: string, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     const invite = await this.prisma.inviteToken.findUnique({
       where: { id: inviteId },
     });
@@ -198,6 +201,14 @@ export class OnboardingService {
         establishment_name: invite!.establishment.name,
       },
     };
+  }
+
+  // ── Internal helpers ────────────────────────────────────────────────────
+
+  private assertManagerOrOwner(user: AuthenticatedUser): void {
+    if (user.role !== 'owner' && user.role !== 'manager') {
+      throw new ForbiddenException('Insufficient permissions');
+    }
   }
 
   // ── Internal: onboarding status progression ─────────────────────────────

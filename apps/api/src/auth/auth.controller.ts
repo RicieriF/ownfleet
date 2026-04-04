@@ -44,6 +44,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } }) // 30 refreshes / min per IP
   async refresh(
     @Req() req: any,
     @Res({ passthrough: true }) res: any,

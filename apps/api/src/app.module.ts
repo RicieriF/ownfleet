@@ -5,6 +5,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { UserAwareThrottlerGuard } from './common/guards/user-aware-throttler.guard.js';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { PING_PERSIST_QUEUE } from './tracking/tracking.service.js';
+import { WEBHOOK_QUEUE } from './webhooks/webhooks.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { EstablishmentsModule } from './establishments/establishments.module.js';
 import { CouriersModule } from './couriers/couriers.module.js';
@@ -37,6 +39,11 @@ import { HealthController } from './health/health.controller.js';
         redis: config.getOrThrow<string>('REDIS_URL'),
       }),
     }),
+    // Register queues needed by HealthController — NestJS deduplicates registrations by name
+    BullModule.registerQueue(
+      { name: PING_PERSIST_QUEUE },
+      { name: WEBHOOK_QUEUE },
+    ),
     SharedRedisModule,
     PrismaModule,
     AuthModule,

@@ -14,7 +14,15 @@ import { EtaModule } from '../eta/eta.module.js';
     EstablishmentsModule,
     EtaModule,
     JwtModule.register({}),
-    BullModule.registerQueue({ name: PING_PERSIST_QUEUE }),
+    BullModule.registerQueue({
+      name: PING_PERSIST_QUEUE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2_000 },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    }),
   ],
   controllers: [TrackingController],
   providers: [TrackingService, TrackingGateway, PingPersistProcessor],

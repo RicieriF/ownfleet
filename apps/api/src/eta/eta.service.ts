@@ -150,7 +150,7 @@ export class EtaService {
           `⏰ Доставка запізнюється на ${overdueMinutes} хв\nКурʼєр: ${delivery.courier.name}\nАдреса: ${delivery.order.address}`,
           'delivery_assigned',
         )
-        .catch(() => {});
+        .catch((err: unknown) => this.logger.warn('Telegram notification failed (eta_overdue)', err));
 
       alertedIds.push(delivery.id);
     }

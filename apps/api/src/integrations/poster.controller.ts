@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { PosterService } from './poster.service.js';
 
 /**
@@ -20,6 +21,7 @@ export class PosterController {
 
   @Post('webhook/:establishmentId')
   @HttpCode(HttpStatus.OK)
+  @SkipThrottle() // Poster POS servers — auth via HMAC; IP throttle would block legitimate burst traffic
   handleWebhook(
     @Param('establishmentId') establishmentId: string,
     @Req() req: any,

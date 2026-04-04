@@ -143,11 +143,11 @@ model User {
 
   // Telegram bot integration (optional)
   telegram_chat_id String? @unique
-  telegram_prefs   Json?   @default("{}")
+  telegram_prefs   Json    @default("{}")
 
   establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   refresh_tokens RefreshToken[]
-  courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull)
+  courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([establishment_id])
   @@map("users")
@@ -181,7 +181,7 @@ model Courier {
   battery_optimization_exempt Boolean         @default(false)
   device_brand                String?
   telegram_chat_id            String?   @unique
-  telegram_prefs              Json?     @default("{}")
+  telegram_prefs              Json      @default("{}")
   last_reminder_sent_at       DateTime?
   reminder_count              Int             @default(0)
   transport_mode              TransportMode?
@@ -207,14 +207,14 @@ model Shift {
   id               String    @id @default(uuid())
   courier_id       String
   establishment_id String
-  started_at       DateTime  @default(now())
-  ended_at         DateTime?
+  started_at       DateTime  @default(now()) @db.Timestamptz
+  ended_at         DateTime? @db.Timestamptz
   ended_by         String?   // 'courier' | 'manager' | 'auto'
-  planned_end_at   DateTime?
+  planned_end_at   DateTime? @db.Timestamptz
   total_deliveries  Int       @default(0)
   total_distance_km Decimal  @default(0) @db.Decimal(8, 2)
-  anomaly_alerted_at DateTime?
-  created_at        DateTime  @default(now())
+  anomaly_alerted_at DateTime? @db.Timestamptz
+  created_at        DateTime  @default(now()) @db.Timestamptz
 
   courier       Courier       @relation(fields: [courier_id], references: [id], onDelete: Cascade)
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
@@ -239,7 +239,7 @@ model Order {
   status           OrderStatus @default(pending)
   source           OrderSource @default(manual)
   notes            String?
-  ready_at         DateTime?
+  ready_at         DateTime?   @db.Timestamptz
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
 
@@ -268,8 +268,8 @@ model Delivery {
   completed_at          DateTime?
   order_closed_at       DateTime?
   eta_seconds           Int?
-  eta_started_at        DateTime?
-  eta_overdue_alerted_at DateTime?
+  eta_started_at        DateTime?      @db.Timestamptz
+  eta_overdue_alerted_at DateTime?     @db.Timestamptz
   created_at            DateTime       @default(now())
   updated_at            DateTime       @updatedAt
 
@@ -433,11 +433,13 @@ model TrackingToken {
   id         String   @id @default(uuid())
   order_id   String   @unique
   token      String   @unique @default(uuid())
-  expires_at DateTime
-  created_at DateTime @default(now())
+  expires_at DateTime @db.Timestamptz
+  created_at DateTime @default(now()) @db.Timestamptz
 
   order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
 
+  // expires_at index exists in DB (created in migration) — needed for retention cron range scan
+  @@index([expires_at])
   @@map("tracking_tokens")
 }
 
@@ -454,9 +456,9 @@ model ApiKey {
   name             String    @default("Default")
   is_active        Boolean   @default(true)
   allowed_domains  String[]  @default([])
-  last_used_at     DateTime?
+  last_used_at     DateTime? @db.Timestamptz
   last_used_domain String?
-  created_at       DateTime  @default(now())
+  created_at       DateTime  @default(now()) @db.Timestamptz
 
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
 

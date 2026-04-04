@@ -2,10 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { gzipSync } from 'node:zlib';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ShiftsService } from '../shifts/shifts.service.js';
 import { EtaService } from '../eta/eta.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { OrderStatus } from '@prisma/client';
 
 const DEFAULT_RETENTION_DAYS = 90;
@@ -19,14 +23,36 @@ const TERMINAL_STATUSES: OrderStatus[] = [
 @Injectable()
 export class RetentionService {
   private readonly logger = new Logger(RetentionService.name);
+  private readonly backupS3: S3Client | null;
+  private readonly backupBucket: string | null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly shiftsService: ShiftsService,
     private readonly etaService: EtaService,
     private readonly telegram: TelegramService,
+    private readonly lock: DistributedLockService,
+    private readonly config: ConfigService,
     @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
-  ) {}
+  ) {
+    const endpoint = config.get<string>('BACKUP_S3_ENDPOINT');
+    const accessKeyId = config.get<string>('BACKUP_S3_ACCESS_KEY');
+    const secretAccessKey = config.get<string>('BACKUP_S3_SECRET_KEY');
+    const bucket = config.get<string>('BACKUP_S3_BUCKET');
+
+    if (endpoint && accessKeyId && secretAccessKey && bucket) {
+      this.backupS3 = new S3Client({
+        endpoint,
+        region: 'auto',
+        credentials: { accessKeyId, secretAccessKey },
+      });
+      this.backupBucket = bucket;
+    } else {
+      this.backupS3 = null;
+      this.backupBucket = null;
+      this.logger.warn('Backup S3 not configured — weekly delivery_proofs export disabled');
+    }
+  }
 
   /**
    * Runs every 30 minutes.
@@ -34,10 +60,12 @@ export class RetentionService {
    */
   @Cron('0 */30 * * * *', { name: 'auto-close-stale-shifts', timeZone: 'UTC' })
   async autoCloseStaleShifts(): Promise<void> {
-    const closed = await this.shiftsService.autoCloseStaleShifts();
-    if (closed > 0) {
-      this.logger.log(`Auto-close cron: closed ${closed} stale shift(s)`);
-    }
+    await this.lock.withLock('auto-close-stale-shifts', 1500, async () => {
+      const closed = await this.shiftsService.autoCloseStaleShifts();
+      if (closed > 0) {
+        this.logger.log(`Auto-close cron: closed ${closed} stale shift(s)`);
+      }
+    });
   }
 
   /**
@@ -47,10 +75,12 @@ export class RetentionService {
    */
   @Cron('0 */5 * * * *', { name: 'shift-ending-soon', timeZone: 'UTC' })
   async checkShiftEndingSoon(): Promise<void> {
-    const sent = await this.shiftsService.checkShiftEndingSoon();
-    if (sent > 0) {
-      this.logger.log(`Shift ending soon: sent ${sent} notification(s)`);
-    }
+    await this.lock.withLock('shift-ending-soon', 240, async () => {
+      const sent = await this.shiftsService.checkShiftEndingSoon();
+      if (sent > 0) {
+        this.logger.log(`Shift ending soon: sent ${sent} notification(s)`);
+      }
+    });
   }
 
   /**
@@ -59,10 +89,12 @@ export class RetentionService {
    */
   @Cron('0 */5 * * * *', { name: 'courier-not-responding', timeZone: 'UTC' })
   async checkCourierNotResponding(): Promise<void> {
-    const sent = await this.shiftsService.checkCourierNotResponding();
-    if (sent > 0) {
-      this.logger.log(`Courier not responding: sent ${sent} notification(s)`);
-    }
+    await this.lock.withLock('courier-not-responding', 240, async () => {
+      const sent = await this.shiftsService.checkCourierNotResponding();
+      if (sent > 0) {
+        this.logger.log(`Courier not responding: sent ${sent} notification(s)`);
+      }
+    });
   }
 
   /**
@@ -72,10 +104,12 @@ export class RetentionService {
    */
   @Cron('0 */5 * * * *', { name: 'eta-overdue-alert', timeZone: 'UTC' })
   async checkEtaOverdue(): Promise<void> {
-    const sent = await this.etaService.checkOverdueDeliveries();
-    if (sent > 0) {
-      this.logger.log(`ETA overdue: sent ${sent} alert(s)`);
-    }
+    await this.lock.withLock('eta-overdue-alert', 240, async () => {
+      const sent = await this.etaService.checkOverdueDeliveries();
+      if (sent > 0) {
+        this.logger.log(`ETA overdue: sent ${sent} alert(s)`);
+      }
+    });
   }
 
   /**
@@ -86,6 +120,7 @@ export class RetentionService {
    */
   @Cron('0 */30 * * * *', { name: 'shift-anomaly-check', timeZone: 'UTC' })
   async checkShiftAnomalies(): Promise<void> {
+    await this.lock.withLock('shift-anomaly-check', 1500, async () => {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
     // Fetch all active shifts (candidate + comparison pool) in a single query
@@ -127,7 +162,7 @@ export class RetentionService {
         const msg = `⚠️ ${shift.courier.name}: ${shift.total_deliveries} доставок за ${hoursActive.toFixed(1)} год — у ${(ratePerHour / avgRate).toFixed(1)}x більше за середнє по команді`;
         this.telegram
           .notifyEstablishmentManagers(shift.establishment_id, msg, 'shift_anomaly')
-          .catch(() => {});
+          .catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_anomaly)', err));
         await this.prisma.shift.update({
           where: { id: shift.id },
           data: { anomaly_alerted_at: new Date() },
@@ -137,6 +172,7 @@ export class RetentionService {
         );
       }
     }
+    });
   }
 
   /**
@@ -217,37 +253,39 @@ export class RetentionService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'retention-cleanup', timeZone: 'UTC' })
   async runRetention(): Promise<void> {
-    this.logger.log('Starting retention cleanup');
+    await this.lock.withLock('retention-cleanup', 7200, async () => {
+      this.logger.log('Starting retention cleanup');
 
-    const PAGE_SIZE = 100;
-    let cursor: string | undefined;
-    let totalOrders = 0;
-    let totalPings = 0;
-    let totalEstablishments = 0;
+      const PAGE_SIZE = 100;
+      let cursor: string | undefined;
+      let totalOrders = 0;
+      let totalPings = 0;
+      let totalEstablishments = 0;
 
-    // Process establishments in pages to avoid loading all rows into memory
-    do {
-      const page = await this.prisma.establishment.findMany({
-        select: { id: true, settings: true },
-        take: PAGE_SIZE,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        orderBy: { id: 'asc' },
-      });
+      // Process establishments in pages to avoid loading all rows into memory
+      do {
+        const page = await this.prisma.establishment.findMany({
+          select: { id: true, settings: true },
+          take: PAGE_SIZE,
+          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          orderBy: { id: 'asc' },
+        });
 
-      if (page.length === 0) break;
-      cursor = page[page.length - 1].id;
-      totalEstablishments += page.length;
+        if (page.length === 0) break;
+        cursor = page[page.length - 1].id;
+        totalEstablishments += page.length;
 
-      for (const est of page) {
-        const { deletedOrders, deletedPings } = await this.cleanupEstablishment(est.id, est.settings);
-        totalOrders += deletedOrders;
-        totalPings += deletedPings;
-      }
-    } while (true);
+        for (const est of page) {
+          const { deletedOrders, deletedPings } = await this.cleanupEstablishment(est.id, est.settings);
+          totalOrders += deletedOrders;
+          totalPings += deletedPings;
+        }
+      } while (true);
 
-    this.logger.log(
-      `Retention done — deleted ${totalOrders} orders, ${totalPings} location_pings across ${totalEstablishments} establishments`,
-    );
+      this.logger.log(
+        `Retention done — deleted ${totalOrders} orders, ${totalPings} location_pings across ${totalEstablishments} establishments`,
+      );
+    });
   }
 
   /**
@@ -304,6 +342,46 @@ export class RetentionService {
     }
 
     return { deletedOrders, deletedPings };
+  }
+
+  /**
+   * Runs every Sunday at 02:00 UTC.
+   * Exports delivery_proofs captured in the last 7 days to off-platform S3 storage.
+   * delivery_proofs are never deleted by retention — this cron provides an extra
+   * off-platform copy that survives provider-side incidents (legal evidence safety net).
+   *
+   * Skipped gracefully when BACKUP_S3_* env vars are not configured.
+   */
+  @Cron('0 2 * * 0', { name: 'weekly-delivery-proofs-backup', timeZone: 'UTC' })
+  async weeklyDeliveryProofsBackup(): Promise<void> {
+    if (!this.backupS3 || !this.backupBucket) {
+      return;
+    }
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    try {
+      const proofs = await this.prisma.deliveryProof.findMany({
+        where: { created_at: { gte: sevenDaysAgo } },
+        orderBy: { created_at: 'asc' },
+      });
+
+      const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const payload = gzipSync(Buffer.from(JSON.stringify(proofs)));
+
+      await this.backupS3.send(
+        new PutObjectCommand({
+          Bucket: this.backupBucket,
+          Key: `delivery-proofs/${dateStr}.json.gz`,
+          Body: payload,
+          ContentType: 'application/gzip',
+        }),
+      );
+
+      this.logger.log(`Weekly backup completed: ${proofs.length} delivery_proofs → delivery-proofs/${dateStr}.json.gz`);
+    } catch (err) {
+      this.logger.error('Weekly delivery_proofs backup FAILED', err);
+    }
   }
 
   private parseRetentionDays(settings: unknown): number {

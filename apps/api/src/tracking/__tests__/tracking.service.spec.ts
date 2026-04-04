@@ -66,7 +66,9 @@ describe('TrackingService', () => {
       await service.handlePing(validPing, courierUser);
       expect(mockPingQueue.add).toHaveBeenCalledWith(
         { courier_id: courierUser.courier_id, lat: 50.45, lng: 30.52, battery: 80 },
-        expect.objectContaining({ removeOnComplete: 100, removeOnFail: 50 }),
+        // removeOnComplete/removeOnFail are configured in defaultJobOptions at module level,
+        // not per-call — so the per-call options object is empty.
+        {},
       );
       // DB write is NOT called synchronously — it happens in the processor
       expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();

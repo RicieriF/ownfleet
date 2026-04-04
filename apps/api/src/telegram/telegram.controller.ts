@@ -12,6 +12,7 @@ import {
   Req,
   BadRequestException,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { TelegramService } from './telegram.service.js';
@@ -31,6 +32,7 @@ export class TelegramController {
    */
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
+  @SkipThrottle() // Telegram servers — auth via X-Telegram-Bot-Api-Secret-Token; IP throttle would block retries
   async webhook(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Body() body: any,

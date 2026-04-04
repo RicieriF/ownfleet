@@ -22,6 +22,9 @@ const mockPrisma = { webhook: mockWebhook };
 
 // By default simulate the final (5th) attempt so recordFailure assertions work.
 // Pass opts/attemptsMade overrides to test intermediate-retry behaviour.
+//
+// Bull increments `attemptsMade` inside moveToFailed() AFTER the handler throws,
+// so in the handler the value is 0-based: attempt #1 → 0, attempt #5 → 4.
 const makeJob = (data = {}, jobMeta: Record<string, unknown> = {}) => ({
   data: {
     webhookId: 'wh-1',
@@ -29,8 +32,9 @@ const makeJob = (data = {}, jobMeta: Record<string, unknown> = {}) => ({
     payload: { order_id: 'o1' },
     ...data,
   },
+  id: 'job-abc',
   opts: { attempts: 5 },
-  attemptsMade: 5, // final attempt → consecutive_failures should be recorded
+  attemptsMade: 4, // final (5th) attempt: 0-based value that Bull actually provides
   ...jobMeta,
 }) as any;
 
@@ -112,9 +116,9 @@ describe('WebhookDispatchProcessor', () => {
 
     it('does NOT increment consecutive_failures on intermediate retry (not final attempt)', async () => {
       mockFetch.mockResolvedValue(makeResponse(500));
-      // 3rd of 5 attempts — not final
+      // 3rd of 5 attempts — Bull provides attemptsMade=2 (0-based), not final (4)
       await expect(
-        processor.handleDeliver(makeJob({}, { attemptsMade: 3, opts: { attempts: 5 } })),
+        processor.handleDeliver(makeJob({}, { attemptsMade: 2, opts: { attempts: 5 } })),
       ).rejects.toThrow();
 
       // consecutive_failures must NOT be updated — only success reset is allowed
@@ -155,7 +159,7 @@ describe('WebhookDispatchProcessor', () => {
   // ── Payload integrity ─────────────────────────────────────────────────
 
   describe('payload', () => {
-    it('includes event, payload, timestamp, and webhook_id in request body', async () => {
+    it('includes event, payload, timestamp, webhook_id, and event_id in request body', async () => {
       await processor.handleDeliver(makeJob());
 
       const [, opts] = mockFetch.mock.calls[0];
@@ -164,6 +168,8 @@ describe('WebhookDispatchProcessor', () => {
       expect(body.payload).toEqual({ order_id: 'o1' });
       expect(body.timestamp).toBeDefined();
       expect(body.webhook_id).toBe('wh-1');
+      // Stable across retries — allows integrators to deduplicate
+      expect(body.event_id).toBe('job-abc');
     });
   });
 });

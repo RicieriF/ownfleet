@@ -34,6 +34,7 @@ export class ApiKeysService {
     dto: CreateApiKeyDto,
     user: AuthenticatedUser,
   ): Promise<{ key: string; id: string; key_prefix: string }> {
+    this.assertManagerOrOwner(user);
     const allowedDomains = dto.website_url ? this.expandDomains(dto.website_url) : [];
 
     // Retry up to 3 times on key_prefix collision (P2002 unique constraint).
@@ -84,6 +85,7 @@ export class ApiKeysService {
    * Returns the API key metadata (without the key itself — it's never stored in plaintext).
    */
   async getKey(user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     const key = await this.prisma.apiKey.findFirst({
       where: { establishment_id: user.establishment_id },
       orderBy: { created_at: 'desc' },
@@ -105,6 +107,7 @@ export class ApiKeysService {
    * Toggles is_active on the API key.
    */
   async toggleActive(id: string, user: AuthenticatedUser): Promise<void> {
+    this.assertManagerOrOwner(user);
     const key = await this.prisma.apiKey.findUnique({ where: { id } });
     if (!key || key.establishment_id !== user.establishment_id) {
       throw new NotFoundException('API key not found');
@@ -121,6 +124,7 @@ export class ApiKeysService {
    * Auto-expands to include www variant.
    */
   async updateDomains(id: string, websiteUrl: string, user: AuthenticatedUser): Promise<void> {
+    this.assertManagerOrOwner(user);
     const key = await this.prisma.apiKey.findUnique({ where: { id } });
     if (!key || key.establishment_id !== user.establishment_id) {
       throw new NotFoundException('API key not found');
@@ -136,6 +140,12 @@ export class ApiKeysService {
       where: { id },
       data: { allowed_domains: allowedDomains },
     });
+  }
+
+  private assertManagerOrOwner(user: AuthenticatedUser): void {
+    if (user.role !== 'owner' && user.role !== 'manager') {
+      throw new ForbiddenException('Insufficient permissions');
+    }
   }
 
   /**

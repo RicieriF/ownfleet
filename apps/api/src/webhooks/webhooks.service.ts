@@ -64,6 +64,7 @@ export class WebhooksService {
   ) {}
 
   async create(dto: CreateWebhookDto, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     assertNotInternalUrl(dto.url);
     return this.prisma.webhook.create({
       data: {
@@ -100,6 +101,7 @@ export class WebhooksService {
   }
 
   async update(id: string, dto: UpdateWebhookDto, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     if (dto.url !== undefined) assertNotInternalUrl(dto.url);
     await this.assertBelongs(id, user.establishment_id);
     return this.prisma.webhook.update({
@@ -114,6 +116,7 @@ export class WebhooksService {
   }
 
   async remove(id: string, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
     await this.assertBelongs(id, user.establishment_id);
     await this.prisma.webhook.delete({ where: { id } });
     return { deleted: true };
@@ -152,6 +155,12 @@ export class WebhooksService {
 
     if (webhooks.length > 0) {
       this.logger.debug(`Queued ${webhooks.length} webhook(s) for event "${event}" [est: ${establishmentId}]`);
+    }
+  }
+
+  private assertManagerOrOwner(user: AuthenticatedUser): void {
+    if (user.role !== 'owner' && user.role !== 'manager') {
+      throw new ForbiddenException('Only owners and managers can manage webhooks');
     }
   }
 

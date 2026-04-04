@@ -62,7 +62,11 @@ export class TrackingGateway
       try {
         const event = JSON.parse(message) as CourierMovedEvent;
         const room = `est:${event.establishment_id}`;
-        this.server.to(room).emit('courier_moved', {
+        // server.local: emit only to clients on THIS instance.
+        // All instances subscribe to the same Redis channel, so each handles
+        // its own connected clients. Without .local, the Redis adapter would
+        // re-broadcast across instances and each client would receive N copies.
+        this.server.local.to(room).emit('courier_moved', {
           courier_id: event.courier_id,
           lat: event.lat,
           lng: event.lng,

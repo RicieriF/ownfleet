@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
@@ -21,6 +21,9 @@ export class TrackingController {
   @Get('couriers/:id/position')
   getPosition(@Param('id') id: string, @Req() req: any) {
     const user = req.user as AuthenticatedUser;
+    if (user.courier_id) {
+      throw new ForbiddenException('Courier accounts cannot query other courier positions');
+    }
     return this.service.getLastKnownPosition(id, user.establishment_id);
   }
 }

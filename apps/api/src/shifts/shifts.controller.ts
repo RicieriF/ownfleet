@@ -21,7 +21,7 @@ interface RequestWithUser {
   user: JwtPayload;
 }
 
-@Controller('api/v1/shifts')
+@Controller('shifts')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class ShiftsController {
   constructor(private readonly shiftsService: ShiftsService) {}
@@ -53,7 +53,7 @@ export class ShiftsController {
   /** GET /api/v1/shifts/active — manager gets all active shifts for their establishment */
   @Get('active')
   getActiveShifts(@Request() req: RequestWithUser) {
-    return this.shiftsService.getActiveShiftsForEstablishment(req.user.establishment_id);
+    return this.shiftsService.getActiveShiftsForEstablishment(req.user);
   }
 
   /** PATCH /api/v1/shifts/:id/planned-end — manager updates planned end time */

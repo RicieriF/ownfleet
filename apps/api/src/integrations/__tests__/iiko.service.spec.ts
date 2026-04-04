@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { IikoService } from '../iiko.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GeocodingService } from '../../geocoding/geocoding.service.js';
+import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
 
 // ── fetch mock ─────────────────────────────────────────────────────────────
 const mockFetch = jest.fn();
@@ -14,6 +15,11 @@ const mockOrder = {
 const mockIntegration = { findMany: jest.fn() };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
 const mockGeocodingService = { enqueueGeocode: jest.fn().mockResolvedValue(undefined) };
+
+// Call-through lock mock: lock is always acquired and fn executes immediately
+const mockLock = {
+  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) => fn()),
+} as unknown as DistributedLockService;
 
 const VALID_CONFIG = {
   server_url: 'http://iiko-server:8080',
@@ -41,6 +47,7 @@ describe('IikoService', () => {
         IikoService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: GeocodingService, useValue: mockGeocodingService },
+        { provide: DistributedLockService, useValue: mockLock },
       ],
     }).compile();
     service = module.get<IikoService>(IikoService);
@@ -205,6 +212,14 @@ describe('IikoService', () => {
         .mockResolvedValueOnce(makeResponse(200, { deliveryOrders: [] }));
 
       await expect(service.pollAll()).resolves.not.toThrow();
+    });
+
+    it('acquires distributed lock with key "iiko-poll" and TTL 90s', async () => {
+      mockIntegration.findMany.mockResolvedValue([]);
+
+      await service.pollAll();
+
+      expect(mockLock.withLock).toHaveBeenCalledWith('iiko-poll', 90, expect.any(Function));
     });
   });
 

@@ -14,7 +14,10 @@ import { CouriersModule } from '../couriers/couriers.module.js';
 
 @Module({
   imports: [
-    BullModule.registerQueue({ name: 'dispatch' }),
+    BullModule.registerQueue({
+      name: 'dispatch',
+      defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
+    }),
     EstablishmentsModule,
     WebhooksModule,
     TelegramModule,

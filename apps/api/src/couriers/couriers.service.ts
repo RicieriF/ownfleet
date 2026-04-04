@@ -187,7 +187,7 @@ export class CouriersService {
       courierId,
       `📢 Нагадування від менеджера: перевірте застосунок — є активне замовлення`,
       'manager_reminder',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (manager_reminder)', err));
 
     this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);
     return { reminded: true, courier_name: courier.name };

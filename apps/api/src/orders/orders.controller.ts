@@ -105,7 +105,7 @@ export class OrdersController {
     // Find the delivery in 'assigned' state for this order
     const delivery = await this.service.findAssignedDelivery(id, user.establishment_id);
     if (!delivery) {
-      throw new NotFoundException({ reason: 'no_assignable_delivery' });
+      throw new NotFoundException({ code: 'no_assignable_delivery', message: 'Активну доставку для перепризначення не знайдено' });
     }
 
     await this.service.reassignDelivery(delivery.id, dto.courierId, user.establishment_id);

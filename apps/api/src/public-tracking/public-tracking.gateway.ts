@@ -20,6 +20,7 @@ import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RedisSubscriberFactory } from '../shared/redis/redis-subscriber.factory.js';
 import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
+import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import {
   TRACKING_DISCONNECT_QUEUE,
   PUBLIC_DELIVERY_STATUS_CHANNEL,
@@ -56,6 +57,9 @@ export interface DeliveryCompletedPayload {
 /** Redis pub/sub pattern for courier location/route events from TrackingService */
 const LOCATION_PATTERN = 'order:*:public';
 
+/** Max new WS connections per IP per minute. Prevents connection flood abuse. */
+const WS_CONNECT_RATE_LIMIT = 30;
+
 @Injectable()
 @Processor(TRACKING_DISCONNECT_QUEUE)
 @WebSocketGateway({ namespace: '/public', cors: { origin: '*' } })
@@ -73,6 +77,7 @@ export class PublicTrackingGateway
     private readonly redisSubscriberFactory: RedisSubscriberFactory,
     @Inject(REDIS_CLIENT) private readonly redis: IORedis,
     @InjectQueue(TRACKING_DISCONNECT_QUEUE) private readonly disconnectQueue: Queue<DisconnectJob>,
+    private readonly lock: DistributedLockService,
   ) {}
 
   afterInit(_server: Server): void {
@@ -98,6 +103,9 @@ export class PublicTrackingGateway
     );
 
     // Pattern messages (courier location / route)
+    // server.local: all instances subscribe to the same Redis pattern, so each
+    // handles only its own connected clients. Without .local the Redis adapter
+    // would re-broadcast the event and each client receives N duplicate messages.
     this.redisSub.on('pmessage', (_pattern: string, channel: string, message: string) => {
       try {
         const payload = JSON.parse(message) as { type: string; [key: string]: unknown };
@@ -108,9 +116,9 @@ export class PublicTrackingGateway
 
         const room = `order:${orderId}:public`;
         if (payload.type === 'location') {
-          this.server.to(room).emit('courier:location', { lat: payload['lat'], lng: payload['lng'] });
+          this.server.local.to(room).emit('courier:location', { lat: payload['lat'], lng: payload['lng'] });
         } else if (payload.type === 'route') {
-          this.server.to(room).emit('delivery:route', { routeGeometry: payload['routeGeometry'] });
+          this.server.local.to(room).emit('delivery:route', { routeGeometry: payload['routeGeometry'] });
         }
       } catch (err) {
         this.logger.error('Failed to handle pmessage', err);
@@ -118,11 +126,12 @@ export class PublicTrackingGateway
     });
 
     // Regular messages (delivery lifecycle, geocoding)
+    // server.local for same reason: every instance subscribes and handles its own clients.
     this.redisSub.on('message', (channel: string, message: string) => {
       try {
         if (channel === GEOCODING_DONE_CHANNEL) {
           const payload = JSON.parse(message) as GeocodingDonePayload;
-          this.server
+          this.server.local
             .to(`order:${payload.orderId}:public`)
             .emit('order:coords_ready', { lat: payload.lat, lng: payload.lng });
           return;
@@ -130,7 +139,7 @@ export class PublicTrackingGateway
 
         if (channel === PUBLIC_DELIVERY_STATUS_CHANNEL) {
           const payload = JSON.parse(message) as DeliveryStatusPayload;
-          this.server
+          this.server.local
             .to(`order:${payload.orderId}:public`)
             .emit('delivery:status', {
               orderStatus: payload.orderStatus,
@@ -177,6 +186,27 @@ export class PublicTrackingGateway
 
   async handleConnection(socket: Socket): Promise<void> {
     try {
+      // IP-based connection rate limit: 30 new connections / min per IP.
+      // Prevents connection flood from a single origin regardless of token validity.
+      const clientIp =
+        (socket.handshake.headers['x-forwarded-for'] as string | undefined)
+          ?.split(',')[0]
+          ?.trim() ?? socket.handshake.address;
+      const minuteBucket = Math.floor(Date.now() / 60_000);
+      const connRateLimitKey = `throttle:ws:connect:${clientIp}:${minuteBucket}`;
+      const connCount = await this.redis
+        .multi()
+        .incr(connRateLimitKey)
+        .expire(connRateLimitKey, 90)
+        .exec()
+        .then((results) => (results?.[0]?.[1] as number | null) ?? 1)
+        .catch(() => 0); // Redis unavailable — fail open
+      if (connCount > WS_CONNECT_RATE_LIMIT) {
+        socket.emit('error', { type: 'RATE_LIMITED' });
+        socket.disconnect(true);
+        return;
+      }
+
       const token =
         (socket.handshake.auth as Record<string, string>)['token'] ?? '';
 
@@ -279,28 +309,30 @@ export class PublicTrackingGateway
 
   @Cron('*/60 * * * * *', { name: 'public-eta-push', timeZone: 'UTC' })
   async pushEtaEvents(): Promise<void> {
-    const deliveries = await this.prisma.delivery.findMany({
-      where: { status: 'in_progress' },
-      select: {
-        id: true,
-        eta_seconds: true,
-        eta_started_at: true,
-        order_id: true,
-      },
-    });
+    await this.lock.withLock('public-eta-push', 55, async () => {
+      const deliveries = await this.prisma.delivery.findMany({
+        where: { status: 'in_progress' },
+        select: {
+          id: true,
+          eta_seconds: true,
+          eta_started_at: true,
+          order_id: true,
+        },
+      });
 
-    for (const d of deliveries) {
-      if (d.eta_seconds === null) continue;
+      for (const d of deliveries) {
+        if (d.eta_seconds === null) continue;
 
-      let remainingSeconds = d.eta_seconds;
-      if (d.eta_started_at) {
-        const elapsedSeconds = Math.floor((Date.now() - d.eta_started_at.getTime()) / 1000);
-        remainingSeconds = Math.max(0, d.eta_seconds - elapsedSeconds);
+        let remainingSeconds = d.eta_seconds;
+        if (d.eta_started_at) {
+          const elapsedSeconds = Math.floor((Date.now() - d.eta_started_at.getTime()) / 1000);
+          remainingSeconds = Math.max(0, d.eta_seconds - elapsedSeconds);
+        }
+
+        this.server
+          .to(`order:${d.order_id}:public`)
+          .emit('delivery:eta', { etaSeconds: remainingSeconds });
       }
-
-      this.server
-        .to(`order:${d.order_id}:public`)
-        .emit('delivery:eta', { etaSeconds: remainingSeconds });
-    }
+    });
   }
 }

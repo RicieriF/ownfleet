@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { ShiftsService } from '../../shifts/shifts.service.js';
 import { EtaService } from '../../eta/eta.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
+import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
 const mockOrder = { deleteMany: jest.fn(), findMany: jest.fn() };
@@ -34,6 +35,13 @@ const mockDispatchQueue = {
   add: jest.fn().mockResolvedValue(undefined),
 };
 
+// Call-through mock: lock is always acquired and fn is executed immediately.
+// This keeps existing tests working unchanged while allowing lock-key assertions
+// in the dedicated "distributed lock" suite below.
+const mockLockService = {
+  withLock: jest.fn((key: string, ttl: number, fn: () => Promise<void>) => fn()),
+};
+
 describe('RetentionService', () => {
   let service: RetentionService;
 
@@ -46,12 +54,15 @@ describe('RetentionService', () => {
         { provide: ShiftsService, useValue: mockShiftsService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TelegramService, useValue: mockTelegramService },
+        { provide: DistributedLockService, useValue: mockLockService },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
       ],
     }).compile();
 
     service = module.get<RetentionService>(RetentionService);
     jest.clearAllMocks();
+    // Restore call-through behaviour after clearAllMocks resets the implementation
+    mockLockService.withLock.mockImplementation((key: string, ttl: number, fn: () => Promise<void>) => fn());
     mockOrder.deleteMany.mockResolvedValue({ count: 0 });
     mockOrder.findMany.mockResolvedValue([]);
     mockPrisma.$executeRaw.mockResolvedValue(0);
@@ -391,6 +402,84 @@ describe('RetentionService', () => {
       await service.checkRecommendTimeout();
 
       expect(mockDispatchQueue.add).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── distributed lock usage ────────────────────────────────────────────────
+  // Verifies that each Telegram-sending cron acquires the lock with the correct
+  // key, so two concurrent instances cannot send duplicate notifications.
+
+  describe('distributed lock — lock keys per cron', () => {
+    beforeEach(() => {
+      mockShiftsService.autoCloseStaleShifts = jest.fn().mockResolvedValue(0);
+      mockShiftsService.checkShiftEndingSoon = jest.fn().mockResolvedValue(0);
+      mockShiftsService.checkCourierNotResponding = jest.fn().mockResolvedValue(0);
+    });
+
+    it('autoCloseStaleShifts acquires lock "auto-close-stale-shifts" with 1500s TTL', async () => {
+      await service.autoCloseStaleShifts();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'auto-close-stale-shifts', 1500, expect.any(Function),
+      );
+    });
+
+    it('checkShiftEndingSoon acquires lock "shift-ending-soon" with 240s TTL', async () => {
+      await service.checkShiftEndingSoon();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'shift-ending-soon', 240, expect.any(Function),
+      );
+    });
+
+    it('checkCourierNotResponding acquires lock "courier-not-responding" with 240s TTL', async () => {
+      await service.checkCourierNotResponding();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'courier-not-responding', 240, expect.any(Function),
+      );
+    });
+
+    it('checkEtaOverdue acquires lock "eta-overdue-alert" with 240s TTL', async () => {
+      await service.checkEtaOverdue();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'eta-overdue-alert', 240, expect.any(Function),
+      );
+    });
+
+    it('checkShiftAnomalies acquires lock "shift-anomaly-check" with 1500s TTL', async () => {
+      mockShift.findMany.mockResolvedValue([]);
+      await service.checkShiftAnomalies();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'shift-anomaly-check', 1500, expect.any(Function),
+      );
+    });
+
+    it('runRetention acquires lock "retention-cleanup" with 7200s TTL', async () => {
+      mockEstablishment.findMany.mockResolvedValue([]);
+      await service.runRetention();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'retention-cleanup', 7200, expect.any(Function),
+      );
+    });
+
+    it('cron body is NOT executed when lock returns false (busy — another instance running)', async () => {
+      // Simulate lock busy: withLock returns false without calling fn
+      mockLockService.withLock.mockResolvedValue(false);
+
+      await service.checkShiftEndingSoon();
+
+      expect(mockShiftsService.checkShiftEndingSoon).not.toHaveBeenCalled();
+    });
+
+    it('checkRecommendTimeout does NOT use a distributed lock (Bull jobId dedup is sufficient)', async () => {
+      mockEstablishment.findMany.mockResolvedValue([]);
+      await service.checkRecommendTimeout();
+      // withLock should NOT have been called for this cron
+      expect(mockLockService.withLock).not.toHaveBeenCalled();
+    });
+
+    it('cleanupExpiredTrackingTokens does NOT use a distributed lock (idempotent DELETE)', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(0);
+      await service.cleanupExpiredTrackingTokens();
+      expect(mockLockService.withLock).not.toHaveBeenCalled();
     });
   });
 });

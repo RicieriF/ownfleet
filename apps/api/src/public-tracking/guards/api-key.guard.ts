@@ -14,12 +14,20 @@ import { Inject } from '@nestjs/common';
 import { ApiKeysService } from '../../api-keys/api-keys.service.js';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
-// Unique external_id throttle: SADD per (keyPrefix + minuteBucket).
-// Purpose: brute-force guard only — not a business rate limit.
-// 60/min allows even a busy establishment's legitimate traffic (1 new customer/sec)
-// while still blocking obvious enumeration attacks (thousands/min).
-const THROTTLE_UNIQUE_LIMIT = 60;
-const THROTTLE_TTL_SEC = 120; // 2 min window
+// Per-key throttle: max unique externalIds per API key per minute.
+// Blocks bulk enumeration even when attacker rotates IPs.
+// 60/min ≈ 1 new customer/sec — covers the busiest legitimate establishments.
+const KEY_THROTTLE_UNIQUE_LIMIT = 60;
+
+// Per-IP throttle: max unique externalIds per client IP per key per minute.
+// Primary defense against slow enumeration from a single origin:
+// even requests well under the per-key limit are blocked at the IP level.
+// Set generously to accommodate shared-NAT scenarios (corporate offices,
+// mobile carriers) while still making full-order-history enumeration from
+// one IP require constant proxy rotation (cost ↑, signal ↑).
+const IP_THROTTLE_UNIQUE_LIMIT = 15;
+
+const THROTTLE_TTL_SEC = 120; // 2 min window — survives minute-boundary edge cases
 
 export interface ApiKeyContext {
   id: string;
@@ -58,10 +66,14 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     // ── 3. Origin check ─────────────────────────────────────────────────────
-    // Only Origin header is trusted for domain restriction — Referer can be spoofed
-    // by server-side requests (curl, fetch from attacker's backend). Missing Origin
-    // (same-origin browser request) is treated as empty domain → denied unless
-    // allowed_domains is empty (which throws on line 65) or localhost.
+    // Domain restriction is enforced via the Origin header. Browsers enforce that
+    // client-side JavaScript cannot override Origin, so this blocks unauthorized
+    // websites from embedding the widget (the primary threat). Server-side code
+    // (curl, backend fetch) CAN spoof Origin freely — this is an accepted trade-off
+    // of the "public API key like Google Maps" design: the key is intentionally
+    // visible in HTML and domain restriction guards against casual cross-site misuse,
+    // not against a determined attacker who has already extracted the key.
+    // Missing Origin (same-origin browser request) → treated as empty domain → denied.
     const origin = req.headers['origin'] as string | undefined;
     const requestDomain = this.extractDomain(origin ?? '');
 
@@ -86,7 +98,7 @@ export class ApiKeyGuard implements CanActivate {
       throw new ForbiddenException('Domain not allowed for this API key');
     }
 
-    // ── 4. Throttle: unique externalIds per key per minute ──────────────────
+    // ── 4. Throttle: per-key + per-IP, single Redis pipeline ───────────────
     // externalId is a path param (/public/order/:externalId/token) or query param fallback
     const externalId =
       (req.params['externalId'] as string | undefined) ??
@@ -99,18 +111,36 @@ export class ApiKeyGuard implements CanActivate {
 
     if (externalId) {
       const minuteBucket = Math.floor(Date.now() / 60_000);
-      const throttleKey = `throttle:api:${keyRecord.key_prefix}:${minuteBucket}`;
+      const keyThrottleKey = `throttle:api:key:${keyRecord.key_prefix}:${minuteBucket}`;
 
-      const count = await this.redis
+      // req.ip is populated correctly from X-Forwarded-For because
+      // `trust proxy` is enabled in main.ts. Falls back to 'unknown' only
+      // when running without any network context (unit tests, etc.).
+      const clientIp = req.ip ?? 'unknown';
+      const ipThrottleKey = `throttle:api:ip:${keyRecord.key_prefix}:${clientIp}:${minuteBucket}`;
+
+      // Both checks in one pipeline — single round-trip to Redis.
+      // Layout: [keyAdd, keyCard, keyExpire, ipAdd, ipCard, ipExpire]
+      const results = await this.redis
         .multi()
-        .sadd(throttleKey, externalId)
-        .scard(throttleKey)
-        .expire(throttleKey, THROTTLE_TTL_SEC)
+        .sadd(keyThrottleKey, externalId)
+        .scard(keyThrottleKey)
+        .expire(keyThrottleKey, THROTTLE_TTL_SEC)
+        .sadd(ipThrottleKey, externalId)
+        .scard(ipThrottleKey)
+        .expire(ipThrottleKey, THROTTLE_TTL_SEC)
         .exec();
 
-      const uniqueCount = count?.[1]?.[1] as number | undefined;
-      if (uniqueCount !== undefined && uniqueCount > THROTTLE_UNIQUE_LIMIT) {
+      const keyUniqueCount = results?.[1]?.[1] as number | undefined;
+      const ipUniqueCount  = results?.[4]?.[1] as number | undefined;
+
+      if (keyUniqueCount !== undefined && keyUniqueCount > KEY_THROTTLE_UNIQUE_LIMIT) {
         throw new HttpException('Too many unique orders per minute for this API key', HttpStatus.TOO_MANY_REQUESTS);
+      }
+
+      if (ipUniqueCount !== undefined && ipUniqueCount > IP_THROTTLE_UNIQUE_LIMIT) {
+        // Generic message — don't reveal that IP-based limiting is active
+        throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
       }
     }
 

@@ -3,23 +3,32 @@ import {
   Get,
   Post,
   Param,
-  Query,
   UseGuards,
   Req,
+  Inject,
   NotFoundException,
+  TooManyRequestsException,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
+import type IORedis from 'ioredis';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { PublicTrackingService } from './public-tracking.service.js';
 import { ApiKeyGuard } from './guards/api-key.guard.js';
+import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import type { ApiKeyContext } from './guards/api-key.guard.js';
 
-@Controller('api/v1')
+/** Max snapshot HTTP polls per token per minute. Clients should use WebSocket for live updates. */
+const SNAPSHOT_RATE_LIMIT = 60;
+
+@Controller('')
 export class PublicTrackingController {
-  constructor(private readonly service: PublicTrackingService) {}
+  constructor(
+    private readonly service: PublicTrackingService,
+    @Inject(REDIS_CLIENT) private readonly redis: IORedis,
+  ) {}
 
   /**
    * Public: get or create tracking token by order external_id.
@@ -57,6 +66,22 @@ export class PublicTrackingController {
     if (!token || token.length > 64) {
       throw new NotFoundException('Tracking token not found or expired');
     }
+
+    // Per-token rate limit: 60 req/min. Prevents hammering DB/Redis with rapid
+    // snapshot polls even when a valid token is known. Clients should use WebSocket.
+    const minuteBucket = Math.floor(Date.now() / 60_000);
+    const rateLimitKey = `throttle:snap:${token}:${minuteBucket}`;
+    const count = await this.redis
+      .multi()
+      .incr(rateLimitKey)
+      .expire(rateLimitKey, 90) // 90s TTL — covers current + next bucket, then self-cleans
+      .exec()
+      .then((results) => (results?.[0]?.[1] as number | null) ?? 1)
+      .catch(() => 0); // Redis unavailable — fail open (don't block legitimate users)
+    if (count > SNAPSHOT_RATE_LIMIT) {
+      throw new TooManyRequestsException('Too many requests');
+    }
+
     const snapshot = await this.service.getSnapshot(token);
     if (!snapshot) {
       throw new NotFoundException('Tracking token not found or expired');

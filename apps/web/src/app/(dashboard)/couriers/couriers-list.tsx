@@ -121,9 +121,10 @@ function PlannedEndEditor({
 
 interface Props {
   couriers: CourierWithStatus[];
+  establishmentTimezone: string;
 }
 
-export function CouriersList({ couriers: initial }: Props) {
+export function CouriersList({ couriers: initial, establishmentTimezone }: Props) {
   const [couriers, setCouriers] = useState(initial);
   const [remindLoading, setRemindLoading] = useState<string | null>(null);
   const [editingShift, setEditingShift] = useState<string | null>(null); // courier id
@@ -227,7 +228,7 @@ export function CouriersList({ couriers: initial }: Props) {
                     />
                     {courier.active_shift.planned_end_at && (
                       <span className="text-[11px] text-[var(--t4)]">
-                        · до {new Date(courier.active_shift.planned_end_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
+                        · до {new Date(courier.active_shift.planned_end_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: establishmentTimezone })}
                       </span>
                     )}
                     <button

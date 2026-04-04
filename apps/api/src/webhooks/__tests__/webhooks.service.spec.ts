@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 
 const EST_ID = 'est-1';
 const userA: any = { id: 'u1', establishment_id: EST_ID, role: 'manager', is_platform_admin: false };
+const dispatcher: any = { id: 'u2', establishment_id: EST_ID, role: 'dispatcher', is_platform_admin: false };
 
 const baseWebhook = {
   id: 'wh-1',
@@ -61,6 +62,11 @@ describe('WebhooksService', () => {
       });
       expect(result.id).toBeDefined();
     });
+
+    it('throws ForbiddenException for dispatcher role', async () => {
+      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] };
+      await expect(service.create(dto, dispatcher)).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('findAll', () => {
@@ -104,6 +110,10 @@ describe('WebhooksService', () => {
       mockWebhook.findUnique.mockResolvedValue({ ...baseWebhook, establishment_id: 'est-other' });
       await expect(service.update('wh-1', { active: false }, userA)).rejects.toThrow(ForbiddenException);
     });
+
+    it('throws ForbiddenException for dispatcher role', async () => {
+      await expect(service.update('wh-1', { active: false }, dispatcher)).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('remove', () => {
@@ -111,6 +121,10 @@ describe('WebhooksService', () => {
       const result = await service.remove('wh-1', userA);
       expect(result.deleted).toBe(true);
       expect(mockWebhook.delete).toHaveBeenCalledWith({ where: { id: 'wh-1' } });
+    });
+
+    it('throws ForbiddenException for dispatcher role', async () => {
+      await expect(service.remove('wh-1', dispatcher)).rejects.toThrow(ForbiddenException);
     });
   });
 

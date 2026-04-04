@@ -18,7 +18,7 @@ import { ExtendSubscriptionDto } from './dto/extend-subscription.dto.js';
 import { ListEstablishmentsDto } from './dto/list-establishments.dto.js';
 import { SensitiveResponse } from '../common/decorators/sensitive-response.decorator.js';
 
-@Controller('api/v1/platform')
+@Controller('platform')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class PlatformController {
   constructor(private readonly service: PlatformService) {}

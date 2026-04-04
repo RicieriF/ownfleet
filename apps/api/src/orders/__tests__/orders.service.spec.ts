@@ -26,7 +26,11 @@ const completedOrder = { id: 'o4', establishment_id: EST_A, status: 'completed',
 const courierA = { id: 'c1', establishment_id: EST_A, name: 'Ivan', transport_mode: 'moto_electric' };
 
 const mockTx = {
-  order: { update: jest.fn().mockResolvedValue(assignedOrder) },
+  order: {
+    update: jest.fn().mockResolvedValue(assignedOrder),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    findUniqueOrThrow: jest.fn().mockResolvedValue(assignedOrder),
+  },
   delivery: { create: jest.fn().mockResolvedValue({}) },
 };
 
@@ -97,6 +101,8 @@ describe('OrdersService', () => {
     jest.clearAllMocks();
     mockPrisma.$transaction.mockImplementation((cb: any) => cb(mockTx));
     mockTx.order.update.mockResolvedValue(assignedOrder);
+    mockTx.order.updateMany.mockResolvedValue({ count: 1 });
+    mockTx.order.findUniqueOrThrow.mockResolvedValue(assignedOrder);
     mockTx.delivery.create.mockResolvedValue({});
   });
 

@@ -8,8 +8,9 @@ function makeCtx(
   query: Record<string, string> = {},
   headers: Record<string, string> = {},
   params: Record<string, string> = {},
+  ip = '1.2.3.4',
 ): ExecutionContext {
-  const req: any = { query, headers, params };
+  const req: any = { query, headers, params, ip };
   return {
     switchToHttp: () => ({ getRequest: () => req }),
   } as any;
@@ -27,30 +28,48 @@ const mockApiKeysService = {
   updateLastUsed: jest.fn(),
 };
 
-const mockRedis = {
-  multi: jest.fn().mockReturnValue({
-    sadd: jest.fn().mockReturnThis(),
-    scard: jest.fn().mockReturnThis(),
-    expire: jest.fn().mockReturnThis(),
-    exec: jest.fn().mockResolvedValue([[null, 1], [null, 1], [null, 1]]),
-  }),
-};
+/**
+ * Pipeline layout (6 commands):
+ *   [0] sadd keyThrottleKey  → [null, 0|1]
+ *   [1] scard keyThrottleKey → [null, N]   ← keyUniqueCount
+ *   [2] expire keyThrottleKey
+ *   [3] sadd ipThrottleKey   → [null, 0|1]
+ *   [4] scard ipThrottleKey  → [null, N]   ← ipUniqueCount
+ *   [5] expire ipThrottleKey
+ */
+function makePipelineResult(keyCount: number, ipCount: number) {
+  return [
+    [null, 1],
+    [null, keyCount],
+    [null, 1],
+    [null, 1],
+    [null, ipCount],
+    [null, 1],
+  ];
+}
+
+function makeMockRedis(keyCount = 1, ipCount = 1) {
+  return {
+    multi: jest.fn().mockReturnValue({
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(keyCount, ipCount)),
+    }),
+  };
+}
 
 describe('ApiKeyGuard', () => {
   let guard: ApiKeyGuard;
+  let mockRedis: ReturnType<typeof makeMockRedis>;
 
   beforeEach(() => {
+    jest.clearAllMocks();
+    mockRedis = makeMockRedis();
     guard = new ApiKeyGuard(
       mockApiKeysService as unknown as ApiKeysService,
       mockRedis as any,
     );
-    jest.clearAllMocks();
-    mockRedis.multi.mockReturnValue({
-      sadd: jest.fn().mockReturnThis(),
-      scard: jest.fn().mockReturnThis(),
-      expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 1], [null, 1], [null, 1]]),
-    });
   });
 
   // ── Missing key ────────────────────────────────────────────────────────────
@@ -110,43 +129,164 @@ describe('ApiKeyGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow('Domain not allowed for this API key');
   });
 
-  // ── Throttle ──────────────────────────────────────────────────────────────
+  // ── Per-key throttle ──────────────────────────────────────────────────────
 
-  it('throws TooManyRequestsException when unique externalId count exceeds limit', async () => {
+  it('throws 429 when unique externalId count per key exceeds 60', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    // Simulate 61 unique entries already present (limit is 60)
     mockRedis.multi.mockReturnValue({
       sadd: jest.fn().mockReturnThis(),
       scard: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 1], [null, 61], [null, 1]]),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(61, 1)),
     });
 
     const ctx = makeCtx(
-      { key: 'wgo_validkey', externalId: 'order-99' },
+      { key: 'wgo_validkey' },
       { origin: 'https://pizza.com' },
+      { externalId: 'order-99' },
     );
     await expect(guard.canActivate(ctx)).rejects.toThrow(HttpException);
   });
 
-  it('allows request when unique externalId count is within limit', async () => {
+  it('allows request when per-key unique count is within limit', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
     mockRedis.multi.mockReturnValue({
       sadd: jest.fn().mockReturnThis(),
       scard: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 1], [null, 5], [null, 1]]),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(5, 1)),
     });
 
     const ctx = makeCtx(
-      { key: 'wgo_validkey', externalId: 'order-1' },
+      { key: 'wgo_validkey' },
       { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
     );
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
 
-  it('skips throttle check when no externalId in query', async () => {
+  // ── Per-IP throttle ───────────────────────────────────────────────────────
+
+  it('throws 429 when unique externalId count per IP exceeds 15', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+    mockRedis.multi.mockReturnValue({
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      // keyCount well within limit, ipCount over limit
+      exec: jest.fn().mockResolvedValue(makePipelineResult(5, 16)),
+    });
+
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-99' },
+      '5.5.5.5',
+    );
+    const err = await guard.canActivate(ctx).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(429);
+    // Generic message — must not reveal IP-based limiting is active
+    expect((err as HttpException).getResponse()).toBe('Too many requests');
+  });
+
+  it('allows request when per-IP count is at the limit boundary (exactly 15)', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+    mockRedis.multi.mockReturnValue({
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(5, 15)),
+    });
+
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-15' },
+      '5.5.5.5',
+    );
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+  });
+
+  it('two different IPs each get their own independent IP throttle bucket', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+
+    // IP A: at limit (15 unique)
+    const multiA = {
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(5, 15)),
+    };
+    // IP B: over limit (16 unique)
+    const multiB = {
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(5, 16)),
+    };
+
+    mockRedis.multi
+      .mockReturnValueOnce(multiA)
+      .mockReturnValueOnce(multiB);
+
+    const ctxA = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' }, { externalId: 'order-1' }, '1.1.1.1');
+    const ctxB = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' }, { externalId: 'order-1' }, '2.2.2.2');
+
+    await expect(guard.canActivate(ctxA)).resolves.toBe(true);
+    await expect(guard.canActivate(ctxB)).rejects.toThrow(HttpException);
+  });
+
+  it('uses IP-scoped Redis key so different IPs do not share buckets', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+    const multiMock = {
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(1, 1)),
+    };
+    mockRedis.multi.mockReturnValue(multiMock);
+
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
+      '9.9.9.9',
+    );
+    await guard.canActivate(ctx);
+
+    // The 4th command (index 3) is sadd for IP key — must contain client IP
+    const saddCalls = multiMock.sadd.mock.calls;
+    expect(saddCalls[1][0]).toContain('9.9.9.9'); // second sadd = IP throttle key
+  });
+
+  it('both throttles use a single Redis pipeline (one round-trip)', async () => {
+    mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
+    const execMock = jest.fn().mockResolvedValue(makePipelineResult(1, 1));
+    mockRedis.multi.mockReturnValue({
+      sadd: jest.fn().mockReturnThis(),
+      scard: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: execMock,
+    });
+
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
+    );
+    await guard.canActivate(ctx);
+
+    // multi() called exactly once — both throttles in one pipeline
+    expect(mockRedis.multi).toHaveBeenCalledTimes(1);
+    expect(execMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Throttle skipped when no externalId ───────────────────────────────────
+
+  it('skips throttle check when no externalId in query or params', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
     const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' });
     const result = await guard.canActivate(ctx);
@@ -158,7 +298,7 @@ describe('ApiKeyGuard', () => {
 
   it('decorates req.apiKey with id, establishment_id, key_prefix', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const req: any = { query: { key: 'wgo_validkey' }, headers: { origin: 'https://pizza.com' }, params: {} };
+    const req: any = { query: { key: 'wgo_validkey' }, headers: { origin: 'https://pizza.com' }, params: {}, ip: '1.2.3.4' };
     const ctx: any = { switchToHttp: () => ({ getRequest: () => req }) };
 
     await guard.canActivate(ctx);
@@ -201,19 +341,18 @@ describe('ApiKeyGuard', () => {
     expect(result).toBe(true);
   });
 
-  // ── Throttle: same externalId 15 retries = 1 unique ──────────────────────
+  // ── Throttle: same externalId retries = 1 unique ──────────────────────────
 
   it('does not throttle 15 retries of the same externalId (SADD is set-idempotent)', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    // SADD for a duplicate returns 0 (element already in set); SCARD stays at 1
+    // SADD for a duplicate returns 0 (element already in set); both SCARDs stay at 1
     mockRedis.multi.mockReturnValue({
       sadd: jest.fn().mockReturnThis(),
       scard: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, 0], [null, 1], [null, 1]]),
+      exec: jest.fn().mockResolvedValue(makePipelineResult(1, 1)),
     });
 
-    // Simulate the 15th retry of the same order — scard=1, well under limit
     const ctx = makeCtx(
       { key: 'wgo_validkey' },
       { origin: 'https://pizza.com' },

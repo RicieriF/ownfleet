@@ -62,7 +62,7 @@ export class PlanAccessGuard implements CanActivate {
       if (graceEnd > now) return true;
     }
 
-    throw new HttpException({ code: 'PLAN_EXPIRED' }, HttpStatus.PAYMENT_REQUIRED);
+    throw new HttpException({ code: 'PLAN_EXPIRED', message: 'Термін дії тарифного плану закінчився' }, HttpStatus.PAYMENT_REQUIRED);
   }
 
   private getCached(establishmentId: string): Pick<CachedEntry, 'plan' | 'trial_ends_at' | 'paid_until'> | null {

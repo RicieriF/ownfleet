@@ -12,7 +12,17 @@ export async function POST(req: NextRequest) {
   });
 
   if (!res.ok) {
-    const error = await res.text().catch(() => 'Login failed');
+    const body = await res.text().catch(() => '');
+    let error = 'Невірний email або пароль';
+    if (body) {
+      try {
+        const json = JSON.parse(body) as { message?: unknown; error?: string };
+        const raw = json.message;
+        error = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw : json.error ?? error);
+      } catch {
+        error = body || error;
+      }
+    }
     return NextResponse.json({ error }, { status: res.status });
   }
 

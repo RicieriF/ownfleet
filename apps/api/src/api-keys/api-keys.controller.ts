@@ -17,7 +17,7 @@ import type { Request } from 'express';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
-@Controller('api/v1/establishments/api-key')
+@Controller('establishments/api-key')
 export class ApiKeysController {
   constructor(private readonly apiKeysService: ApiKeysService) {}
 

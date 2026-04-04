@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { OnboardingService } from './onboarding.service.js';
@@ -46,6 +47,7 @@ export class OnboardingController {
 
   @Post('accept-invite/:token')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } }) // 20 attempts / min per IP
   acceptInvite(@Param('token') token: string, @Body() dto: AcceptInviteDto) {
     return this.service.acceptInvite(token, dto.password, dto.transport_mode);
   }

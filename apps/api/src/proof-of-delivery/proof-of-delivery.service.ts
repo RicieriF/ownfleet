@@ -101,6 +101,12 @@ export class ProofOfDeliveryService {
 
   async startDelivery(deliveryId: string, user: AuthenticatedUser) {
     const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Courier may only start their own delivery
+    if (user.courier_id && delivery.courier_id !== user.courier_id) {
+      throw new ForbiddenException('This delivery is not assigned to you');
+    }
+
     assertDeliveryTransition(delivery.status, DeliveryStatus.in_progress);
 
     const now = new Date();
@@ -125,7 +131,7 @@ export class ProofOfDeliveryService {
     this.redis.publish(
       PUBLIC_DELIVERY_STATUS_CHANNEL,
       JSON.stringify({ orderId: delivery.order_id, orderStatus: 'in_progress', deliveryStatus: 'in_progress' }),
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Redis publish failed (delivery_in_progress)', err));
 
     // Return full delivery object so mobile can render InProgressState immediately
     return this.prisma.delivery.findUniqueOrThrow({
@@ -156,7 +162,18 @@ export class ProofOfDeliveryService {
     }
 
     const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Courier may only complete their own delivery
+    if (delivery.courier_id !== user.courier_id) {
+      throw new ForbiddenException('This delivery is not assigned to you');
+    }
+
     assertDeliveryTransition(delivery.status, DeliveryStatus.completed);
+
+    // Validate photo_key belongs to this delivery (prevents cross-delivery photo substitution)
+    if (dto.photo_key && !dto.photo_key.startsWith(`proofs/${user.establishment_id}/${deliveryId}/`)) {
+      throw new ForbiddenException('photo_key does not match this delivery');
+    }
 
     // Fetch the order to get destination coordinates
     const order = await this.prisma.order.findUniqueOrThrow({
@@ -246,7 +263,7 @@ export class ProofOfDeliveryService {
       user.establishment_id,
       `✅ Доставку завершено ${geoMatch ? '(геопозиція OK)' : '(геопозиція не співпала)'}`,
       'delivery_completed',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_completed)', err));
 
     // Publish delivery:status for public WS (before lifecycle event so client sees completed first)
     this.redis.publish(
@@ -343,7 +360,7 @@ export class ProofOfDeliveryService {
       user.establishment_id,
       `⚠️ Доставку закрито вручну менеджером`,
       'delivery_force_closed',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_force_closed)', err));
 
     // Publish delivery:status + lifecycle events for public WS
     this.redis.publish(
@@ -365,13 +382,23 @@ export class ProofOfDeliveryService {
 
   async failDelivery(deliveryId: string, user: AuthenticatedUser) {
     const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    // Courier may only fail their own delivery
+    if (user.courier_id && delivery.courier_id !== user.courier_id) {
+      throw new ForbiddenException('This delivery is not assigned to you');
+    }
+
     assertDeliveryTransition(delivery.status, DeliveryStatus.failed);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.delivery.update({
-        where: { id: deliveryId },
+      // Atomic status guard: prevents double-fail race (pre-check is outside transaction).
+      const updated = await tx.delivery.updateMany({
+        where: { id: deliveryId, status: DeliveryStatus.in_progress },
         data: { status: DeliveryStatus.failed },
       });
+      if (updated.count === 0) {
+        throw new ConflictException('Delivery was already transitioned by another request');
+      }
       await tx.order.update({
         where: { id: delivery.order_id },
         data: { status: OrderStatus.failed },
@@ -389,13 +416,13 @@ export class ProofOfDeliveryService {
       user.establishment_id,
       `❌ Доставку провалено`,
       'delivery_failed',
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_failed)', err));
 
     // Publish delivery:status for public WS + DEL Redis keys
     this.redis.publish(
       PUBLIC_DELIVERY_STATUS_CHANNEL,
       JSON.stringify({ orderId: delivery.order_id, orderStatus: 'failed', deliveryStatus: 'failed' }),
-    ).catch(() => {});
+    ).catch((err: unknown) => this.logger.warn('Redis publish failed (delivery_failed)', err));
     this.redis.del(
       `courier:active_order:${delivery.courier_id}`,
       `route:origin:${deliveryId}`,

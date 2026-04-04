@@ -49,8 +49,18 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const body = await res.text().catch(() => 'Unknown error');
-    throw new ApiError(res.status, body);
+    const body = await res.text().catch(() => '');
+    let message = `Помилка ${res.status}`;
+    if (body) {
+      try {
+        const json = JSON.parse(body) as { message?: unknown; error?: string };
+        const raw = json.message;
+        message = Array.isArray(raw) ? raw.join(', ') : (typeof raw === 'string' ? raw : json.error ?? message);
+      } catch {
+        message = body;
+      }
+    }
+    throw new ApiError(res.status, message);
   }
 
   // Handle 204 No Content

@@ -28,6 +28,8 @@ export class WebhookDispatchProcessor {
       payload,
       timestamp: new Date().toISOString(),
       webhook_id: webhookId,
+      // Stable across all retry attempts of the same delivery — use for idempotency.
+      event_id: String(job.id),
     });
 
     const signature = crypto
@@ -79,11 +81,15 @@ export class WebhookDispatchProcessor {
    * Returns true when this is the last Bull retry for the job.
    * consecutive_failures should only be incremented once per delivery attempt,
    * not once per retry — matching industry standard (Stripe, GitHub Webhooks).
+   *
+   * Bull increments `attemptsMade` inside `moveToFailed()` (via `_saveAttempt`),
+   * which runs AFTER the handler throws — not before. So when the handler is
+   * executing its Nth attempt, `attemptsMade` equals N-1 (0-based).
+   * For maxAttempts=5: final-attempt handler sees attemptsMade=4 → check is 4 >= 4.
    */
   private isFinalAttempt(job: Job): boolean {
     const maxAttempts = job.opts.attempts ?? 1;
-    // attemptsMade is 0-based and already incremented before this handler runs
-    return job.attemptsMade >= maxAttempts;
+    return job.attemptsMade >= maxAttempts - 1;
   }
 
   private async recordFailure(webhookId: string, error: string): Promise<void> {

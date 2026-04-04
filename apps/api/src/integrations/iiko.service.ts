@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GeocodingService } from '../geocoding/geocoding.service.js';
+import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
 
 const POLL_INTERVAL_CRON = '*/2 * * * *'; // every 2 minutes
@@ -31,17 +32,24 @@ export class IikoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geocodingService: GeocodingService,
+    private readonly lock: DistributedLockService,
   ) {}
 
   @Cron(POLL_INTERVAL_CRON, { name: 'iiko-poll', timeZone: 'UTC' })
   async pollAll(): Promise<void> {
-    const integrations = await this.prisma.integration.findMany({
-      where: { type: IntegrationType.iiko, active: true },
-    });
+    // Global lock ensures only one instance polls at a time in multi-instance deployments.
+    // TTL 90s is the crash-recovery window; the lock heartbeat inside withLock keeps it alive
+    // for the full duration of pollAll regardless of how long iiko responses take.
+    // In-memory backoff state is preserved on the instance that holds the lock.
+    await this.lock.withLock('iiko-poll', 90, async () => {
+      const integrations = await this.prisma.integration.findMany({
+        where: { type: IntegrationType.iiko, active: true },
+      });
 
-    for (const integration of integrations) {
-      await this.pollEstablishment(integration.establishment_id, integration.config);
-    }
+      for (const integration of integrations) {
+        await this.pollEstablishment(integration.establishment_id, integration.config);
+      }
+    });
   }
 
   /**
