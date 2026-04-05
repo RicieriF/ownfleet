@@ -17,12 +17,16 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { registerPushToken } from '@/services/notifications';
 
+const PREVIEW_MODE = process.env.EXPO_PUBLIC_PREVIEW_MODE === '1';
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
   const { user, isLoaded, gpsConsentDone } = useAuthStore();
 
   useEffect(() => {
+    if (PREVIEW_MODE) return;
+
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
@@ -59,15 +63,18 @@ export default function RootLayout() {
     registerPushToken().catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hold splash until fonts are ready
-  if (!fontsLoaded) return null;
+  // In design preview mode allow render even if font loading is delayed/failed.
+  if (!fontsLoaded && !PREVIEW_MODE) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
         <AuthGuard>
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack
+            initialRouteName={PREVIEW_MODE ? '(app)' : undefined}
+            screenOptions={{ headerShown: false }}
+          >
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
             <Stack.Screen name="onboarding" />

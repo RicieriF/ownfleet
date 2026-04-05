@@ -14,6 +14,7 @@ import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
@@ -22,6 +23,24 @@ import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL, PUBLIC_DELIVERY_COMPLETED
 
 const GEO_RADIUS_METERS = 300;
 const PRESIGNED_URL_TTL_SEC = 300; // 5 min
+
+/**
+ * Structured type for the `delivery_proofs.geo_flags` JSONB column.
+ * All keys are optional — a flag is present only when the condition fired.
+ * This type is the single source of truth; the DB column stores it as Json.
+ */
+interface GeoFlags {
+  /** Proof was submitted after the POS order_closed_at timestamp */
+  proof_after_close?: true;
+  /** GPS accuracy was >100 m — reading may be imprecise */
+  low_accuracy?: true;
+  /** Order had no destination coordinates — 300 m check was skipped */
+  no_destination_coords?: true;
+  /** Delivery was closed by a manager without courier geo proof */
+  force_closed?: true;
+  /** Manager user id when force_closed=true */
+  closed_by?: string;
+}
 
 @Injectable()
 export class ProofOfDeliveryService {
@@ -186,18 +205,17 @@ export class ProofOfDeliveryService {
     const capturedAt = now;
 
     // ── Geo flags ──────────────────────────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const geoFlags: Record<string, any> = {};
+    const geoFlags: GeoFlags = {};
 
     // Two timestamps anomaly: proof captured AFTER order_closed_at
     // (order_closed_at is set when manager closes order in external POS)
     if (delivery.order_closed_at && capturedAt > delivery.order_closed_at) {
-      geoFlags['proof_after_close'] = true;
+      geoFlags.proof_after_close = true;
     }
 
     // Accuracy flag — low accuracy GPS reading
     if (dto.accuracy && dto.accuracy > 100) {
-      geoFlags['low_accuracy'] = true;
+      geoFlags.low_accuracy = true;
     }
 
     // ── 300m geo check via PostGIS ─────────────────────────────────────────
@@ -214,7 +232,7 @@ export class ProofOfDeliveryService {
       geoMatch = result[0]?.within ?? false;
     } else {
       // No destination coordinates — cannot verify, mark as unverifiable
-      geoFlags['no_destination_coords'] = true;
+      geoFlags.no_destination_coords = true;
     }
 
     // ── Persist proof + update delivery/order atomically ──────────────────
@@ -262,7 +280,7 @@ export class ProofOfDeliveryService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `✅ Доставку завершено ${geoMatch ? '(геопозиція OK)' : '(геопозиція не співпала)'}`,
-      'delivery_completed',
+      MANAGER_EVENT.DELIVERY_COMPLETED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_completed)', err));
 
     // Publish delivery:status for public WS (before lifecycle event so client sees completed first)
@@ -327,6 +345,7 @@ export class ProofOfDeliveryService {
       }
 
       // Create proof for audit trail — force_closed marks it as manager-initiated
+      const forceFlags: GeoFlags = { force_closed: true, closed_by: user.id };
       await tx.deliveryProof.create({
         data: {
           delivery_id: deliveryId,
@@ -337,7 +356,7 @@ export class ProofOfDeliveryService {
           photo_key: null,
           geo_match: false,
           accuracy: null,
-          geo_flags: { force_closed: true, closed_by: user.id },
+          geo_flags: forceFlags,
         },
       });
 
@@ -359,7 +378,7 @@ export class ProofOfDeliveryService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `⚠️ Доставку закрито вручну менеджером`,
-      'delivery_force_closed',
+      MANAGER_EVENT.DELIVERY_FORCE_CLOSED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_force_closed)', err));
 
     // Publish delivery:status + lifecycle events for public WS
@@ -415,7 +434,7 @@ export class ProofOfDeliveryService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `❌ Доставку провалено`,
-      'delivery_failed',
+      MANAGER_EVENT.DELIVERY_FAILED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_failed)', err));
 
     // Publish delivery:status for public WS + DEL Redis keys

@@ -24,7 +24,12 @@ export interface Establishment {
     show_sla_on_dashboard?: boolean;
     eta_alert_enabled?: boolean;
     eta_alert_delay_minutes?: number;
-    [key: string]: unknown;
+    dispatch_recommend_timeout_minutes?: number | null;
+    dispatch_recommend_radius_km?: number;
+    dispatch_anomaly_threshold_minutes?: number;
+    dispatch_anomaly_min_deliveries?: number;
+    dispatch_no_courier_escalation_minutes?: number;
+    locale?: string;
   } | null;
   timezone?: string;
   delivery_sla_minutes?: number | null;

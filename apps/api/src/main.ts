@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { RedisIoAdapter } from './shared/adapters/redis-io.adapter.js';
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor.js';
+import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
@@ -28,10 +29,14 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
 
-  // /health is excluded — no auth, no plan check, no versioning
-  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
+  // /health and /metrics are excluded — no auth, no plan check, no versioning.
+  // IMPORTANT: /metrics must NOT be exposed via the reverse proxy to the internet.
+  // It is scraped only by Grafana Alloy running on the same host/private network.
+  app.setGlobalPrefix('api/v1', { exclude: ['health', 'metrics'] });
 
-  app.useGlobalInterceptors(new CorrelationIdInterceptor());
+  // Order matters: CorrelationId must run first so req.correlationId is set
+  // before RequestLoggingInterceptor reads it in the response tap.
+  app.useGlobalInterceptors(new CorrelationIdInterceptor(), new RequestLoggingInterceptor());
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -55,7 +55,7 @@ B2B SaaS платформа для управління власними кур�
 | `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; dispatch алгоритм (manual/recommend/auto): `POST /ready`, `POST /assign-recommended`, `POST /reassign`; `GET /couriers/workload-today` |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
 | `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
-| `RetentionModule` | Cron: очищення orders + location_pings + tracking_tokens (де expires_at < NOW()); авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert (5 cron jobs, кожні 5–30 хв) |
+| `RetentionModule` | Cron: очищення orders + location_pings + tracking_tokens (де expires_at < NOW()); авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert; shift-anomaly-check; recommend-timeout-check; weekly S3 backup delivery_proofs (9 cron jobs) |
 | `EtaModule` | Розрахунок ETA через OSRM, детекція виїзду курʼєра (100м), cron-алерти про запізнення |
 | `GeocodingModule` | Геокодування адрес через Nominatim; Redis кеш TTL 30 днів; Bull queue rate limit 1 req/s; якщо координати вже є в payload — Nominatim не викликається; timeout 2с — замовлення зберігається без блокування; після успішного geocoding: `redis.publish('geocoding:done', ...)` → PublicTrackingModule емітить `order:coords_ready` |
 | `IntegrationsModule` | Poster POS webhook + iiko polling; при отриманні замовлення без координат → виклик `GeocodingService` |
@@ -72,63 +72,44 @@ B2B SaaS платформа для управління власними кур�
 
 ```sql
 establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, settings JSONB,
-                 -- settings JSONB містить: retention_orders_days, retention_pings_days,
+                 -- settings JSONB keys: retention_orders_days, retention_pings_days,
                  --   courier_not_responding_min, show_sla_on_dashboard,
                  --   eta_alert_enabled, eta_alert_delay_minutes,
                  --   dispatch_recommend_radius_km, dispatch_anomaly_threshold_minutes,
                  --   dispatch_anomaly_min_deliveries, dispatch_no_courier_escalation_minutes,
                  --   dispatch_recommend_timeout_minutes (null = вимкнено)
-                 timezone TEXT NOT NULL DEFAULT 'Europe/Kyiv',  -- IANA timezone; допустимі: Europe/Kyiv|Warsaw|Prague|Berlin|Riga; CHECK constraint в БД
+                 timezone TEXT NOT NULL DEFAULT 'Europe/Kyiv',  -- IANA; CHECK constraint; sync ALLOWED_TIMEZONES↔TIMEZONE_OPTIONS
                  dispatch_mode dispatch_mode NOT NULL DEFAULT 'manual',  -- enum: manual|recommend|auto
-                 delivery_sla_minutes INT NULL,        -- null = без SLA; N = SLA доставки в хвилинах
-                 lat FLOAT NULL,                       -- координати закладу для розрахунку ETA
-                 lng FLOAT NULL,
+                 delivery_sla_minutes INT NULL, lat FLOAT NULL, lng FLOAT NULL,
                  hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE)
-                -- hosted_tracking_enabled: керується тільки через super admin panel.
-                -- Коли FALSE: секція embed-коду в /settings і API ключ залишаються доступними,
-                -- але кнопка "Копіювати посилання клієнту" в таблиці доставок і пояснювальна
-                -- фраза про hosted page в /settings приховані.
+                -- hosted_tracking_enabled: тільки super admin. Коли FALSE — кнопка "Копіювати посилання
+                -- клієнту" і фраза про hosted page в /settings приховані; embed-код і ключ доступні.
 users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
 couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
-                 battery_optimization_exempt, device_brand, last_reminder_sent_at, reminder_count,
-                 transport_mode TransportMode NULL)    -- car|moto_gas|moto_electric|bicycle|walking; виставляється при онбордингу
-shifts          (id, courier_id, establishment_id,
-                 started_at TIMESTAMPTZ NOT NULL,     -- курʼєр натиснув "Вийти на зміну"
-                 ended_at TIMESTAMPTZ NULL,           -- NULL = зміна активна
-                 ended_by TEXT CHECK IN ('courier','manager','auto'),
-                 planned_end_at TIMESTAMPTZ NULL,     -- опціональний дедлайн зміни (таймер у мобільному)
-                 total_deliveries INT DEFAULT 0,
-                 total_distance_km NUMERIC(8,2),
-                 anomaly_alerted_at TIMESTAMPTZ NULL) -- захист від повторного Telegram-алерту про +N хв/дост
-                -- Курʼєр "на зміні" ↔ shifts.ended_at IS NULL
-                -- Авто-закриття: cron кожні 30хв, закриває зміни > 16 годин без GPS-пінгу
+                 transport_mode TransportMode NULL)   -- car|moto_gas|moto_electric|bicycle|walking
+shifts          (id, courier_id, establishment_id, started_at, ended_at TIMESTAMPTZ NULL,
+                 ended_by CHECK IN ('courier','manager','auto'), planned_end_at,
+                 total_deliveries, total_distance_km, anomaly_alerted_at)
+                -- ended_at IS NULL = зміна активна; anomaly_alerted_at — захист від повторних алертів
 orders          (id, establishment_id, external_id, address, lat, lng, status, source, created_at,
-                 ready_at TIMESTAMPTZ NULL)           -- встановлюється при POST /ready; використовується для dispatch idempotency і "⏳ Очікує курʼєра" UI
+                 ready_at TIMESTAMPTZ NULL)   -- ready_at: встановлює POST /ready; dispatch idempotency key
                 UNIQUE(external_id, establishment_id)
-deliveries      (id, order_id, courier_id, status, assigned_at, assignment_timeout_at,
-                 started_at, completed_at, order_closed_at, proof_id,
-                 eta_seconds INT NULL,                -- розрахований ETA в секундах (при assign)
-                 eta_started_at TIMESTAMPTZ NULL,     -- коли курʼєр відʼїхав >100м від закладу
-                 eta_overdue_alerted_at TIMESTAMPTZ NULL) -- захист від повторних алертів
+deliveries      (id, order_id, courier_id, status, assigned_at, started_at, completed_at,
+                 proof_id, eta_seconds INT NULL, eta_started_at TIMESTAMPTZ NULL,
+                 eta_overdue_alerted_at TIMESTAMPTZ NULL)
 delivery_proofs (id, delivery_id, lat, lng, captured_at, order_closed_at, photo_key,
                  geo_match, accuracy, geo_flags JSONB)  -- НІКОЛИ не видаляється
 location_pings  (id, courier_id, location GEOMETRY(Point,4326), battery, created_at)
 integrations    (id, establishment_id, type, config JSONB, active)
-webhooks        (id, establishment_id, url, secret, events TEXT[], active,
-                 consecutive_failures INT, last_error, last_error_at)
+webhooks        (id, establishment_id, url, secret, events TEXT[], active, consecutive_failures, last_error_at)
 invite_tokens   (id, establishment_id, token, courier_id, expires_at, used_at)
 retention_logs  (id, establishment_id, deleted_orders, deleted_pings, run_at)
-billing_events  (id, establishment_id, type, amount_usd, notes, created_at)
 tracking_tokens (id, order_id UNIQUE, token UNIQUE, expires_at, created_at)
-                -- expires_at = created_at + 4h; без establishment_id — навмисний виняток з multi-tenancy;
-                -- доступ тільки через UUID token (122 bits entropy); UNIQUE(order_id) гарантує ідемпотентність
-                -- RetentionModule прибирає рядки де expires_at < NOW()
-api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active BOOLEAN DEFAULT TRUE,
-                 allowed_domains TEXT[] DEFAULT '{}', last_used_at, last_used_domain TEXT NULL, created_at)
-                -- Публічний ключ за дизайном (як Google Maps API key). Захист через domain restriction:
-                -- сервер перевіряє Origin header проти allowed_domains; порожній масив = заблоковано.
-                -- bcrypt hash в key_hash; key_prefix (8 символів) для пошуку без повного скану.
-                -- last_used_domain: аудит звідки використовується ключ.
+                -- НЕ має establishment_id — навмисний виняток: ізоляція через 122-bit UUID token
+                -- expires_at = created_at + 4h; RetentionModule прибирає прострочені
+api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active, allowed_domains TEXT[], last_used_domain)
+                -- Origin-based domain check: non-browser clients можуть spoofити — прийнятний trade-off
+                -- порожній allowed_domains = заблоковано; key_prefix для lookup без повного скану
 ```
 
 ---
@@ -163,39 +144,24 @@ active (ended_at IS NULL) → ended (ended_at SET, ended_by = courier|manager|au
 
 ## Система змін (Shifts) — бізнес-логіка
 
-**Термінологія:** "На зміні" — НЕ "онлайн". Курʼєр є на зміні коли він прийшов працювати. "Онлайн" — технічний стан GPS-підключення, ніколи не показується в UI менеджера.
-
-**Ініціатор зміни:** Курʼєр (self-service). Менеджер НЕ підтверджує кожен вихід — це зайве тертя для малого закладу. Менеджер може примусово завершити зміну.
-
-**Флоу виходу на зміну (мобільний додаток):**
-1. Курʼєр відкриває додаток → бачить великий CTA "Вийти на зміну"
-2. Тап → `POST /api/v1/shifts/start` → GPS-трекінг активується
-3. Дашборд менеджера отримує WS-подію `shift:started` → курʼєр зʼявляється в списку "На зміні"
-4. Мобільний: показує таймер зміни в UI (без persistent notification — курʼєр відпочиває між доставками)
-
-**Флоу завершення зміни:**
-- Курʼєр: меню → "Завершити зміну" → confirmation dialog (захист від випадкового тапу)
-- Менеджер: може завершити з дашборду (кнопка в розділі Курʼєри → InvitePanel → список активних курʼєрів)
-- Auto: cron закриває зміни > 16 годин без GPS-пінгу (`ended_by = 'auto'`), надсилає Telegram менеджеру
+**Термінологія:** "На зміні" ≠ "онлайн". "Онлайн" — технічний стан GPS, **ніколи не показується** в UI менеджера.
 
 **Обмеження:**
-- Курʼєр НЕ може отримати доставку без активної зміни (`Guard: ShiftActiveGuard`)
-- Одна активна зміна на курʼєра одночасно (`UNIQUE` constraint на `courier_id` де `ended_at IS NULL`)
+- Курʼєр НЕ може отримати доставку без активної зміни (`ShiftActiveGuard`)
+- Одна активна зміна на курʼєра одночасно (`UNIQUE` на `courier_id` де `ended_at IS NULL`)
+- Persistent notification у мобільному — тільки під час активної **доставки** (не зміни)
 
-**Дашборд — що показує менеджер:**
-- KPI: `X/N На зміні` (замість "онлайн")
-- Підпис: `X в дорозі · Y вільних · Z не вийшли`
-- "Не вийшли" = активні курʼєри закладу без поточної зміни
-- Нагадування: кнопка [Нагадати] → Telegram push курʼєру
+**Дашборд KPI:**
+- `X/N На зміні` (не "онлайн"); підпис: `X в дорозі · Y вільних · Z не вийшли`
+- "Не вийшли" = активні курʼєри без поточної зміни; кнопка [Нагадати] → Telegram push
 
 ---
 
 ## Правила коду
 
 - **TypeScript strict mode** — ніяких `any`, ніяких `@ts-ignore`
-- **Zod** — валідація на ВСІХ ендпоінтах (body, query, params)
+- **DTO + Class-validator** — валідація на ВСІХ ендпоінтах (body, query, params) через NestJS pipes
 - **Prisma** — всі DB запити через Prisma. Raw SQL тільки для PostGIS (`ST_DWithin`, `ST_MakePoint`)
-- **DTO + Class-validator** — для NestJS pipes
 - **Fire-and-forget** — Telegram і FCM ніколи не блокують відповідь. Завжди `void` без `await` або через `setImmediate`
 - **Bull** — всі retry-черги через Bull, не in-memory
 - **Idempotency** — `INSERT ... ON CONFLICT (external_id, establishment_id) DO NOTHING` для POS замовлень
@@ -224,7 +190,7 @@ const orders = await prisma.order.findMany({ where: { status: 'pending' } });
 
 Застосовується через `@UseGuards(JwtAuthGuard, PlanAccessGuard)` на всіх бізнес-ендпоінтах.
 
-**НЕ застосовується на:** `/health`, `/api/v1/auth/*`, `/api/v1/onboarding/accept-invite/:token`, `/api/v1/public/*`
+**НЕ застосовується на:** `/health`, `/metrics`, `/api/v1/auth/*`, `/api/v1/onboarding/accept-invite/:token`, `/api/v1/public/*`
 
 Логіка:
 ```typescript
@@ -247,7 +213,7 @@ throw HttpException({ code: 'PLAN_EXPIRED' }, 402);
 Неавторизовані — відхиляються негайно. Менеджер отримує тільки події свого закладу.
 
 Мобільний додаток використовує `x-refresh-token` header замість cookie.
-`access_token` cookie — httpOnly (JS не може читати). Refresh через `/api/auth/refresh`.
+`access_token` cookie — httpOnly (JS не може читати). Refresh через `/api/v1/auth/refresh`.
 
 ---
 
@@ -305,64 +271,9 @@ FCM push при `invalid_registration` → автоматично видалит
 
 ---
 
-## Статус реалізації
-
-Всі заплановані компоненти реалізовані та закомічені в `main`. Customer Tracking Widget (фази 0–3) реалізований та закомічений в `feat/geocoding-module`.
-
-**API (NestJS) — ✅ 17/17 модулів:**
-```
-✅  1. Prisma schema + migrations
-✅  2. AuthModule (JWT + refresh tokens)
-✅  3. EstablishmentsModule + PlanAccessGuard
-✅  4. CouriersModule
-✅  5. OrdersModule (state machine + ETA при assign)
-✅  6. TrackingModule (GPS пінги + Redis + WebSocket + departure detection)
-✅  7. ProofOfDeliveryModule
-✅  8. NotificationsModule (FCM + Telegram)
-✅  9. RetentionModule (cron jobs, включаючи ETA overdue alerts + tracking_tokens cleanup)
-✅ 10. IntegrationsModule (Poster webhook + iiko polling)
-✅ 11. OnboardingModule (invite tokens + transport_mode)
-✅ 12. AnalyticsModule
-✅ 13. WebhooksModule (outbound HMAC + Bull retry)
-✅ 14. EtaModule (OSRM розрахунок, детекція виїзду 100м, 5 типів транспорту)
-✅ 15. GeocodingModule (Nominatim + Redis cache + Bull queue + geocoding:done pub/sub)
-✅ 16. ApiKeysModule (HMAC key gen, domain restriction, toggle, last_used audit)
-✅ 17. PublicTrackingModule (ApiKeyGuard, /public WS namespace, snapshot, hosted tracking)
-```
-
-**Web Dashboard (Next.js) — ✅ 8/8 сторінок + embed:**
-```
-✅  /               — KPI + активні доставки + статус курʼєрів
-✅  /couriers       — список курʼєрів + invite panel
-✅  /map            — fullscreen Leaflet + OSRM routing
-✅  /analytics      — summary KPIs + per-courier breakdown
-✅  /integrations   — Poster + iiko config cards
-✅  /webhooks       — CRUD webhooks + HMAC secret
-✅  /settings       — дані закладу + timezone + retention + ETA/SLA + dispatch_mode + Tracking Widget секція
-✅  /embed/track/[token] — публічна сторінка трекінгу (6 станів + TOKEN_EXPIRED + Leaflet + WS)
-✅  /t/[token]      — short URL redirect → /embed/track/[token]
-```
-
-**Mobile App (React Native + Expo) — ✅ реалізовано:**
-```
-✅  Авторизація (login screen + JWT + refresh)
-✅  Головний екран (4 стани: no shift → idle → assigned → in_progress; idle показує workload команди + власну метрику +N хв/дост)
-✅  Proof of delivery (гео + фото upload до R2)
-✅  GPS (background location + foreground ping 15с)
-✅  FCM push notifications
-✅  Onboarding по invite token (2-кроковий: пароль → вибір типу транспорту)
-✅  Zustand stores (auth + shift з AsyncStorage persistence)
-```
-
-**tracker.js** — TypeScript + esbuild → `public/tracker.js`; `Weego.track({apiKey, orderId})`; retry 2с × 15; auto-init з `data-api-key` атрибуту.
-
-**Тести — ✅ 432 тестів / 27 суїт / all green**
-
----
-
 ## Що НЕ чіпати без обговорення
 
-- `database/migrations/` — тільки через `prisma migrate dev`. Якщо міграція містить `CREATE INDEX CONCURRENTLY` або інші команди, що не підтримуються в транзакції shadow DB — використовувати ручний флоу: створити директорію вручну, написати SQL, застосувати через `npx prisma db execute --file ...`, зареєструвати через `npx prisma migrate resolve --applied <name>`. НЕ запускати `prisma db pull` — він перезаписує schema.prisma.
+- `apps/api/prisma/migrations/` — тільки через `prisma migrate dev`. Якщо міграція містить `CREATE INDEX CONCURRENTLY` або інші команди, що не підтримуються в транзакції shadow DB — використовувати ручний флоу: створити директорію вручну, написати SQL, застосувати через `npx prisma db execute --file ...`, зареєструвати через `npx prisma migrate resolve --applied <name>`. НЕ запускати `prisma db pull` — він перезаписує schema.prisma.
 - State machine transitions в `OrdersModule` та `ProofOfDeliveryModule`
 - `PlanAccessGuard` логіка — зміна може зламати білінг
 - `delivery_proofs` retention — ця таблиця захищена навмисно
@@ -387,6 +298,15 @@ WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
 OSRM_URL             (optional; default: https://router.project-osrm.org)
 API_KEY_SECRET       (HMAC-SHA256 key for API key hashing; rotate 90 days — app crashes on startup if unset)
 NEXT_PUBLIC_APP_URL  (web app public URL, e.g. https://weego.app; used in tracker.js base URL fallback and embed code generation in /settings)
+METRICS_SECRET       (Bearer token protecting GET /metrics; required in prod — if unset, /metrics is open. Must match Alloy config. Not loaded by the app on startup, but Alloy scrape will fail with 401 if mismatched.)
+```
+
+### Grafana Cloud (Alloy sidecar — `infra/grafana-alloy/`)
+
+```
+GRAFANA_CLOUD_PROMETHEUS_URL   (Grafana Cloud → My Account → Prometheus → Remote Write Endpoint)
+GRAFANA_CLOUD_PROMETHEUS_USER  (numeric Prometheus user ID from Grafana Cloud)
+GRAFANA_CLOUD_API_KEY          (Grafana Cloud API key with MetricsPublisher role)
 ```
 
 Ніяких `.env` файлів у репозиторії. `.gitignore` + pre-commit hook.

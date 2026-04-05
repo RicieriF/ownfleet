@@ -1,0 +1,41 @@
+# Grafana Alloy — metrics collection sidecar
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f infra/grafana-alloy/docker-compose.yml up -d
+#
+# Or copy this service block into your main docker-compose.yml.
+#
+# Required .env variables (add to your server's .env, NOT to the repo):
+#   METRICS_SECRET
+#   GRAFANA_CLOUD_PROMETHEUS_URL
+#   GRAFANA_CLOUD_PROMETHEUS_USER
+#   GRAFANA_CLOUD_API_KEY
+
+services:
+  grafana-alloy:
+    image: grafana/alloy:latest
+    restart: unless-stopped
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    environment:
+      METRICS_SECRET: ${METRICS_SECRET}
+      GRAFANA_CLOUD_PROMETHEUS_URL: ${GRAFANA_CLOUD_PROMETHEUS_URL}
+      GRAFANA_CLOUD_PROMETHEUS_USER: ${GRAFANA_CLOUD_PROMETHEUS_USER}
+      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY}
+    # Alloy UI at http://localhost:12345 — useful for debugging scrape status.
+    # Remove the ports block in production if you don't want this exposed.
+    ports:
+      - "127.0.0.1:12345:12345"
+    networks:
+      - default
+
+# Alloy must be on the same network as the API container.
+# If your main docker-compose defines a named network, specify it here:
+# networks:
+#   default:
+#     external: true
+#     name: weego_default

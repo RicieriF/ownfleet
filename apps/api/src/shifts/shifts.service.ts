@@ -10,7 +10,8 @@ import { DeliveryStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TelegramService } from '../telegram/telegram.service.js';
-import { CourierTelegramPrefs } from '../telegram/telegram.types.js';
+import { CourierTelegramPrefs, MANAGER_EVENT, COURIER_EVENT } from '../telegram/telegram.types.js';
+import { parseEstablishmentSettings } from '../establishments/establishment-settings.js';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { UpdatePlannedEndDto } from './dto/update-planned-end.dto';
 import { JwtPayload } from '../auth/auth.types';
@@ -58,7 +59,7 @@ export class ShiftsService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `🟢 ${shift.courier.name} вийшов на зміну`,
-      'courier_shift_started',
+      MANAGER_EVENT.COURIER_SHIFT_STARTED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_started)', err));
     return shift;
   }
@@ -93,7 +94,7 @@ export class ShiftsService {
     this.telegram.notifyEstablishmentManagers(
       updated.establishment_id,
       `⚫ ${shift.courier.name} завершив зміну`,
-      'courier_shift_ended',
+      MANAGER_EVENT.COURIER_SHIFT_ENDED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_courier)', err));
     return updated;
   }
@@ -138,7 +139,7 @@ export class ShiftsService {
     this.telegram.notifyEstablishmentManagers(
       updated.establishment_id,
       `⚫ ${shift.courier.name} — зміну завершено менеджером`,
-      'courier_shift_ended',
+      MANAGER_EVENT.COURIER_SHIFT_ENDED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_manager)', err));
     return updated;
   }
@@ -234,7 +235,7 @@ export class ShiftsService {
       this.telegram.notifyEstablishmentManagers(
         s.establishment_id,
         `🕐 Зміну ${courierName} закрито автоматично (> 16 год без GPS-пінгу)`,
-        'courier_shift_auto_closed',
+        MANAGER_EVENT.COURIER_SHIFT_AUTO_CLOSED,
       ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_auto_closed)', err));
     }
 
@@ -357,8 +358,8 @@ export class ShiftsService {
       for (const d of deliveries) {
         if (!d.courier.telegram_chat_id) continue;
 
-        const settings = estMap.get(d.order.establishment_id);
-        const thresholdMin = Number((settings as Record<string, unknown> | null)?.courier_not_responding_min) || 15;
+        const settings = parseEstablishmentSettings(estMap.get(d.order.establishment_id));
+        const thresholdMin = settings.courier_not_responding_min;
         const thresholdMs = thresholdMin * 60 * 1000;
 
         const lastPing = pingMap.get(d.courier_id) ?? null;
@@ -379,7 +380,7 @@ export class ShiftsService {
         const text = `⚠️ ${d.courier.name} не відповідає вже ${minutesAgo} хв (доставка #${orderId})`;
 
         this.telegram
-          .notifyEstablishmentManagers(d.order.establishment_id, text, 'courier_not_responding')
+          .notifyEstablishmentManagers(d.order.establishment_id, text, MANAGER_EVENT.COURIER_NOT_RESPONDING)
           .catch((err) => this.logger.warn('Courier not responding notify failed', err));
 
         sent++;

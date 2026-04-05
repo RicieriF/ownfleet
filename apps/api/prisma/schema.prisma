@@ -289,7 +289,10 @@ model Delivery {
 
 model DeliveryProof {
   id              String    @id @default(uuid())
-  delivery_id     String    @unique
+  /// Nullable: SET NULL when parent Delivery is deleted during retention.
+  /// The proof record itself is never deleted — delivery_id = NULL means the
+  /// delivery was purged but the geo/audit evidence is retained indefinitely.
+  delivery_id     String?   @unique
   lat             Float
   lng             Float
   captured_at     DateTime
@@ -300,7 +303,7 @@ model DeliveryProof {
   geo_flags       Json      @default("{}")
   created_at      DateTime  @default(now())
 
-  delivery Delivery @relation(fields: [delivery_id], references: [id])
+  delivery Delivery? @relation(fields: [delivery_id], references: [id], onDelete: SetNull)
 
   @@map("delivery_proofs")
 }

@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { TransportMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { parseEstablishmentSettings } from '../establishments/establishment-settings.js';
+import { haversineMeters } from '../shared/geo.js';
+import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 
 // OSRM routing profile per transport mode
 const OSRM_PROFILE: Record<TransportMode, string> = {
@@ -45,9 +49,9 @@ export class EtaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
+    private readonly config: ConfigService,
   ) {
-    this.osrmUrl =
-      process.env['OSRM_URL'] ?? 'https://router.project-osrm.org';
+    this.osrmUrl = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
   }
 
   /**
@@ -131,10 +135,10 @@ export class EtaService {
     const now = new Date();
 
     for (const delivery of deliveries) {
-      const settings = this.parseSettings(delivery.order.establishment.settings);
+      const settings = parseEstablishmentSettings(delivery.order.establishment.settings);
       if (!settings.eta_alert_enabled) continue;
 
-      const delayMs = (settings.eta_alert_delay_minutes ?? 10) * 60_000;
+      const delayMs = settings.eta_alert_delay_minutes * 60_000;
       const etaMs = delivery.eta_seconds! * 1_000;
       const overdueAt = new Date(delivery.eta_started_at!.getTime() + etaMs + delayMs);
 
@@ -148,7 +152,7 @@ export class EtaService {
         .notifyEstablishmentManagers(
           delivery.order.establishment_id,
           `⏰ Доставка запізнюється на ${overdueMinutes} хв\nКурʼєр: ${delivery.courier.name}\nАдреса: ${delivery.order.address}`,
-          'delivery_assigned',
+          MANAGER_EVENT.DELIVERY_ASSIGNED,
         )
         .catch((err: unknown) => this.logger.warn('Telegram notification failed (eta_overdue)', err));
 
@@ -194,7 +198,7 @@ export class EtaService {
     const est = delivery.order.establishment;
     if (est.lat === null || est.lng === null) return;
 
-    const distanceMeters = this.haversineMeters(lat, lng, est.lat, est.lng);
+    const distanceMeters = haversineMeters(lat, lng, est.lat, est.lng);
     if (distanceMeters <= DEPARTURE_THRESHOLD_METERS) return;
 
     await this.prisma.delivery.update({
@@ -216,30 +220,4 @@ export class EtaService {
     return isPeak ? PEAK_COEFFICIENT : 1.0;
   }
 
-  private parseSettings(raw: unknown): {
-    eta_alert_enabled: boolean;
-    eta_alert_delay_minutes: number | null;
-  } {
-    if (raw !== null && typeof raw === 'object') {
-      const s = raw as Record<string, unknown>;
-      return {
-        eta_alert_enabled: s['eta_alert_enabled'] === true,
-        eta_alert_delay_minutes:
-          typeof s['eta_alert_delay_minutes'] === 'number' ? s['eta_alert_delay_minutes'] : null,
-      };
-    }
-    return { eta_alert_enabled: false, eta_alert_delay_minutes: null };
-  }
-
-  /** Haversine distance between two lat/lng points in meters */
-  private haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6_371_000;
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
 }

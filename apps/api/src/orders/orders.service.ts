@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
-import { OrderStatus, TransportMode, Prisma } from '@prisma/client';
+import { DispatchMode, OrderStatus, TransportMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
@@ -23,6 +23,8 @@ import { EtaService } from '../eta/eta.service.js';
 import { TrackingGateway } from '../tracking/tracking.gateway.js';
 import { TrackingService } from '../tracking/tracking.service.js';
 import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL } from '../shared/redis/redis.constants.js';
+import { haversineMeters } from '../shared/geo.js';
+import { MANAGER_EVENT, COURIER_EVENT } from '../telegram/telegram.types.js';
 import type IORedis from 'ioredis';
 
 
@@ -51,6 +53,8 @@ export type DispatchResult =
   | {
       recommended: CourierWithEta;
       pool: CourierWithEta[];
+      /** Included so callers do not need a second DB round-trip to check the mode. */
+      dispatchMode: DispatchMode;
     };
 
 // Raw row returned by workload $queryRaw
@@ -133,7 +137,7 @@ export class OrdersService {
       this.telegram.notifyEstablishmentManagers(
         user.establishment_id,
         `📦 Нове замовлення: ${order.address}`,
-        'order_created',
+        MANAGER_EVENT.ORDER_CREATED,
       ).catch((err: unknown) => this.logger.warn('Telegram notification failed (order_created)', err));
       // Trigger auto-dispatch if establishment has dispatch_mode='auto'
       void this.prisma.establishment.findUnique({
@@ -237,12 +241,12 @@ export class OrdersService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
-      'delivery_assigned',
+      MANAGER_EVENT.DELIVERY_ASSIGNED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_assigned manager)', err));
     this.telegram.notifyCourier(
       dto.courier_id,
       `📦 Вам призначено доставку: ${order.address}`,
-      'delivery_assigned',
+      COURIER_EVENT.DELIVERY_ASSIGNED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_assigned courier)', err));
 
     // Set courier:active_order Redis key for public tracking
@@ -361,12 +365,12 @@ export class OrdersService {
     this.telegram.notifyEstablishmentManagers(
       user.establishment_id,
       `🚴 Курʼєр ${courier.name} самостійно взяв замовлення: ${order.address}`,
-      'delivery_assigned',
+      MANAGER_EVENT.DELIVERY_ASSIGNED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (self_assign manager)', err));
     this.telegram.notifyCourier(
       user.courier_id,
       `📦 Ви взяли доставку: ${order.address}`,
-      'delivery_assigned',
+      COURIER_EVENT.DELIVERY_ASSIGNED,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (self_assign courier)', err));
     this.webhooks.dispatch(user.establishment_id, 'order.assigned', { order_id: orderId }).catch(
       (err) => this.logger.warn('webhook dispatch failed for order.assigned', err),
@@ -492,7 +496,7 @@ export class OrdersService {
     // Step — calculate order delivery distance for transport warnings
     const orderDistanceMeters =
       order.lat !== null && order.lng !== null
-        ? this.haversineMeters(estLat, estLng, order.lat, order.lng)
+        ? haversineMeters(estLat, estLng, order.lat, order.lng)
         : null;
 
     // Step — calculate OSRM ETA for all candidates in parallel.
@@ -556,7 +560,7 @@ export class OrdersService {
       }
     }
 
-    return { recommended, pool };
+    return { recommended, pool, dispatchMode: establishment.dispatch_mode };
   }
 
   /**
@@ -650,7 +654,7 @@ export class OrdersService {
       .notifyEstablishmentManagers(
         establishmentId,
         `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
-        'delivery_assigned',
+        MANAGER_EVENT.DELIVERY_ASSIGNED,
       )
       .catch((err: unknown) => this.logger.warn('Telegram notification failed (auto_assign manager)', err));
 
@@ -822,17 +826,6 @@ export class OrdersService {
       return `Доставка ${(orderDistanceMeters / 1000).toFixed(1)} км — велика відстань для велосипеда`;
     }
     return undefined;
-  }
-
-  private haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 6_371_000;
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   // Verifies dispatch_mode allows self-assignment and returns establishment data needed for ETA
@@ -1036,7 +1029,7 @@ export class OrdersService {
       .notifyEstablishmentManagers(
         user.establishment_id,
         `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
-        'delivery_assigned',
+        MANAGER_EVENT.DELIVERY_ASSIGNED,
       )
       .catch((err: unknown) => this.logger.warn('Telegram notification failed (assign_recommended manager)', err));
 

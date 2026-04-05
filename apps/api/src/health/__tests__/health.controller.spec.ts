@@ -15,12 +15,16 @@ const mockRedis = {
   ping: jest.fn(),
 };
 
+const defaultCounts = { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+
 const mockPingQueue = {
   isPaused: jest.fn(),
+  getJobCounts: jest.fn(),
 };
 
 const mockWebhookQueue = {
   isPaused: jest.fn(),
+  getJobCounts: jest.fn(),
 };
 
 async function buildController(): Promise<HealthController> {
@@ -50,16 +54,34 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     const result = await controller.check();
 
     expect(result.status).toBe('ok');
     expect(result.services.database).toBe('ok');
     expect(result.services.redis).toBe('ok');
-    expect(result.services.queues[PING_PERSIST_QUEUE]).toBe('ok');
-    expect(result.services.queues[WEBHOOK_QUEUE]).toBe('ok');
+    expect(result.services.queues[PING_PERSIST_QUEUE].status).toBe('ok');
+    expect(result.services.queues[WEBHOOK_QUEUE].status).toBe('ok');
     expect(result.services.version).toBeDefined();
     expect(result.timestamp).toBeDefined();
+  });
+
+  it('includes job counts in queue health', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockRedis.ping.mockResolvedValue('PONG');
+    mockPingQueue.isPaused.mockResolvedValue(false);
+    mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue({ waiting: 42, active: 3, completed: 100, failed: 1, delayed: 0 });
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
+
+    const result = await controller.check();
+
+    expect(result.services.queues[PING_PERSIST_QUEUE].waiting).toBe(42);
+    expect(result.services.queues[PING_PERSIST_QUEUE].active).toBe(3);
+    expect(result.services.queues[PING_PERSIST_QUEUE].failed).toBe(1);
+    expect(result.services.queues[PING_PERSIST_QUEUE].delayed).toBe(0);
   });
 
   it('throws 503 when DB is down', async () => {
@@ -67,6 +89,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
   });
@@ -76,6 +100,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockRejectedValue(new Error('redis timeout'));
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
   });
@@ -85,6 +111,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockRejectedValue(new Error('redis down'));
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
   });
@@ -94,6 +122,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     let thrown: ServiceUnavailableException | null = null;
     try {
@@ -115,6 +145,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('WRONGVAL');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
   });
@@ -124,6 +156,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(true);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     let thrown: ServiceUnavailableException | null = null;
     try {
@@ -135,8 +169,8 @@ describe('HealthController', () => {
     expect(thrown).not.toBeNull();
     const body = thrown!.getResponse() as Record<string, unknown>;
     const services = body['services'] as Record<string, unknown>;
-    const queues = services['queues'] as Record<string, string>;
-    expect(queues[PING_PERSIST_QUEUE]).toBe('paused');
+    const queues = services['queues'] as Record<string, { status: string }>;
+    expect(queues[PING_PERSIST_QUEUE].status).toBe('paused');
   });
 
   it('throws 503 when webhook-dispatch queue is paused', async () => {
@@ -144,6 +178,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(true);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
   });
@@ -153,6 +189,8 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockRejectedValue(new Error('queue unreachable'));
     mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     let thrown: ServiceUnavailableException | null = null;
     try {
@@ -164,7 +202,21 @@ describe('HealthController', () => {
     expect(thrown).not.toBeNull();
     const body = thrown!.getResponse() as Record<string, unknown>;
     const services = body['services'] as Record<string, unknown>;
-    const queues = services['queues'] as Record<string, string>;
-    expect(queues[PING_PERSIST_QUEUE]).toBe('error');
+    const queues = services['queues'] as Record<string, { status: string }>;
+    expect(queues[PING_PERSIST_QUEUE].status).toBe('error');
+  });
+
+  it('falls back to zero counts when getJobCounts() throws', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockRedis.ping.mockResolvedValue('PONG');
+    mockPingQueue.isPaused.mockResolvedValue(false);
+    mockWebhookQueue.isPaused.mockResolvedValue(false);
+    mockPingQueue.getJobCounts.mockRejectedValue(new Error('redis timeout'));
+    mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
+
+    const result = await controller.check();
+
+    expect(result.services.queues[PING_PERSIST_QUEUE].status).toBe('ok');
+    expect(result.services.queues[PING_PERSIST_QUEUE].waiting).toBe(0);
   });
 });

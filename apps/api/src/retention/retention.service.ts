@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
-import { gzipSync } from 'node:zlib';
+import { createGzip } from 'node:zlib';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -11,8 +11,12 @@ import { EtaService } from '../eta/eta.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
 import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { OrderStatus } from '@prisma/client';
+import {
+  parseEstablishmentSettings,
+  type EstablishmentSettings,
+} from '../establishments/establishment-settings.js';
+import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 
-const DEFAULT_RETENTION_DAYS = 90;
 // Orders must be in a terminal state to be eligible for deletion
 const TERMINAL_STATUSES: OrderStatus[] = [
   OrderStatus.completed,
@@ -161,7 +165,7 @@ export class RetentionService {
       if (avgRate > 0 && ratePerHour > 2 * avgRate) {
         const msg = `⚠️ ${shift.courier.name}: ${shift.total_deliveries} доставок за ${hoursActive.toFixed(1)} год — у ${(ratePerHour / avgRate).toFixed(1)}x більше за середнє по команді`;
         this.telegram
-          .notifyEstablishmentManagers(shift.establishment_id, msg, 'shift_anomaly')
+          .notifyEstablishmentManagers(shift.establishment_id, msg, MANAGER_EVENT.SHIFT_ANOMALY)
           .catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_anomaly)', err));
         await this.prisma.shift.update({
           where: { id: shift.id },
@@ -183,14 +187,15 @@ export class RetentionService {
    */
   @Cron('0 */5 * * * *', { name: 'recommend-timeout-check', timeZone: 'UTC' })
   async checkRecommendTimeout(): Promise<void> {
+    await this.lock.withLock('recommend-timeout-check', 240, async () => {
     const establishments = await this.prisma.establishment.findMany({
       where: { dispatch_mode: 'recommend' },
       select: { id: true, settings: true },
     });
 
     for (const est of establishments) {
-      const settings = est.settings as Record<string, unknown>;
-      const timeoutMinutes = settings?.dispatch_recommend_timeout_minutes as number | undefined;
+      const settings = parseEstablishmentSettings(est.settings);
+      const timeoutMinutes = settings.dispatch_recommend_timeout_minutes;
       if (!timeoutMinutes) continue;
 
       const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
@@ -228,6 +233,7 @@ export class RetentionService {
         );
       }
     }
+    });
   }
 
   /**
@@ -276,7 +282,10 @@ export class RetentionService {
         totalEstablishments += page.length;
 
         for (const est of page) {
-          const { deletedOrders, deletedPings } = await this.cleanupEstablishment(est.id, est.settings);
+          const { deletedOrders, deletedPings } = await this.cleanupEstablishment(
+        est.id,
+        parseEstablishmentSettings(est.settings),
+      );
           totalOrders += deletedOrders;
           totalPings += deletedPings;
         }
@@ -293,18 +302,18 @@ export class RetentionService {
    */
   async cleanupEstablishment(
     establishmentId: string,
-    settings: unknown,
+    settings: EstablishmentSettings,
   ): Promise<{ deletedOrders: number; deletedPings: number }> {
-    const retentionDays = this.parseRetentionDays(settings);
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - retentionDays);
+    cutoff.setDate(cutoff.getDate() - settings.retention_orders_days);
 
     let deletedOrders = 0;
     let deletedPings = 0;
 
     try {
       // Delete terminal orders older than cutoff.
-      // Cascades: deliveries (not delivery_proofs — no cascade on proofs by design).
+      // Cascade chain: orders → deliveries (Cascade) → delivery_proofs.delivery_id = NULL (SetNull).
+      // Proof rows are never deleted — delivery_id becomes NULL when the delivery is purged.
       const ordersResult = await this.prisma.order.deleteMany({
         where: {
           establishment_id: establishmentId,
@@ -358,16 +367,53 @@ export class RetentionService {
       return;
     }
 
+    const BATCH_SIZE = 500;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
     try {
-      const proofs = await this.prisma.deliveryProof.findMany({
-        where: { created_at: { gte: sevenDaysAgo } },
-        orderBy: { created_at: 'asc' },
+      // Stream gzip so we never hold the full uncompressed dataset in memory.
+      // Cursor-based pagination ensures only BATCH_SIZE rows are resident at once.
+      const gz = createGzip();
+      const chunks: Buffer[] = [];
+      gz.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+      let cursor: string | undefined;
+      let totalCount = 0;
+      let first = true;
+
+      gz.write('[');
+
+      while (true) {
+        const batch = await this.prisma.deliveryProof.findMany({
+          where: { created_at: { gte: sevenDaysAgo } },
+          orderBy: { id: 'asc' },
+          take: BATCH_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        });
+
+        if (batch.length === 0) break;
+
+        for (const proof of batch) {
+          gz.write((first ? '' : ',') + JSON.stringify(proof));
+          first = false;
+        }
+
+        totalCount += batch.length;
+        cursor = batch[batch.length - 1].id;
+
+        if (batch.length < BATCH_SIZE) break;
+      }
+
+      gz.write(']');
+      gz.end();
+
+      await new Promise<void>((resolve, reject) => {
+        gz.on('finish', resolve);
+        gz.on('error', reject);
       });
 
-      const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      const payload = gzipSync(Buffer.from(JSON.stringify(proofs)));
+      const payload = Buffer.concat(chunks);
 
       await this.backupS3.send(
         new PutObjectCommand({
@@ -378,22 +424,10 @@ export class RetentionService {
         }),
       );
 
-      this.logger.log(`Weekly backup completed: ${proofs.length} delivery_proofs → delivery-proofs/${dateStr}.json.gz`);
+      this.logger.log(`Weekly backup completed: ${totalCount} delivery_proofs → delivery-proofs/${dateStr}.json.gz`);
     } catch (err) {
       this.logger.error('Weekly delivery_proofs backup FAILED', err);
     }
   }
 
-  private parseRetentionDays(settings: unknown): number {
-    if (
-      settings !== null &&
-      typeof settings === 'object' &&
-      'retention_days' in settings &&
-      typeof (settings as Record<string, unknown>).retention_days === 'number'
-    ) {
-      const days = (settings as Record<string, unknown>).retention_days as number;
-      return days > 0 ? days : DEFAULT_RETENTION_DAYS;
-    }
-    return DEFAULT_RETENTION_DAYS;
-  }
 }

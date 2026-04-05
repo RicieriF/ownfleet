@@ -26,6 +26,7 @@ import { GeocodingModule } from './geocoding/geocoding.module.js';
 import { SharedRedisModule } from './shared/redis/redis.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { PublicTrackingModule } from './public-tracking/public-tracking.module.js';
+import { MetricsModule } from './metrics/metrics.module.js';
 import { HealthController } from './health/health.controller.js';
 
 @Module({
@@ -64,6 +65,7 @@ import { HealthController } from './health/health.controller.js';
     GeocodingModule,
     ApiKeysModule,
     PublicTrackingModule,
+    MetricsModule,
   ],
   controllers: [HealthController],
   providers: [

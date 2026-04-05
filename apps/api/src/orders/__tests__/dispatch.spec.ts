@@ -434,7 +434,8 @@ describe('DispatchProcessor', () => {
   let mockOrdersService: { runDispatchAlgorithm: jest.Mock };
   let mockProcessorQueue: { add: jest.Mock };
   let mockProcessorGateway: { broadcastToEstablishment: jest.Mock };
-  let mockProcessorPrisma: { establishment: { findUnique: jest.Mock } };
+  let mockProcessorPrisma: { establishment: { findUnique: jest.Mock }; order: { findUnique: jest.Mock } };
+  let mockProcessorTelegram: { notifyEstablishmentManagers: jest.Mock };
 
   beforeEach(async () => {
     mockOrdersService = {
@@ -446,6 +447,12 @@ describe('DispatchProcessor', () => {
       establishment: {
         findUnique: jest.fn().mockResolvedValue({ dispatch_mode: 'auto' }),
       },
+      order: {
+        findUnique: jest.fn().mockResolvedValue({ address: 'вул. Тестова 1' }),
+      },
+    };
+    mockProcessorTelegram = {
+      notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -454,6 +461,7 @@ describe('DispatchProcessor', () => {
         { provide: OrdersService, useValue: mockOrdersService },
         { provide: TrackingGateway, useValue: mockProcessorGateway },
         { provide: PrismaService, useValue: mockProcessorPrisma },
+        { provide: TelegramService, useValue: mockProcessorTelegram },
         { provide: getQueueToken('dispatch'), useValue: mockProcessorQueue },
       ],
     }).compile();
@@ -461,6 +469,8 @@ describe('DispatchProcessor', () => {
     jest.clearAllMocks();
     mockProcessorQueue.add.mockResolvedValue(undefined);
     mockProcessorPrisma.establishment.findUnique.mockResolvedValue({ dispatch_mode: 'auto' });
+    mockProcessorPrisma.order.findUnique.mockResolvedValue({ address: 'вул. Тестова 1' });
+    mockProcessorTelegram.notifyEstablishmentManagers.mockResolvedValue(undefined);
     mockProcessorGateway.broadcastToEstablishment.mockReturnValue(undefined);
   });
 
@@ -502,6 +512,47 @@ describe('DispatchProcessor', () => {
     expect(mockProcessorQueue.add).not.toHaveBeenCalled();
   });
 
+  it('assigned=false, attempt = 5 → sends Telegram dispatch_no_courier early alert (~5 min)', async () => {
+    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({ waiting: true });
+
+    await processor.handle(makeJob(5));
+
+    // The alert is fire-and-forget (Promise chain), so we flush the microtask queue
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockProcessorPrisma.order.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'order-1' } }),
+    );
+    expect(mockProcessorTelegram.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      EST_A,
+      expect.stringContaining('Немає курʼєра'),
+      'dispatch_no_courier',
+    );
+  });
+
+  it('assigned=false, attempt = 30 (max exhausted) → does NOT send duplicate Telegram alert', async () => {
+    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({ waiting: true });
+
+    await processor.handle(makeJob(30));
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockProcessorTelegram.notifyEstablishmentManagers).not.toHaveBeenCalled();
+  });
+
+  it('assigned=false, attempt = 1 → does NOT send Telegram alert yet', async () => {
+    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({ waiting: true });
+
+    await processor.handle(makeJob(1));
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockProcessorTelegram.notifyEstablishmentManagers).not.toHaveBeenCalled();
+  });
+
   it('recommend mode → broadcasts order:recommendation WS event', async () => {
     const recommended = {
       courierId: 'c1',
@@ -512,8 +563,11 @@ describe('DispatchProcessor', () => {
       workloadSeconds: 0,
       deliveriesCount: 0,
     };
-    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({ recommended, pool: [recommended] });
-    mockProcessorPrisma.establishment.findUnique.mockResolvedValue({ dispatch_mode: 'recommend' });
+    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({
+      recommended,
+      pool: [recommended],
+      dispatchMode: 'recommend',
+    });
 
     await processor.handle(makeJob(1));
 

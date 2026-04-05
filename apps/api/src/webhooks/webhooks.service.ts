@@ -140,21 +140,27 @@ export class WebhooksService {
       select: { id: true },
     });
 
+    let queued = 0;
     for (const webhook of webhooks) {
-      await this.queue.add(
-        'deliver',
-        { webhookId: webhook.id, event, payload },
-        {
-          attempts: 5,
-          backoff: { type: 'exponential', delay: 1_000 },
-          removeOnComplete: 100,
-          removeOnFail: 50,
-        },
-      );
+      try {
+        await this.queue.add(
+          'deliver',
+          { webhookId: webhook.id, event, payload },
+          {
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 1_000 },
+            removeOnComplete: 100,
+            removeOnFail: 50,
+          },
+        );
+        queued++;
+      } catch (err) {
+        this.logger.warn(`Failed to enqueue webhook ${webhook.id} for event "${event}" — Redis may be unavailable`, err);
+      }
     }
 
-    if (webhooks.length > 0) {
-      this.logger.debug(`Queued ${webhooks.length} webhook(s) for event "${event}" [est: ${establishmentId}]`);
+    if (queued > 0) {
+      this.logger.debug(`Queued ${queued}/${webhooks.length} webhook(s) for event "${event}" [est: ${establishmentId}]`);
     }
   }
 

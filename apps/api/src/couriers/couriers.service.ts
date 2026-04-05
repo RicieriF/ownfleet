@@ -13,6 +13,7 @@ import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { COURIER_EVENT } from '../telegram/telegram.types.js';
 import { COURIERS_REDIS_CLIENT } from './couriers-redis.provider.js';
 
 // Thresholds for online status (in ms)
@@ -186,7 +187,7 @@ export class CouriersService {
     this.telegram.notifyCourier(
       courierId,
       `📢 Нагадування від менеджера: перевірте застосунок — є активне замовлення`,
-      'manager_reminder',
+      COURIER_EVENT.MANAGER_REMINDER,
     ).catch((err: unknown) => this.logger.warn('Telegram notification failed (manager_reminder)', err));
 
     this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);

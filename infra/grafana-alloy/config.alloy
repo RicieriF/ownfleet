@@ -1,0 +1,59 @@
+// Grafana Alloy configuration for @weego CMI API metrics
+//
+// This config scrapes the /metrics endpoint from the NestJS API
+// and remote_writes to Grafana Cloud Prometheus.
+//
+// Required environment variables (set in docker-compose or systemd unit):
+//   METRICS_SECRET                  — must match the API's METRICS_SECRET env var
+//   GRAFANA_CLOUD_PROMETHEUS_URL    — from Grafana Cloud → My Account → Prometheus → Remote Write Endpoint
+//   GRAFANA_CLOUD_PROMETHEUS_USER   — numeric user ID (e.g. "1234567")
+//   GRAFANA_CLOUD_API_KEY           — Grafana Cloud API key with MetricsPublisher role
+
+// ─────────────────────────────────────────────
+// Scrape the API /metrics endpoint
+// ─────────────────────────────────────────────
+prometheus.scrape "weego_api" {
+  // "host.docker.internal" reaches the host machine from inside the Docker container.
+  // Works on macOS/Windows Docker Desktop out of the box.
+  // On a Linux production server where API runs in docker-compose: replace with the
+  // API service name (e.g. "api:3000") and ensure both containers share a network.
+  targets = [{"__address__" = "host.docker.internal:3000"}]
+
+  metrics_path    = "/metrics"
+  scrape_interval = "30s"
+  scrape_timeout  = "10s"
+
+  authorization {
+    type        = "Bearer"
+    credentials = sys.env("METRICS_SECRET")
+  }
+
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// ─────────────────────────────────────────────
+// Remote write to Grafana Cloud
+// ─────────────────────────────────────────────
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+
+    // Retry on transient failures — keeps metrics flowing during brief network hiccups.
+    queue_config {
+      max_samples_per_send = 1000
+      batch_send_deadline  = "5s"
+    }
+  }
+
+  // Add a label to identify the environment in Grafana dashboards.
+  // Change "production" to "staging" for non-prod environments.
+  external_labels = {
+    env = "production",
+    app = "weego-api",
+  }
+}

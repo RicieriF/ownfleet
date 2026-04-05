@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { EtaService, EtaParams } from './eta.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
@@ -49,6 +50,7 @@ describe('EtaService', () => {
         EtaService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: TelegramService, useValue: mockTelegram },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
       ],
     }).compile();
 

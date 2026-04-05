@@ -76,6 +76,17 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
 
   const activeCouriers = couriers.filter((c) => c.active && c.on_shift);
 
+  // An order is "courier-stuck" when: pending + ready_at set + waiting > 5 min.
+  // Mirrors the dispatch processor's early-alert threshold (attempt 5 = ~5 min).
+  const STUCK_THRESHOLD_MS = 5 * 60 * 1000;
+  function isStuck(order: Order): boolean {
+    return (
+      order.status === 'pending' &&
+      order.ready_at != null &&
+      Date.now() - new Date(order.ready_at).getTime() > STUCK_THRESHOLD_MS
+    );
+  }
+
   async function handleAssign() {
     if (!assignModalOrder || !selectedCourierId) return;
     setActionError('');
@@ -160,7 +171,15 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
               </tr>
             )}
             {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-[var(--s2)] transition-colors">
+              <tr
+                key={order.id}
+                className={cn(
+                  'transition-colors',
+                  isStuck(order)
+                    ? 'bg-[rgba(239,68,68,0.06)] hover:bg-[rgba(239,68,68,0.10)]'
+                    : 'hover:bg-[var(--s2)]',
+                )}
+              >
                 <td className="px-3 py-2.5 max-w-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-[var(--t1)] truncate">{order.address}</span>
@@ -182,14 +201,29 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
                   </div>
                 </td>
                 <td className="px-3 py-2.5">
-                  <span
-                    className={cn(
-                      'px-2 py-0.5 rounded text-xs font-medium',
-                      STATUS_COLORS[order.status],
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded text-xs font-medium',
+                        STATUS_COLORS[order.status],
+                      )}
+                    >
+                      {STATUS_LABELS[order.status]}
+                    </span>
+                    {isStuck(order) && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.04em]"
+                        style={{
+                          background: 'rgba(239,68,68,0.15)',
+                          color: 'var(--bad)',
+                          border: '1px solid rgba(239,68,68,0.3)',
+                        }}
+                        title="Автодиспетчер не зміг знайти курʼєра. Призначте вручну."
+                      >
+                        Немає курʼєра
+                      </span>
                     )}
-                  >
-                    {STATUS_LABELS[order.status]}
-                  </span>
+                  </div>
                 </td>
                 <td className="px-3 py-2.5 text-[var(--t2)]">
                   {order.delivery?.courier?.name ?? (

@@ -10,6 +10,14 @@ import { WEBHOOK_QUEUE } from '../webhooks/webhooks.service.js';
 // npm sets npm_package_version when running any npm script (start, test, etc.)
 const APP_VERSION: string = process.env['npm_package_version'] ?? 'unknown';
 
+interface QueueHealth {
+  status: 'ok' | 'paused' | 'error';
+  waiting: number;
+  active: number;
+  failed: number;
+  delayed: number;
+}
+
 /**
  * Health check — excluded from global prefix and all guards.
  * Responds at GET /health (not /api/v1/health).
@@ -22,6 +30,9 @@ const APP_VERSION: string = process.env['npm_package_version'] ?? 'unknown';
  * Queue checks detect paused workers (ops incident — someone called queue.pause()
  * or a worker process crashed leaving the queue in a degraded state).
  * A paused queue causes 503 since jobs are silently accumulating without processing.
+ *
+ * Queue job counts (waiting/active/failed/delayed) are included for observability
+ * but do NOT affect the 200/503 status — depth alone is not an error condition.
  */
 @Controller('health')
 export class HealthController {
@@ -36,18 +47,31 @@ export class HealthController {
   async check(): Promise<{
     status: string;
     timestamp: string;
-    services: { database: string; redis: string; queues: Record<string, string>; version: string };
+    services: { database: string; redis: string; queues: Record<string, QueueHealth>; version: string };
   }> {
-    const [dbOk, redisOk, pingPaused, webhookPaused] = await Promise.all([
+    const [dbOk, redisOk, pingPaused, webhookPaused, pingCounts, webhookCounts] = await Promise.all([
       this.prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
       this.redis.ping().then((r) => r === 'PONG').catch(() => false),
       this.pingQueue.isPaused().catch(() => null as boolean | null),
       this.webhookQueue.isPaused().catch(() => null as boolean | null),
+      this.pingQueue.getJobCounts().catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
+      this.webhookQueue.getJobCounts().catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
     ]);
 
-    const queues: Record<string, string> = {
-      [PING_PERSIST_QUEUE]: pingPaused === null ? 'error' : pingPaused ? 'paused' : 'ok',
-      [WEBHOOK_QUEUE]: webhookPaused === null ? 'error' : webhookPaused ? 'paused' : 'ok',
+    const toQueueHealth = (
+      paused: boolean | null,
+      counts: Awaited<ReturnType<Queue['getJobCounts']>> | null,
+    ): QueueHealth => ({
+      status: paused === null ? 'error' : paused ? 'paused' : 'ok',
+      waiting: counts?.waiting ?? 0,
+      active: counts?.active ?? 0,
+      failed: counts?.failed ?? 0,
+      delayed: counts?.delayed ?? 0,
+    });
+
+    const queues: Record<string, QueueHealth> = {
+      [PING_PERSIST_QUEUE]: toQueueHealth(pingPaused, pingCounts),
+      [WEBHOOK_QUEUE]: toQueueHealth(webhookPaused, webhookCounts),
     };
 
     const services = {
@@ -57,7 +81,7 @@ export class HealthController {
       version: APP_VERSION,
     };
 
-    const queuesDegraded = Object.values(queues).some((s) => s !== 'ok');
+    const queuesDegraded = Object.values(queues).some((q) => q.status !== 'ok');
 
     if (!dbOk || !redisOk || queuesDegraded) {
       throw new ServiceUnavailableException({

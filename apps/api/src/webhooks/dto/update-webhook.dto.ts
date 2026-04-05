@@ -1,4 +1,5 @@
-import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
+import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty, IsBoolean, IsOptional, IsIn } from 'class-validator';
+import { SUPPORTED_EVENTS, WebhookEvent } from './create-webhook.dto.js';
 
 export class UpdateWebhookDto {
   @IsOptional()
@@ -13,8 +14,8 @@ export class UpdateWebhookDto {
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
-  @IsString({ each: true })
-  events?: string[];
+  @IsIn(SUPPORTED_EVENTS, { each: true })
+  events?: WebhookEvent[];
 
   @IsOptional()
   @IsBoolean()

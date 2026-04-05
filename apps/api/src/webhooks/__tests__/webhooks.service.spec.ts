@@ -1,8 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bull';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 import { WebhooksService, WEBHOOK_QUEUE } from '../webhooks.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { CreateWebhookDto } from '../dto/create-webhook.dto.js';
+import { UpdateWebhookDto } from '../dto/update-webhook.dto.js';
 
 const EST_ID = 'est-1';
 const userA: any = { id: 'u1', establishment_id: EST_ID, role: 'manager', is_platform_admin: false };
@@ -164,5 +168,62 @@ describe('WebhooksService', () => {
         select: { id: true },
       });
     });
+  });
+});
+
+// ── DTO validation — events field must be a subset of SUPPORTED_EVENTS ────────
+
+describe('CreateWebhookDto — events validation', () => {
+  const validBase = { url: 'https://example.com/hook', secret: 'sec' };
+
+  it('passes with all supported events', async () => {
+    const dto = plainToInstance(CreateWebhookDto, {
+      ...validBase,
+      events: ['order.created', 'delivery.completed'],
+    });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an unknown event string', async () => {
+    const dto = plainToInstance(CreateWebhookDto, {
+      ...validBase,
+      events: ['order.created', 'shipment.updated'],
+    });
+    const errors = await validate(dto);
+    const eventsError = errors.find((e) => e.property === 'events');
+    expect(eventsError).toBeDefined();
+  });
+
+  it('rejects an empty events array', async () => {
+    const dto = plainToInstance(CreateWebhookDto, { ...validBase, events: [] });
+    const errors = await validate(dto);
+    expect(errors.find((e) => e.property === 'events')).toBeDefined();
+  });
+
+  it('rejects when events is not an array', async () => {
+    const dto = plainToInstance(CreateWebhookDto, { ...validBase, events: 'order.created' });
+    const errors = await validate(dto);
+    expect(errors.find((e) => e.property === 'events')).toBeDefined();
+  });
+});
+
+describe('UpdateWebhookDto — events validation', () => {
+  it('passes when events is omitted (all fields optional)', async () => {
+    const dto = plainToInstance(UpdateWebhookDto, { active: false });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an unknown event when events is provided', async () => {
+    const dto = plainToInstance(UpdateWebhookDto, { events: ['delivery.teleported'] });
+    const errors = await validate(dto);
+    expect(errors.find((e) => e.property === 'events')).toBeDefined();
+  });
+
+  it('passes with a valid single supported event', async () => {
+    const dto = plainToInstance(UpdateWebhookDto, { events: ['delivery.failed'] });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
   });
 });

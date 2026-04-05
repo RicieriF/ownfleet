@@ -1,4 +1,4 @@
-import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty } from 'class-validator';
+import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty, IsIn } from 'class-validator';
 
 export const SUPPORTED_EVENTS = [
   'order.created',
@@ -21,6 +21,6 @@ export class CreateWebhookDto {
 
   @IsArray()
   @ArrayMinSize(1)
-  @IsString({ each: true })
-  events: string[];
+  @IsIn(SUPPORTED_EVENTS, { each: true })
+  events: WebhookEvent[];
 }

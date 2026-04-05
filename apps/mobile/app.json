@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#09090b"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ua.weego.courier",
@@ -20,7 +22,10 @@
         "NSLocationAlwaysUsageDescription": "Weego відстежує ваше місцезнаходження під час активної доставки у фоновому режимі.",
         "NSLocationWhenInUseUsageDescription": "Weego потребує доступу до геолокації для відстеження доставок.",
         "NSCameraUsageDescription": "Weego використовує камеру для фотофіксації при здачі замовлення.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "android": {
@@ -58,7 +63,8 @@
           "color": "#6aaa84",
           "sounds": []
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "weego-courier",
     "extra": {

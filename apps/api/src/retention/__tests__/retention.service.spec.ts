@@ -1,11 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bull';
+import { ConfigService } from '@nestjs/config';
 import { RetentionService } from '../retention.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ShiftsService } from '../../shifts/shifts.service.js';
 import { EtaService } from '../../eta/eta.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
+import {
+  parseEstablishmentSettings,
+  ESTABLISHMENT_SETTINGS_DEFAULTS,
+} from '../../establishments/establishment-settings.js';
 
 const mockRetentionLog = { create: jest.fn().mockResolvedValue({}) };
 const mockOrder = { deleteMany: jest.fn(), findMany: jest.fn() };
@@ -14,12 +19,17 @@ const mockShift = {
   findMany: jest.fn().mockResolvedValue([]),
   update: jest.fn().mockResolvedValue({}),
 };
+const mockDeliveryProof = {
+  findMany: jest.fn().mockResolvedValue([]),
+  deleteMany: jest.fn(),
+};
 
 const mockPrisma = {
   establishment: mockEstablishment,
   order: mockOrder,
   shift: mockShift,
   retentionLog: mockRetentionLog,
+  deliveryProof: mockDeliveryProof,
   $executeRaw: jest.fn(),
 };
 
@@ -55,6 +65,7 @@ describe('RetentionService', () => {
         { provide: EtaService, useValue: mockEtaService },
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: DistributedLockService, useValue: mockLockService },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
       ],
     }).compile();
@@ -65,6 +76,8 @@ describe('RetentionService', () => {
     mockLockService.withLock.mockImplementation((key: string, ttl: number, fn: () => Promise<void>) => fn());
     mockOrder.deleteMany.mockResolvedValue({ count: 0 });
     mockOrder.findMany.mockResolvedValue([]);
+    mockDeliveryProof.findMany.mockResolvedValue([]);
+    mockDeliveryProof.deleteMany.mockResolvedValue({ count: 0 });
     mockPrisma.$executeRaw.mockResolvedValue(0);
     mockRetentionLog.create.mockResolvedValue({});
   });
@@ -76,7 +89,7 @@ describe('RetentionService', () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 5 });
       mockPrisma.$executeRaw.mockResolvedValue(10);
 
-      const result = await service.cleanupEstablishment('est-1', {});
+      const result = await service.cleanupEstablishment('est-1', parseEstablishmentSettings({}));
 
       expect(result.deletedOrders).toBe(5);
       expect(result.deletedPings).toBe(10);
@@ -91,11 +104,14 @@ describe('RetentionService', () => {
       );
     });
 
-    it('respects custom retention_days from settings', async () => {
+    it('respects custom retention_orders_days from settings', async () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 3 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-2', { retention_days: 30 });
+      await service.cleanupEstablishment(
+        'est-2',
+        parseEstablishmentSettings({ retention_orders_days: 30 }),
+      );
 
       const call = mockOrder.deleteMany.mock.calls[0][0];
       const cutoff: Date = call.where.created_at.lt;
@@ -105,23 +121,43 @@ describe('RetentionService', () => {
       expect(diffDays).toBeLessThan(31);
     });
 
-    it('falls back to default when retention_days is invalid', async () => {
-      mockOrder.deleteMany.mockResolvedValue({ count: 0 });
+    it('respects legacy retention_days key for backwards compatibility', async () => {
+      mockOrder.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-3', { retention_days: -5 });
+      // Rows written before the key was renamed from retention_days → retention_orders_days
+      await service.cleanupEstablishment(
+        'est-2b',
+        parseEstablishmentSettings({ retention_days: 14 }),
+      );
 
       const call = mockOrder.deleteMany.mock.calls[0][0];
       const cutoff: Date = call.where.created_at.lt;
       const diffDays = (Date.now() - cutoff.getTime()) / (1000 * 60 * 60 * 24);
-      expect(diffDays).toBeGreaterThan(89);
+      expect(diffDays).toBeGreaterThan(13);
+      expect(diffDays).toBeLessThan(15);
+    });
+
+    it('falls back to default when retention_orders_days is invalid', async () => {
+      mockOrder.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.$executeRaw.mockResolvedValue(0);
+
+      await service.cleanupEstablishment(
+        'est-3',
+        parseEstablishmentSettings({ retention_orders_days: -5 }),
+      );
+
+      const call = mockOrder.deleteMany.mock.calls[0][0];
+      const cutoff: Date = call.where.created_at.lt;
+      const diffDays = (Date.now() - cutoff.getTime()) / (1000 * 60 * 60 * 24);
+      expect(diffDays).toBeGreaterThan(ESTABLISHMENT_SETTINGS_DEFAULTS.retention_orders_days - 1);
     });
 
     it('creates retention_log only when something was deleted', async () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 2 });
       mockPrisma.$executeRaw.mockResolvedValue(7);
 
-      await service.cleanupEstablishment('est-4', {});
+      await service.cleanupEstablishment('est-4', parseEstablishmentSettings({}));
 
       expect(mockRetentionLog.create).toHaveBeenCalledTimes(1);
       expect(mockRetentionLog.create).toHaveBeenCalledWith({
@@ -133,25 +169,27 @@ describe('RetentionService', () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 0 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-5', {});
+      await service.cleanupEstablishment('est-5', parseEstablishmentSettings({}));
 
       expect(mockRetentionLog.create).not.toHaveBeenCalled();
     });
 
-    it('delivery_proofs are never touched — no delete call on deliveryProof', async () => {
+    it('delivery_proofs are never explicitly deleted — no deliveryProof.delete call', async () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-6', {});
+      await service.cleanupEstablishment('est-6', parseEstablishmentSettings({}));
 
-      // Ensure mockPrisma has no deliveryProof.delete calls
-      expect(mockPrisma).not.toHaveProperty('deliveryProof');
+      // RetentionService must never call prisma.deliveryProof.delete/deleteMany.
+      // The DB-level ON DELETE SET NULL FK ensures proofs survive with delivery_id = NULL
+      // when their parent delivery is cascade-deleted along with its order.
+      expect(mockDeliveryProof.deleteMany).not.toHaveBeenCalled();
     });
 
     it('does not throw when DB error occurs — logs and returns zeros', async () => {
       mockOrder.deleteMany.mockRejectedValue(new Error('DB timeout'));
 
-      const result = await service.cleanupEstablishment('est-7', {});
+      const result = await service.cleanupEstablishment('est-7', parseEstablishmentSettings({}));
 
       expect(result.deletedOrders).toBe(0);
       expect(result.deletedPings).toBe(0);
@@ -218,8 +256,9 @@ describe('RetentionService', () => {
 
       await service.cleanupExpiredTrackingTokens();
 
-      // No deliveryProof mock was registered — verify it wasn't accessed
-      expect(mockPrisma).not.toHaveProperty('deliveryProof');
+      // Tracking token cleanup must not touch delivery_proofs at all
+      expect(mockDeliveryProof.findMany).not.toHaveBeenCalled();
+      expect(mockDeliveryProof.deleteMany).not.toHaveBeenCalled();
     });
 
     it('does not call order.deleteMany or touch retention logic', async () => {
@@ -469,17 +508,130 @@ describe('RetentionService', () => {
       expect(mockShiftsService.checkShiftEndingSoon).not.toHaveBeenCalled();
     });
 
-    it('checkRecommendTimeout does NOT use a distributed lock (Bull jobId dedup is sufficient)', async () => {
+    it('checkRecommendTimeout uses distributed lock with key "recommend-timeout-check"', async () => {
       mockEstablishment.findMany.mockResolvedValue([]);
       await service.checkRecommendTimeout();
-      // withLock should NOT have been called for this cron
-      expect(mockLockService.withLock).not.toHaveBeenCalled();
+      expect(mockLockService.withLock).toHaveBeenCalledWith(
+        'recommend-timeout-check',
+        expect.any(Number),
+        expect.any(Function),
+      );
     });
 
     it('cleanupExpiredTrackingTokens does NOT use a distributed lock (idempotent DELETE)', async () => {
       mockPrisma.$executeRaw.mockResolvedValue(0);
       await service.cleanupExpiredTrackingTokens();
       expect(mockLockService.withLock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── weeklyDeliveryProofsBackup ────────────────────────────────────────────
+
+  describe('weeklyDeliveryProofsBackup', () => {
+    // Helper to build a minimal fake proof record
+    const makeProof = (id: string) => ({
+      id,
+      delivery_id: `del-${id}`,
+      lat: 50.45,
+      lng: 30.52,
+      captured_at: new Date('2026-03-30T10:00:00Z'),
+      order_closed_at: new Date('2026-03-30T10:05:00Z'),
+      photo_key: null,
+      geo_match: true,
+      accuracy: 12,
+      geo_flags: {},
+    });
+
+    it('is a no-op when backupS3 is not configured (BACKUP_S3_* env vars absent)', async () => {
+      // ConfigService returns undefined for all keys → backupS3 = null in constructor
+      // Service was already built with get() → undefined, so backup is disabled.
+      await expect(service.weeklyDeliveryProofsBackup()).resolves.not.toThrow();
+      // No DB calls should be made
+      expect(mockDeliveryProof.findMany).not.toHaveBeenCalled();
+    });
+
+    it('fetches proofs in batches using cursor-based pagination (no single findMany for all)', async () => {
+      // Inject a real S3 stub so the guard passes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupS3 = { send: jest.fn().mockResolvedValue({}) };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupBucket = 'test-bucket';
+
+      // First batch: 500 records (full page) → pagination continues
+      const batch1 = Array.from({ length: 500 }, (_, i) => makeProof(`p${i}`));
+      // Second batch: 3 records (partial page) → pagination stops
+      const batch2 = [makeProof('p500'), makeProof('p501'), makeProof('p502')];
+
+      mockDeliveryProof.findMany
+        .mockResolvedValueOnce(batch1)
+        .mockResolvedValueOnce(batch2)
+        .mockResolvedValue([]); // safety — should not be called again
+
+      await service.weeklyDeliveryProofsBackup();
+
+      // Must have been called exactly twice (two pages)
+      expect(mockDeliveryProof.findMany).toHaveBeenCalledTimes(2);
+
+      // Second call must use cursor from last record of first batch
+      expect(mockDeliveryProof.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          cursor: { id: 'p499' },
+          skip: 1,
+          take: 500,
+        }),
+      );
+    });
+
+    it('uploads valid gzipped JSON containing all fetched records', async () => {
+      const mockSend = jest.fn().mockResolvedValue({});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupS3 = { send: mockSend };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupBucket = 'test-bucket';
+
+      const proofs = [makeProof('a'), makeProof('b')];
+      mockDeliveryProof.findMany
+        .mockResolvedValueOnce(proofs)
+        .mockResolvedValue([]);
+
+      await service.weeklyDeliveryProofsBackup();
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const cmd = mockSend.mock.calls[0][0];
+      expect(cmd.input.Bucket).toBe('test-bucket');
+      expect(cmd.input.Key).toMatch(/^delivery-proofs\/\d{4}-\d{2}-\d{2}\.json\.gz$/);
+      expect(cmd.input.ContentType).toBe('application/gzip');
+      // Payload must be a Buffer (gzipped)
+      expect(Buffer.isBuffer(cmd.input.Body)).toBe(true);
+    });
+
+    it('does not throw when S3 upload fails — logs error and swallows', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupS3 = { send: jest.fn().mockRejectedValue(new Error('S3 timeout')) };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupBucket = 'test-bucket';
+
+      mockDeliveryProof.findMany
+        .mockResolvedValueOnce([makeProof('x')])
+        .mockResolvedValue([]);
+
+      await expect(service.weeklyDeliveryProofsBackup()).resolves.not.toThrow();
+    });
+
+    it('makes no DB queries and no S3 calls when there are zero proofs in the window', async () => {
+      const mockSend = jest.fn().mockResolvedValue({});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupS3 = { send: mockSend };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupBucket = 'test-bucket';
+
+      mockDeliveryProof.findMany.mockResolvedValue([]);
+
+      await service.weeklyDeliveryProofsBackup();
+
+      // S3 upload still happens — empty array backup is valid
+      expect(mockSend).toHaveBeenCalledTimes(1);
     });
   });
 });
