@@ -499,35 +499,38 @@ export class OrdersService {
         ? haversineMeters(estLat, estLng, order.lat, order.lng)
         : null;
 
-    // Step — calculate OSRM ETA for all candidates in parallel.
-    // Promise.allSettled keeps working even if individual OSRM calls fail,
-    // so a single flaky courier does not block the entire batch.
-    const etaSettled = await Promise.allSettled(
-      candidates.map((c) => {
-        if (order.lat === null || order.lng === null) return Promise.resolve(null);
-        return this.eta.calculateEta({
-          establishmentLat: estLat,
-          establishmentLng: estLng,
-          orderLat: order.lat!,
-          orderLng: order.lng!,
-          transportMode: c.transport_mode,
-          timezone: establishment.timezone,
-        });
-      }),
-    );
+    // Step — calculate OSRM ETA deduplicated by transport mode.
+    // All couriers share the same establishment→order route; only transport_mode varies.
+    // This collapses N parallel OSRM calls down to ≤ 4 unique profiles
+    // (driving / cycling / foot — moto_electric reuses driving with a speed factor).
+    const etaByMode = new Map<TransportMode, number | null>();
+    if (order.lat !== null && order.lng !== null) {
+      const uniqueModes = [...new Set(candidates.map((c) => c.transport_mode))];
+      await Promise.allSettled(
+        uniqueModes.map(async (mode) => {
+          const eta = await this.eta.calculateEta({
+            establishmentLat: estLat,
+            establishmentLng: estLng,
+            orderLat: order.lat!,
+            orderLng: order.lng!,
+            transportMode: mode,
+            timezone: establishment.timezone,
+          });
+          etaByMode.set(mode, eta);
+        }),
+      );
+    }
 
     // Step 4 — build CourierWithEta list from candidates whose ETA succeeded
     const pool: CourierWithEta[] = [];
-    for (let i = 0; i < candidates.length; i++) {
-      const settled = etaSettled[i]!;
-      if (settled.status === 'rejected' || settled.value === null) {
+    for (const c of candidates) {
+      const etaSeconds = etaByMode.get(c.transport_mode) ?? null;
+      if (etaSeconds === null) {
         this.logger.warn(
-          `OSRM ETA failed for courier ${candidates[i]!.courier_id}`,
-          settled.status === 'rejected' ? settled.reason : 'null ETA',
+          `OSRM ETA unavailable for courier ${c.courier_id} (${c.transport_mode})`,
         );
         continue;
       }
-      const c = candidates[i]!;
       const distanceMeters = Number(c.distance_meters);
       const transportWarning = this.buildTransportWarning(c.transport_mode, orderDistanceMeters);
       pool.push({
@@ -537,7 +540,7 @@ export class OrdersService {
         distanceMeters,
         workloadSeconds: Number(c.workload_score),
         deliveriesCount: Number(c.deliveries_count),
-        etaSeconds: settled.value,
+        etaSeconds,
         ...(transportWarning ? { transportWarning } : {}),
       });
     }

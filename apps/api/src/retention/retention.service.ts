@@ -311,6 +311,18 @@ export class RetentionService {
     let deletedPings = 0;
 
     try {
+      // Capture order identifiers before deletion for audit trail.
+      // Stores only id + external_id — enough to answer "did this order exist?" disputes
+      // without retaining full order data indefinitely.
+      const ordersToDelete = await this.prisma.order.findMany({
+        where: {
+          establishment_id: establishmentId,
+          status: { in: TERMINAL_STATUSES },
+          created_at: { lt: cutoff },
+        },
+        select: { id: true, external_id: true },
+      });
+
       // Delete terminal orders older than cutoff.
       // Cascade chain: orders → deliveries (Cascade) → delivery_proofs.delivery_id = NULL (SetNull).
       // Proof rows are never deleted — delivery_id becomes NULL when the delivery is purged.
@@ -339,6 +351,7 @@ export class RetentionService {
             establishment_id: establishmentId,
             deleted_orders: deletedOrders,
             deleted_pings: deletedPings,
+            deleted_order_ids: ordersToDelete,
           },
         });
 

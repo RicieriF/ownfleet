@@ -396,11 +396,12 @@ model InviteToken {
 // ─────────────────────────────────────────
 
 model RetentionLog {
-  id               String   @id @default(uuid())
-  establishment_id String
-  deleted_orders   Int      @default(0)
-  deleted_pings    Int      @default(0)
-  run_at           DateTime @default(now())
+  id                  String   @id @default(uuid())
+  establishment_id    String
+  deleted_orders      Int      @default(0)
+  deleted_pings       Int      @default(0)
+  deleted_order_ids   Json     @default("[]")
+  run_at              DateTime @default(now())
 
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
 

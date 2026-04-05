@@ -7,16 +7,22 @@ import { parseEstablishmentSettings } from '../establishments/establishment-sett
 import { haversineMeters } from '../shared/geo.js';
 import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 
-// OSRM routing profile per transport mode
+// OSRM routing profile per transport mode.
+// moto_gas and moto_electric use driving routes (same roads as cars).
+// Speed differences are handled via DURATION_FACTOR constants below, not separate OSRM profiles.
 const OSRM_PROFILE: Record<TransportMode, string> = {
   car: 'driving',
   moto_gas: 'driving',
-  moto_electric: 'driving', // uses driving routes, but speed-corrected below
+  moto_electric: 'driving',
   bicycle: 'cycling',
   walking: 'foot',
 };
 
-// Electric moto max ~35 km/h vs urban car average ~50 km/h → duration multiplier
+// Duration multipliers relative to the OSRM driving baseline (~50 km/h urban average).
+// moto_gas: urban scooter speed is comparable to car — no correction needed for MVP.
+//   Tune with real delivery data if ETA accuracy is off.
+// moto_electric: e-scooter max ~35 km/h vs car ~50 km/h → takes longer for same route.
+const MOTO_GAS_DURATION_FACTOR = 1.0;       // same as car; revisit after real-world data
 const MOTO_ELECTRIC_DURATION_FACTOR = 50 / 35; // ≈ 1.43
 
 // Peak hour coefficients (applied in establishment's local timezone)
@@ -44,14 +50,22 @@ export interface EtaParams {
 @Injectable()
 export class EtaService {
   private readonly logger = new Logger(EtaService.name);
-  private readonly osrmUrl: string;
+  // Per-profile OSRM base URLs. Fall back to OSRM_URL if profile-specific var is not set.
+  // Self-hosted setup: each profile runs as a separate process on its own port.
+  // Set OSRM_URL_DRIVING / OSRM_URL_CYCLING / OSRM_URL_FOOT in production env.
+  private readonly osrmUrls: Record<string, string>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
   ) {
-    this.osrmUrl = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
+    const base = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
+    this.osrmUrls = {
+      driving: config.get<string>('OSRM_URL_DRIVING') ?? base,
+      cycling: config.get<string>('OSRM_URL_CYCLING') ?? base,
+      foot:    config.get<string>('OSRM_URL_FOOT')    ?? base,
+    };
   }
 
   /**
@@ -63,7 +77,8 @@ export class EtaService {
       params;
 
     const profile = OSRM_PROFILE[transportMode];
-    const url = `${this.osrmUrl}/route/v1/${profile}/${establishmentLng},${establishmentLat};${orderLng},${orderLat}?overview=false`;
+    const baseUrl = this.osrmUrls[profile] ?? this.osrmUrls['driving']!;
+    const url = `${baseUrl}/route/v1/${profile}/${establishmentLng},${establishmentLat};${orderLng},${orderLat}?overview=false`;
 
     let durationSeconds: number;
 
@@ -87,8 +102,10 @@ export class EtaService {
       return null;
     }
 
-    // Electric moto speed correction
-    if (transportMode === TransportMode.moto_electric) {
+    // Moto speed corrections (applied after OSRM driving baseline)
+    if (transportMode === TransportMode.moto_gas) {
+      durationSeconds = durationSeconds * MOTO_GAS_DURATION_FACTOR;
+    } else if (transportMode === TransportMode.moto_electric) {
       durationSeconds = durationSeconds * MOTO_ELECTRIC_DURATION_FACTOR;
     }
 
