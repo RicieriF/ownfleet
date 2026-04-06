@@ -332,11 +332,11 @@ Always read `DESIGN.md` before making any visual or UI decisions for `apps/web` 
 All font choices, colors, spacing, border-radius, and aesthetic direction are defined there. Do not deviate without explicit user approval.
 
 Key decisions to remember:
-- **Dark-first** — background `#09090b` (zinc-950), surface `#18181b` (zinc-900). Do NOT switch to a light dashboard.
-  - **Виняток: `/embed/track/[token]`** — публічна сторінка трекінгу для клієнтів закладу використовує **світлу тему** (білий фон, нейтральні кольори). Причина: embed відображається всередині iframe на сайтах ресторанів (здебільшого світлі), його бачать клієнти, а не менеджери. Sage accent — `#3d7a5a` (light mode варіант). Це єдиний виняток із dark-first правила в усьому продукті.
+- **Dark-first** — background `#0c0b09` (warm near-black), surface `#1a1917` (warm surface). Do NOT switch to a light dashboard.
+  - **Виняток: `/embed/track/[token]`** — публічна сторінка трекінгу для клієнтів закладу використовує **світлу тему** (білий фон, нейтральні кольори). Причина: embed відображається всередині iframe на сайтах ресторанів (здебільшого світлі), його бачать клієнти, а не менеджери. Це єдиний виняток із dark-first правила в усьому продукті.
 - **Manrope** — primary font for all UI text (web + mobile). Import from Google Fonts. NOT Onest, Inter, or Roboto.
 - **JetBrains Mono** — for all numerical data, timestamps, IDs, coordinates, battery %, order counts.
-- **Sage accent** — `#6aaa84` (dark mode) / `#3d7a5a` (light mode). The ONLY non-neutral interactive color. No blue, no indigo, no violet.
+- **No accent color** — interactive states use neutral elevation (`--surface-3` `#3a3935` bg + `--text-1` text). No sage, no blue, no indigo, no violet. Only semantic signals: green/amber/red for status dots and alert borders.
 - **Semantic-only status colors** — green/amber/red ONLY for courier status dots and system alerts, never for buttons or nav.
 - **Compact density** — operational tool, not a marketing page. Table rows `py-2.5 px-3`.
 - **Border-radius ≤ 8px** — no `rounded-2xl` or `rounded-3xl` on cards. Buttons: 6px.

@@ -4,71 +4,94 @@
 
 /* ─────────────────────────────────────────────────────────────
    Weego CMI — Design Tokens
-   Source of truth: DESIGN.md
-   Palette: Zinc (neutral) + Sage (accent) — dark mode only
+   Source of truth: DESIGN/DESIGN.md
+   Palette: Warm neutral base + Sage accent — dark mode first
 ───────────────────────────────────────────────────────────── */
 
 @layer base {
   :root {
-    /* shadcn/ui variables — mapped to Zinc/Sage design system */
-    --background:  240 5.9% 4.1%;     /* #09090b zinc-950  */
-    --foreground:  0 0% 98%;          /* #fafafa zinc-50   */
+    /* shadcn/ui variables — mapped to warm neutral / Sage design system */
+    --background:  20 6% 4%;          /* #0c0b09 warm near-black  */
+    --foreground:  40 8% 97%;         /* #faf9f6 warm parchment   */
 
-    --card:        240 3.7% 10.2%;   /* #18181b zinc-900  */
-    --card-foreground: 0 0% 98%;
+    --card:        30 5% 10%;         /* #1a1917 warm surface     */
+    --card-foreground: 40 8% 97%;
 
-    --popover:     240 3.7% 10.2%;
-    --popover-foreground: 0 0% 98%;
+    --popover:     30 5% 10%;
+    --popover-foreground: 40 8% 97%;
 
-    --primary:     144 27% 54%;       /* #6aaa84 sage      */
-    --primary-foreground: 240 5.9% 4.1%; /* dark text on sage button */
+    --primary:     144 27% 54%;       /* #6aaa84 sage             */
+    --primary-foreground: 20 6% 4%;   /* dark text on sage button */
 
-    --secondary:   240 3.7% 16.1%;   /* #27272a zinc-800  */
-    --secondary-foreground: 0 0% 98%;
+    --secondary:   30 4% 14%;         /* #252420 warm surface-2   */
+    --secondary-foreground: 40 8% 97%;
 
-    --muted:       240 3.7% 16.1%;
-    --muted-foreground: 240 5% 64.9%; /* #a1a1aa zinc-400  */
+    --muted:       30 4% 14%;
+    --muted-foreground: 35 4% 61%;    /* #9c9b96 warm labels      */
 
-    --accent:      240 3.7% 16.1%;
-    --accent-foreground: 0 0% 98%;
+    --accent:      30 4% 14%;
+    --accent-foreground: 40 8% 97%;
 
-    --destructive: 0 84.2% 60.2%;    /* #ef4444 red-500   */
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;    /* #ef4444 red-500          */
+    --destructive-foreground: 40 8% 97%;
 
-    --border:      240 3.7% 16.1%;   /* #27272a zinc-800  */
-    --input:       240 3.7% 16.1%;
-    --ring:        144 27% 54%;       /* sage focus ring   */
+    --border:      40 8% 97% / 0.08; /* rgba(250,249,246,0.08) soft */
+    --input:       30 4% 14%;
+    --ring:        144 27% 54%;       /* sage focus ring          */
 
     --radius: 0.5rem;                 /* 8px — max for cards; buttons use 6px explicitly */
 
-    /* ── Weego semantic tokens (direct hex for readability) ── */
-    --bg:       #09090b;   /* zinc-950 — page background    */
-    --sf:       #18181b;   /* zinc-900 — cards, panels      */
-    --s1:       #18181b;   /* alias for --sf (backwards compat) */
-    --s2:       #27272a;   /* zinc-800 — hover, nested      */
-    --s3:       #3f3f46;   /* zinc-700 — active states      */
-    --br:       #27272a;   /* zinc-800 — borders            */
-    --br2:      #3f3f46;   /* zinc-700 — stronger borders   */
+    /* ── Weego semantic tokens ── */
 
-    --t1:       #fafafa;   /* zinc-50  — primary text       */
-    --t2:       #d4d4d8;   /* zinc-300 — secondary text     */
-    --t3:       #a1a1aa;   /* zinc-400 — labels             */
-    --t4:       #71717a;   /* zinc-500 — disabled/muted     */
+    /* Warm neutral base — dark mode */
+    --bg:       #0c0b09;   /* warm near-black — page background  */
+    --sf:       #1a1917;   /* warm surface — cards, sidebar      */
+    --s1:       #1a1917;   /* alias for --sf                     */
+    --s2:       #252420;   /* warm surface-2 — hover, nested     */
+    --s3:       #3a3935;   /* warm surface-3 — active states     */
+    --br:       rgba(250,249,246,0.08);  /* soft border           */
+    --br2:      rgba(250,249,246,0.14);  /* stronger border       */
 
-    --acm:      #6aaa84;   /* sage accent                   */
-    --acm-h:    #5c9973;   /* sage hover                    */
-    --acm-m:    rgba(106,170,132,0.12); /* sage muted bg    */
-    --acm-b:    rgba(106,170,132,0.25); /* sage border      */
+    --t1:       #faf9f6;   /* warm parchment — primary text      */
+    --t2:       #d5d4ce;   /* warm secondary text                */
+    --t3:       #9c9b96;   /* warm labels, placeholders          */
+    --t4:       #6b6a66;   /* warm disabled, timestamps          */
 
-    --ok:       #22c55e;   /* green-500  — online / success */
-    --warn:     #f59e0b;   /* amber-500  — background / warn */
-    --bad:      #ef4444;   /* red-500    — danger / error   */
-    --info:     #06b6d4;   /* cyan-500   — info / new order */
+    /* Neutral interactive — elevated surface system, no hue */
+    --acm:      #3a3935;                         /* primary btn bg = warm surface-3          */
+    --acm-h:    #47463f;                         /* hover = slightly brighter                */
+    --acm-m:    rgba(250,249,246,0.05);          /* active nav background — barely-there     */
+    --acm-b:    rgba(250,249,246,0.16);          /* active nav border / btn border           */
 
-    /* ── Shadows ── */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,.8);
-    --shadow-md: 0 4px 16px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.8);
-    --shadow-lg: 0 8px 32px rgba(0,0,0,.7);
+    /* Semantic signals — STRICTLY RESTRICTED (dots, borders, tints only) */
+    --ok:       #22c55e;   /* green — online / success           */
+    --warn:     #eab308;   /* amber — background / warn          */
+    --bad:      #ef4444;   /* red — danger / error               */
+
+    /* Muted tints — barely perceptible backgrounds */
+    --ok-tint:   rgba(34,197,94,0.04);
+    --ok-border: rgba(34,197,94,0.10);
+    --warn-tint: rgba(234,179,8,0.04);
+    --warn-border: rgba(234,179,8,0.10);
+    --bad-tint:  rgba(239,68,68,0.03);
+    --bad-border: rgba(239,68,68,0.10);
+
+    /* ── Shadows — layered, low-opacity, warm-tinted ── */
+    /* Level 0.5 — Edge definition: subtle top-edge highlight on cards */
+    --shadow-edge: inset 0 0.5px 0 rgba(250,249,246,0.05);
+
+    /* Level 1 — Subtle containment: outline ring + micro lift */
+    --shadow-sm: 0 0 0 0.5px rgba(250,249,246,0.04),
+                 0 1px 2px rgba(0,0,0,0.25);
+
+    /* Level 2 — Card elevation: edge + containment + lift */
+    --shadow-md: inset 0 0.5px 0 rgba(250,249,246,0.05),
+                 0 0 0 0.5px rgba(250,249,246,0.04),
+                 0 2px 8px rgba(0,0,0,0.30);
+
+    /* Level 3 — Float: dropdowns, modals, popovers */
+    --shadow-lg: 0 4px 24px rgba(0,0,0,0.40),
+                 0 0 0 0.5px rgba(250,249,246,0.06);
 
     /* ── Motion ── */
     --t-micro:  80ms;
@@ -85,7 +108,7 @@
 
   html {
     /* Force dark background immediately — prevents flash of white */
-    background-color: #09090b;
+    background-color: #0c0b09;
     color-scheme: dark;
   }
 
@@ -95,6 +118,7 @@
     font-family: var(--font-manrope), system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
+    letter-spacing: -0.006em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -104,11 +128,12 @@
 .mono {
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-feature-settings: "tnum";
+  letter-spacing: 0;
 }
 
-/* ── Card depth — top-edge shine (Linear/Raycast pattern) ── */
+/* ── Card depth — top-edge shine (ElevenLabs / Linear pattern) ── */
 .card-shine {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: var(--shadow-edge);
 }
 
 /* ── Focus ring — sage double ring ── */

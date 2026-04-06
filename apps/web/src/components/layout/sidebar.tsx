@@ -48,7 +48,7 @@ export function Sidebar() {
             className={cn(
               'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
               pathname === href
-                ? 'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]'
+                ? 'bg-[var(--acm-m)] text-[var(--t1)] border border-[var(--acm-b)]'
                 : 'text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--t1)] border border-transparent',
             )}
           >
