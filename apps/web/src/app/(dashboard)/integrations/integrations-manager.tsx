@@ -144,7 +144,7 @@ function IntegrationCard({
               style={{
                 border: existing.active ? '1px solid var(--acm-b)' : '1px solid var(--br)',
                 background: existing.active ? 'var(--acm-m)' : 'var(--s1)',
-                color: existing.active ? 'var(--acm)' : 'var(--t4)',
+                color: existing.active ? 'var(--t2)' : 'var(--t4)',
                 borderRadius: '6px',
               }}
             >
@@ -193,14 +193,14 @@ function IntegrationCard({
                   padding: '6px 10px',
                   borderRadius: '6px',
                 }}
-                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
                 onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
               />
             </div>
           ))}
 
           {error && <p className="text-xs" style={{ color: 'var(--bad)' }}>{error}</p>}
-          {saved && <p className="text-xs" style={{ color: 'var(--ok)' }}>Збережено</p>}
+          {saved && <p className="text-xs" style={{ color: 'var(--t3)' }}>Збережено</p>}
 
           <div className="flex items-center justify-between pt-1">
             <div className="flex gap-3">
@@ -208,7 +208,7 @@ function IntegrationCard({
                 onClick={handleSave}
                 disabled={isPending}
                 className="text-sm font-medium rounded disabled:opacity-40"
-                style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+                style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
               >
                 {isPending ? 'Зберігаємо…' : 'Зберегти'}
               </button>

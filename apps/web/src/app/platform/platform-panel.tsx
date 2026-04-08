@@ -22,7 +22,7 @@ interface CreateResult {
 
 const STATUS_CONFIG = {
   trial:   { label: 'Тріал',      color: 'text-[var(--warn)]  bg-[rgba(245,158,11,0.1)]  border-[rgba(245,158,11,0.2)]' },
-  active:  { label: 'Активний',   color: 'text-[var(--acm)]   bg-[var(--acm-m)]           border-[var(--acm-b)]' },
+  active:  { label: 'Активний',   color: 'text-[var(--t2)]    bg-[var(--acm-m)]           border-[var(--acm-b)]' },
   grace:   { label: 'Grace',      color: 'text-[var(--warn)]  bg-[rgba(245,158,11,0.08)] border-[rgba(245,158,11,0.15)]' },
   expired: { label: 'Прострочено',color: 'text-[var(--bad)]   bg-[rgba(239,68,68,0.1)]   border-[rgba(239,68,68,0.2)]' },
 } as const;
@@ -60,7 +60,7 @@ function CopyButton({ value }: { value: string }) {
       className="ml-1.5 p-1 rounded text-[var(--t4)] hover:text-[var(--t2)] hover:bg-[var(--s2)] transition-colors"
       title={failed ? 'Не вдалось скопіювати' : 'Копіювати'}
     >
-      {copied ? <Check size={12} className="text-[var(--acm)]" /> : <Copy size={12} className={failed ? 'text-[var(--bad)]' : ''} />}
+      {copied ? <Check size={12} className="text-[var(--ok)]" /> : <Copy size={12} className={failed ? 'text-[var(--bad)]' : ''} />}
     </button>
   );
 }
@@ -70,7 +70,7 @@ function CopyButton({ value }: { value: string }) {
 function CredentialsCard({ creds }: { creds: Credentials }) {
   return (
     <div className="mt-4 rounded-md border border-[var(--acm-b)] bg-[var(--acm-m)] p-4 space-y-3">
-      <p className="text-xs font-semibold text-[var(--acm)] uppercase tracking-[0.05em]">
+      <p className="text-xs font-semibold text-[var(--t3)] uppercase tracking-[0.05em]">
         Credentials — скопіюйте зараз, більше не будуть показані
       </p>
       {(['owner', 'manager'] as const).map((role) => (
@@ -156,13 +156,13 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div className="w-full max-w-md bg-[var(--sf)] rounded-lg border border-[var(--br2)] shadow-[var(--shadow-lg)] p-6">
           <div className="flex items-center gap-2 mb-1">
-            <Check size={16} className="text-[var(--acm)]" />
+            <Check size={16} className="text-[var(--ok)]" />
             <h2 className="text-base font-semibold text-[var(--t1)]">{createdName} створено</h2>
           </div>
           <CredentialsCard creds={credentials} />
           <button
             onClick={onClose}
-            className="mt-5 w-full py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--bg)] text-sm font-semibold transition-colors"
+            className="mt-5 w-full py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--t1)] text-sm font-semibold transition-colors"
           >
             Готово
           </button>
@@ -184,7 +184,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Pizza Roma"
-              className="w-full bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:border-[var(--acm)] transition-colors"
+              className="w-full bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
             />
           </div>
 
@@ -198,7 +198,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                 placeholder="pizza-roma"
-                className="flex-1 bg-[var(--bg)] border border-[var(--br2)] rounded-r-md px-3 py-2 text-sm text-[var(--t1)] font-mono placeholder:text-[var(--t4)] focus:outline-none focus:border-[var(--acm)] transition-colors"
+                className="flex-1 bg-[var(--bg)] border border-[var(--br2)] rounded-r-md px-3 py-2 text-sm text-[var(--t1)] font-mono placeholder:text-[var(--t4)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
               />
             </div>
             <p className="mt-1 text-[11px] text-[var(--t4)]">
@@ -219,7 +219,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               max={365}
               value={trialDays}
               onChange={(e) => setTrialDays(e.target.value)}
-              className="w-24 bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] font-mono focus:outline-none focus:border-[var(--acm)] transition-colors"
+              className="w-24 bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] font-mono focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
             />
           </div>
         </div>
@@ -240,7 +240,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <button
             onClick={handleSubmit}
             disabled={isPending || !name.trim() || !slug.trim()}
-            className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--bg)] text-sm font-semibold transition-colors"
+            className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--t1)] text-sm font-semibold transition-colors"
           >
             {isPending ? 'Створення…' : 'Створити'}
           </button>
@@ -308,7 +308,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
                   className={cn(
                     'px-3 py-1.5 rounded border text-sm font-medium transition-colors',
                     days === String(d)
-                      ? 'border-[var(--acm)] bg-[var(--acm-m)] text-[var(--acm)]'
+                      ? 'border-[var(--acm-b)] bg-[var(--acm-m)] text-[var(--t2)]'
                       : 'border-[var(--br2)] text-[var(--t3)] hover:bg-[var(--s2)]',
                   )}
                 >
@@ -321,7 +321,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
                 max={365}
                 value={days}
                 onChange={(e) => setDays(e.target.value)}
-                className="w-20 bg-[var(--bg)] border border-[var(--br2)] rounded-md px-2 py-1.5 text-sm text-[var(--t1)] font-mono focus:outline-none focus:border-[var(--acm)] transition-colors text-center"
+                className="w-20 bg-[var(--bg)] border border-[var(--br2)] rounded-md px-2 py-1.5 text-sm text-[var(--t1)] font-mono focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors text-center"
               />
             </div>
           </div>
@@ -345,7 +345,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
           <button
             onClick={handleExtend}
             disabled={isPending}
-            className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--bg)] text-sm font-semibold transition-colors"
+            className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--t1)] text-sm font-semibold transition-colors"
           >
             {isPending ? 'Збереження…' : 'Продовжити'}
           </button>
@@ -391,7 +391,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--bg)] text-sm font-semibold transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--t1)] text-sm font-semibold transition-colors"
         >
           <Plus size={15} strokeWidth={2.5} />
           Новий заклад

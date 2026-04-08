@@ -5,7 +5,7 @@
 /* ─────────────────────────────────────────────────────────────
    Weego CMI — Design Tokens
    Source of truth: DESIGN/DESIGN.md
-   Palette: Warm neutral base + Sage accent — dark mode first
+   Palette: Warm neutral base, no chromatic accent — dark mode first
 ───────────────────────────────────────────────────────────── */
 
 @layer base {
@@ -20,8 +20,8 @@
     --popover:     30 5% 10%;
     --popover-foreground: 40 8% 97%;
 
-    --primary:     144 27% 54%;       /* #6aaa84 sage             */
-    --primary-foreground: 20 6% 4%;   /* dark text on sage button */
+    --primary:     30 4% 22%;          /* #3a3935 warm surface-3   */
+    --primary-foreground: 40 8% 97%;   /* #faf9f6 warm parchment   */
 
     --secondary:   30 4% 14%;         /* #252420 warm surface-2   */
     --secondary-foreground: 40 8% 97%;
@@ -37,7 +37,7 @@
 
     --border:      40 8% 97% / 0.08; /* rgba(250,249,246,0.08) soft */
     --input:       30 4% 14%;
-    --ring:        144 27% 54%;       /* sage focus ring          */
+    --ring:        40 8% 97% / 0.25;  /* neutral warm focus ring  */
 
     --radius: 0.5rem;                 /* 8px — max for cards; buttons use 6px explicitly */
 
@@ -55,7 +55,7 @@
     --t1:       #faf9f6;   /* warm parchment — primary text      */
     --t2:       #d5d4ce;   /* warm secondary text                */
     --t3:       #9c9b96;   /* warm labels, placeholders          */
-    --t4:       #6b6a66;   /* warm disabled, timestamps          */
+    --t4:       #78776e;   /* warm disabled, timestamps          */
 
     /* Neutral interactive — elevated surface system, no hue */
     --acm:      #3a3935;                         /* primary btn bg = warm surface-3          */
@@ -136,8 +136,8 @@
   box-shadow: var(--shadow-edge);
 }
 
-/* ── Focus ring — sage double ring ── */
+/* ── Focus ring — neutral warm double ring ── */
 .focus-ring {
   outline: none;
-  box-shadow: 0 0 0 1px var(--bg), 0 0 0 3px var(--acm);
+  box-shadow: 0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25);
 }

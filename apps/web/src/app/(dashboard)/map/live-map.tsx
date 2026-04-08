@@ -7,6 +7,7 @@ import { getSocket } from '@/lib/socket';
 
 interface Props {
   couriers: CourierWithStatus[];
+  initialCenter?: [number, number];
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -41,7 +42,7 @@ function makeMarkerHtml(name: string, status: string): string {
   ">${initials}</div>`;
 }
 
-export function LiveMap({ couriers }: Props) {
+export function LiveMap({ couriers, initialCenter }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<Map<string, any>>(new Map());
@@ -58,7 +59,8 @@ export function LiveMap({ couriers }: Props) {
     import('leaflet').then((L) => {
       if (!mounted || !mapRef.current) return;
 
-      const map = L.map(mapRef.current!).setView([50.45, 30.52], 12);
+      const center: [number, number] = initialCenter ?? [50.45, 30.52];
+      const map = L.map(mapRef.current!).setView(center, 12);
       leafletMapRef.current = map;
 
       // CartoDB Dark Matter tiles — per design system

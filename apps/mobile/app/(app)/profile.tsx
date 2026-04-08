@@ -152,8 +152,8 @@ export default function ProfileScreen() {
       <Stack.Screen
         options={{
           title: 'Профіль',
-          headerStyle: { backgroundColor: '#09090b' },
-          headerTintColor: '#fafafa',
+          headerStyle: { backgroundColor: '#0c0b09' },
+          headerTintColor: '#faf9f6',
           headerTitleStyle: { fontFamily: 'Manrope_600SemiBold', fontSize: 17 },
         }}
       />
@@ -181,7 +181,10 @@ export default function ProfileScreen() {
               <View>
                 <Text style={styles.cardTitle}>Telegram сповіщення</Text>
                 {status?.connected && (
-                  <Text style={styles.connectedBadge}>● Підключено</Text>
+                  <View style={styles.connectedRow}>
+                    <View style={styles.connectedDot} />
+                    <Text style={styles.connectedText}>Підключено</Text>
+                  </View>
                 )}
               </View>
               {status?.connected && (
@@ -198,7 +201,7 @@ export default function ProfileScreen() {
             </View>
 
             {loadingStatus ? (
-              <ActivityIndicator color="#6aaa84" style={{ marginVertical: 20 }} />
+              <ActivityIndicator color="#9c9b96" style={{ marginVertical: 20 }} />
             ) : (
               <>
                 {/* Not connected — connect button */}
@@ -214,7 +217,7 @@ export default function ProfileScreen() {
                       activeOpacity={0.8}
                     >
                       {actionLoading ? (
-                        <ActivityIndicator color="#09090b" size="small" />
+                        <ActivityIndicator color="#faf9f6" size="small" />
                       ) : (
                         <Text style={styles.connectBtnText}>Підключити Telegram</Text>
                       )}
@@ -240,7 +243,7 @@ export default function ProfileScreen() {
                       style={styles.refreshBtn}
                       onPress={() => { setConnectCode(null); loadStatus(); }}
                     >
-                      <Ionicons name="refresh-outline" size={14} color="#6aaa84" />
+                      <Ionicons name="refresh-outline" size={14} color="#9c9b96" />
                       <Text style={styles.refreshText}>Перевірити статус</Text>
                     </TouchableOpacity>
                   </View>
@@ -258,7 +261,7 @@ export default function ProfileScreen() {
                       >
                         <View style={[styles.checkbox, prefs[key] && styles.checkboxChecked]}>
                           {prefs[key] && (
-                            <Ionicons name="checkmark" size={12} color="#09090b" />
+                            <Ionicons name="checkmark" size={12} color="#faf9f6" />
                           )}
                         </View>
                         <Text style={styles.prefLabel}>{label}</Text>
@@ -300,7 +303,7 @@ export default function ProfileScreen() {
                         activeOpacity={0.8}
                       >
                         {actionLoading ? (
-                          <ActivityIndicator color="#09090b" size="small" />
+                          <ActivityIndicator color="#faf9f6" size="small" />
                         ) : (
                           <Text style={styles.saveBtnText}>Зберегти</Text>
                         )}
@@ -333,7 +336,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#09090b',
+    backgroundColor: '#0c0b09',
   },
   scroll: {
     padding: 16,
@@ -342,10 +345,10 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1917',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -354,18 +357,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
+    borderBottomColor: 'rgba(250,249,246,0.08)',
   },
   cardTitle: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 14,
-    color: '#fafafa',
+    color: '#faf9f6',
   },
-  connectedBadge: {
+
+  // Connected status
+  connectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 3,
+  },
+  connectedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
+  connectedText: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
-    color: '#6aaa84',
-    marginTop: 2,
+    color: '#9c9b96',
   },
 
   // Info rows (account section)
@@ -376,7 +392,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
+    borderBottomColor: 'rgba(250,249,246,0.08)',
   },
   noBorder: {
     borderBottomWidth: 0,
@@ -384,13 +400,13 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 11,
-    color: '#71717a',
+    color: '#78776e',
     letterSpacing: 0.6,
   },
   infoValue: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 14,
-    color: '#a1a1aa',
+    color: '#9c9b96',
   },
 
   // Not connected
@@ -401,62 +417,64 @@ const styles = StyleSheet.create({
   notConnectedText: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 14,
-    color: '#71717a',
+    color: '#78776e',
     lineHeight: 20,
   },
   connectBtn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 11,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
   connectBtnText: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 14,
-    color: '#09090b',
+    color: '#faf9f6',
   },
 
   // Code banner
   codeBanner: {
     margin: 16,
     padding: 14,
-    backgroundColor: 'rgba(106,170,132,0.08)',
+    backgroundColor: '#252420',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(106,170,132,0.25)',
+    borderColor: 'rgba(250,249,246,0.08)',
     gap: 6,
   },
   codeLabel: {
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: 'Manrope_600SemiBold',
     fontSize: 10,
-    color: '#6aaa84',
+    color: '#78776e',
     letterSpacing: 0.8,
   },
   code: {
     fontFamily: 'JetBrainsMono_500Medium',
     fontSize: 32,
-    color: '#fafafa',
+    color: '#faf9f6',
     letterSpacing: 6,
     marginVertical: 4,
   },
   codeInstruction: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 13,
-    color: '#71717a',
+    color: '#78776e',
   },
   botName: {
-    color: '#a1a1aa',
+    color: '#9c9b96',
   },
   codeCommand: {
     fontFamily: 'JetBrainsMono_400Regular',
     fontSize: 14,
-    color: '#a1a1aa',
+    color: '#9c9b96',
     marginTop: 2,
   },
   codeHint: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
-    color: '#52525b',
+    color: '#78776e',
     marginTop: 4,
   },
   refreshBtn: {
@@ -468,7 +486,7 @@ const styles = StyleSheet.create({
   refreshText: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
-    color: '#6aaa84',
+    color: '#9c9b96',
   },
 
   // Prefs
@@ -487,19 +505,19 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#3f3f46',
+    borderColor: 'rgba(250,249,246,0.14)',
     backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#6aaa84',
-    borderColor: '#6aaa84',
+    backgroundColor: '#3a3935',
+    borderColor: 'rgba(250,249,246,0.22)',
   },
   prefLabel: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 14,
-    color: '#a1a1aa',
+    color: '#9c9b96',
     flex: 1,
   },
   saveRow: {
@@ -509,31 +527,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#27272a',
+    borderTopColor: 'rgba(250,249,246,0.08)',
   },
   saveBtn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 9,
     paddingHorizontal: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
   saveBtnText: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 14,
-    color: '#09090b',
+    color: '#faf9f6',
   },
   savedText: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
-    color: '#6aaa84',
+    color: '#9c9b96',
   },
 
   // Disconnect
   disconnectText: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
-    color: '#f87171',
+    color: '#ef4444',
   },
 
   // Threshold chip picker
@@ -544,7 +564,7 @@ const styles = StyleSheet.create({
   thresholdLabel: {
     fontFamily: 'Manrope_600SemiBold',
     fontSize: 11,
-    color: '#71717a',
+    color: '#78776e',
     letterSpacing: 0.6,
     marginBottom: 8,
   },
@@ -557,28 +577,29 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#3f3f46',
+    borderColor: 'rgba(250,249,246,0.10)',
     backgroundColor: 'transparent',
   },
   chipSelected: {
-    backgroundColor: '#6aaa84',
-    borderColor: '#6aaa84',
+    backgroundColor: '#3a3935',
+    borderColor: 'rgba(250,249,246,0.22)',
   },
   chipText: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 13,
-    color: '#71717a',
+    color: '#78776e',
   },
   chipTextSelected: {
-    color: '#09090b',
+    color: '#faf9f6',
   },
 
   // Shared
   errorText: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
-    color: '#f87171',
+    color: '#ef4444',
     marginTop: 4,
+    opacity: 0.85,
   },
   disabled: {
     opacity: 0.4,

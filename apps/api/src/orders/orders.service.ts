@@ -924,6 +924,23 @@ export class OrdersService {
       this.logger.warn('WS broadcast failed for order:ready', err);
     }
 
+    // For `recommend` mode: trigger the dispatch algorithm so the SmartAssignmentPanel
+    // receives an `order:recommendation` WS event. Only for pending orders — assigned
+    // orders already have a courier. The jobId makes this idempotent.
+    if (order.status === OrderStatus.pending) {
+      void this.prisma.establishment.findUnique({
+        where: { id: user.establishment_id },
+        select: { dispatch_mode: true },
+      }).then((est) => {
+        if (est?.dispatch_mode === DispatchMode.recommend) {
+          return this.dispatchQueue.add(
+            { orderId: id, establishmentId: user.establishment_id, attempt: 1 },
+            { jobId: `dispatch:${id}` },
+          );
+        }
+      }).catch((err: unknown) => this.logger.warn('Failed to enqueue dispatch job in markReady', err));
+    }
+
     this.logger.log(`Order ${id} marked ready at ${readyAt.toISOString()}`);
     return updated;
   }

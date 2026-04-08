@@ -57,7 +57,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 // Dot colors per order status — semantic minimum: tiny 6px circle only
 const STATUS_DOT: Record<OrderStatus, string> = {
   pending:     '#eab308',  // amber — waiting
-  assigned:    '#6aaa84',  // sage — courier assigned
+  assigned:    '#22c55e',  // green — courier assigned
   in_progress: '#22c55e',  // green — active delivery
   completed:   '#6b6a66',  // muted — done
   cancelled:   '#6b6a66',  // muted — cancelled
@@ -68,9 +68,11 @@ interface Props {
   orders: Order[];
   couriers: CourierWithStatus[];
   hostedTrackingEnabled: boolean;
+  showSlaOnDashboard: boolean;
+  stuckThresholdMinutes?: number;
 }
 
-export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) {
+export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOnDashboard, stuckThresholdMinutes = 5 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [assignModalOrder, setAssignModalOrder] = useState<Order | null>(null);
@@ -83,8 +85,8 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
 
   const activeCouriers = couriers.filter((c) => c.active && c.on_shift);
 
-  // An order is "stuck" when: pending + ready_at set + waiting > 5 min.
-  const STUCK_THRESHOLD_MS = 5 * 60 * 1000;
+  // An order is "stuck" when: pending + ready_at set + waiting > threshold (per-establishment setting).
+  const STUCK_THRESHOLD_MS = stuckThresholdMinutes * 60 * 1000;
   function isStuck(order: Order): boolean {
     return (
       order.status === 'pending' &&
@@ -172,7 +174,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
         <table className="w-full text-sm">
           <thead style={{ borderBottom: '1px solid var(--br)' }}>
             <tr>
-              {['Адреса', 'Статус', 'Курʼєр', 'Час', ...(hostedTrackingEnabled ? ['Клієнт'] : []), 'Дії'].map((h) => (
+              {['Адреса', 'Статус', 'Курʼєр', showSlaOnDashboard ? 'Вік · ETA' : 'Вік', ...(hostedTrackingEnabled ? ['Клієнт'] : []), 'Дії'].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2.5 text-left"
@@ -281,21 +283,22 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
                   )}
                 </td>
 
-                {/* Time / ETA */}
+                {/* Age + ETA — always show creation age; ETA countdown shown alongside when enabled */}
                 <td className="px-3 py-2.5">
-                  {order.delivery?.eta_seconds && order.delivery?.eta_started_at ? (
-                    <EtaTimer
-                      etaSeconds={order.delivery.eta_seconds}
-                      etaStartedAt={order.delivery.eta_started_at}
-                    />
-                  ) : (
+                  <div className="flex flex-col gap-0.5">
                     <span className="mono" style={{ fontSize: '12px', color: 'var(--t4)' }}>
                       {formatDistanceToNow(new Date(order.created_at), {
                         addSuffix: true,
                         locale: uk,
                       })}
                     </span>
-                  )}
+                    {showSlaOnDashboard && order.delivery?.eta_seconds && order.delivery?.eta_started_at && (
+                      <EtaTimer
+                        etaSeconds={order.delivery.eta_seconds}
+                        etaStartedAt={order.delivery.eta_started_at}
+                      />
+                    )}
+                  </div>
                 </td>
 
                 {/* Tracking link — hosted tracking only */}
@@ -311,7 +314,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled }: Props) 
                           fontSize: '12px',
                           borderRadius: '6px',
                           background: copiedTrackingId === order.id ? 'var(--acm-m)' : 'var(--s2)',
-                          color: copiedTrackingId === order.id ? 'var(--acm)' : 'var(--t3)',
+                          color: copiedTrackingId === order.id ? 'var(--t2)' : 'var(--t3)',
                           border: `1px solid ${copiedTrackingId === order.id ? 'var(--acm-b)' : 'var(--br)'}`,
                         }}
                       >

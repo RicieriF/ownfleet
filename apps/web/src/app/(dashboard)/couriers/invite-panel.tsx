@@ -18,7 +18,7 @@ function statusOf(invite: InviteToken): 'used' | 'expired' | 'active' {
 }
 
 const STATUS_STYLES = {
-  active:  'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]',
+  active:  'bg-[var(--acm-m)] text-[var(--t2)] border border-[var(--acm-b)]',
   used:    'bg-[rgba(34,197,94,0.12)] text-[var(--ok)] border border-[rgba(34,197,94,0.25)]',
   expired: 'bg-[var(--s1)] text-[var(--t4)] border border-[var(--br)]',
 };
@@ -119,7 +119,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
               padding: '6px 10px',
               borderRadius: '6px',
             }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           >
             <option value="">Оберіть курʼєра...</option>
@@ -132,7 +132,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
           onClick={handleCreate}
           disabled={!selectedCourierId || isPending}
           className="text-sm font-medium rounded transition-opacity disabled:opacity-40"
-          style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+          style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
         >
           {isPending ? 'Створюємо…' : 'Створити токен'}
         </button>
@@ -143,10 +143,10 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
       {newToken && (
         <div
           className="mx-5 my-4 px-4 py-3 rounded-md flex items-center justify-between gap-4"
-          style={{ background: 'rgba(106,170,132,0.1)', border: '1px solid rgba(106,170,132,0.3)' }}
+          style={{ background: 'var(--s2)', border: '1px solid var(--br2)' }}
         >
           <div className="min-w-0">
-            <p className="text-xs font-medium mb-1" style={{ color: 'var(--acm)' }}>Токен створено</p>
+            <p className="text-xs font-medium mb-1" style={{ color: 'var(--t2)' }}>Токен створено</p>
             <p
               className="text-sm break-all"
               style={{ fontFamily: 'var(--font-mono)', color: 'var(--t1)' }}

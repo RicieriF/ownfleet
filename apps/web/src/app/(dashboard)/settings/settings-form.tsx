@@ -89,7 +89,7 @@ function NumberInput({
           background: 'var(--s1)', border: '1px solid var(--br)',
           color: 'var(--t1)', padding: '5px 8px',
         }}
-        onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+        onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
         onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
       />
       <span className="text-sm" style={{ color: 'var(--t4)' }}>{suffix}</span>
@@ -103,8 +103,8 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       type="button"
       onClick={() => onChange(!value)}
       className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors outline-none"
-      style={{ background: value ? 'var(--acm)' : 'var(--s3)' }}
-      onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+      style={{ background: value ? 'var(--acm)' : 'var(--s2)' }}
+      onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
       onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
     >
       <span
@@ -128,7 +128,7 @@ function CoordInput({ value, onChange, placeholder }: {
         background: 'var(--s1)', border: '1px solid var(--br)',
         color: 'var(--t1)', padding: '5px 8px',
       }}
-      onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+      onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
       onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
     />
   );
@@ -218,7 +218,7 @@ export function SettingsForm({
           value={timezone} onChange={(e) => setTimezone(e.target.value)}
           className="w-full text-sm rounded outline-none transition-all"
           style={selectStyle}
-          onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+          onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
           onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
         >
           {TIMEZONE_OPTIONS.map((tz) => (
@@ -257,8 +257,8 @@ export function SettingsForm({
 
           {slaEnabled && (
             <FieldRow
-              label="Показувати SLA на дашборді"
-              hint="Відображати поруч з ETA таймером"
+              label="Показувати ETA на дашборді"
+              hint="Відображати ETA-таймер поруч з віком замовлення в таблиці"
             >
               <Toggle value={showSlaOnDashboard} onChange={setShowSlaOnDashboard} />
             </FieldRow>
@@ -296,7 +296,7 @@ export function SettingsForm({
                         padding: '5px 10px', borderRadius: '6px',
                         fontFamily: 'var(--font-mono)',
                         background: etaAlertDelay === opt ? 'var(--acm)' : 'transparent',
-                        color: etaAlertDelay === opt ? 'var(--bg)' : 'var(--t4)',
+                        color: etaAlertDelay === opt ? 'var(--t1)' : 'var(--t4)',
                         border: `1px solid ${etaAlertDelay === opt ? 'var(--acm)' : 'var(--br)'}`,
                       }}
                     >
@@ -344,8 +344,8 @@ export function SettingsForm({
                 className="flex items-start gap-3 w-full text-left rounded-[6px] transition-colors"
                 style={{
                   padding: '10px 12px',
-                  background: isSelected ? 'rgba(106,170,132,0.10)' : 'var(--s1)',
-                  border: `1px solid ${isSelected ? 'rgba(106,170,132,0.35)' : 'var(--br)'}`,
+                  background: isSelected ? 'var(--s3)' : 'var(--s1)',
+                  border: `1px solid ${isSelected ? 'var(--acm-b)' : 'var(--br)'}`,
                 }}
               >
                 <span
@@ -359,7 +359,7 @@ export function SettingsForm({
                   }}
                 />
                 <span className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium" style={{ color: isSelected ? 'var(--acm)' : 'var(--t1)' }}>
+                  <span className="text-sm font-medium" style={{ color: 'var(--t1)' }}>
                     {opt.label}
                   </span>
                   <span className="text-xs" style={{ color: 'var(--t4)' }}>
@@ -405,7 +405,7 @@ export function SettingsForm({
                     padding: '5px 10px', borderRadius: '6px',
                     fontFamily: 'var(--font-mono)',
                     background: courierNotRespondingMin === opt ? 'var(--acm)' : 'transparent',
-                    color: courierNotRespondingMin === opt ? 'var(--bg)' : 'var(--t4)',
+                    color: courierNotRespondingMin === opt ? 'var(--t1)' : 'var(--t4)',
                     border: `1px solid ${courierNotRespondingMin === opt ? 'var(--acm)' : 'var(--br)'}`,
                   }}
                 >
@@ -419,13 +419,13 @@ export function SettingsForm({
         <div className="flex items-center justify-between mt-4 pt-4 border-t" style={{ borderColor: 'var(--br)' }}>
           <div className="text-sm h-5">
             {error && <span style={{ color: 'var(--bad)' }}>{error}</span>}
-            {saved && <span style={{ color: 'var(--ok)' }}>Збережено</span>}
+            {saved && <span style={{ color: 'var(--t3)' }}>Збережено</span>}
           </div>
           <button
             onClick={handleSave}
             disabled={isPending}
             className="text-sm font-medium rounded transition-opacity disabled:opacity-50"
-            style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+            style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
           >
             {isPending ? 'Зберігаємо…' : 'Зберегти'}
           </button>

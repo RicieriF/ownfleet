@@ -293,7 +293,7 @@ export default function MainScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator color="#6aaa84" style={{ marginTop: 80 }} />
+        <ActivityIndicator color="#9c9b96" style={{ marginTop: 80 }} />
       </SafeAreaView>
     );
   }
@@ -319,7 +319,7 @@ export default function MainScreen() {
             hitSlop={8}
             style={{ marginRight: 4 }}
           >
-            <Ionicons name="person-circle-outline" size={26} color="#71717a" />
+            <Ionicons name="person-circle-outline" size={26} color="#78776e" />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout}>
             <Text style={styles.logoutBtn}>Вийти</Text>
@@ -385,7 +385,7 @@ function NoShiftState({
 
   return (
     <View style={styles.noShift}>
-      <Ionicons name="time-outline" size={52} color="#3f3f46" style={{ marginBottom: 20 }} />
+      <Ionicons name="time-outline" size={52} color="#3a3935" style={{ marginBottom: 20 }} />
       <Text style={styles.noShiftTitle}>Ви не на зміні</Text>
       <Text style={styles.noShiftSub}>Вкажіть тривалість зміни або пропустіть</Text>
 
@@ -420,7 +420,7 @@ function NoShiftState({
         activeOpacity={0.8}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color="#faf9f6" />
         ) : (
           <Text style={styles.startBtnText}>Вийти на зміну</Text>
         )}
@@ -432,7 +432,7 @@ function NoShiftState({
 function IdleState() {
   return (
     <View style={styles.idle}>
-      <Ionicons name="hourglass-outline" size={52} color="#3f3f46" style={{ marginBottom: 16 }} />
+      <Ionicons name="hourglass-outline" size={52} color="#3a3935" style={{ marginBottom: 16 }} />
       <Text style={styles.idleTitle}>Очікуємо замовлення</Text>
       <Text style={styles.idleSub}>Коли менеджер призначить доставку — ви побачите її тут</Text>
     </View>
@@ -477,7 +477,8 @@ function AssignedState({
 }) {
   return (
     <View style={styles.card}>
-      <View style={styles.statusBadge}>
+      <View style={styles.statusRow}>
+        <View style={styles.statusDot} />
         <Text style={styles.statusText}>Нова доставка</Text>
       </View>
       <Text style={styles.address}>{delivery.order.address}</Text>
@@ -494,7 +495,7 @@ function AssignedState({
         activeOpacity={0.8}
       >
         {actionLoading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color="#faf9f6" />
         ) : (
           <Text style={styles.btnText}>Прийняти доставку</Text>
         )}
@@ -512,10 +513,14 @@ function InProgressState({
 }) {
   return (
     <View style={styles.card}>
-      <View style={[styles.statusBadge, styles.statusBadgeActive]}>
+      <View style={styles.statusRow}>
+        <View style={styles.statusDotActive} />
         <Text style={styles.statusText}>Доставка активна</Text>
       </View>
-      <Text style={styles.gpsLabel}>GPS відстеження увімкнено</Text>
+      <View style={styles.gpsRow}>
+        <View style={styles.gpsDot} />
+        <Text style={styles.gpsText}>GPS відстеження увімкнено</Text>
+      </View>
       <Text style={styles.address}>{delivery.order.address}</Text>
       {delivery.order.notes ? (
         <Text style={styles.notes}>{delivery.order.notes}</Text>
@@ -537,7 +542,7 @@ function InProgressState({
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090b' },
+  safe: { flex: 1, backgroundColor: '#0c0b09' },
 
   // Header
   header: {
@@ -547,12 +552,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
+    borderBottomColor: 'rgba(250,249,246,0.08)',
   },
-  headerName: { fontSize: 16, color: '#fafafa', fontFamily: 'Manrope_500Medium' },
+  headerName: { fontSize: 16, color: '#faf9f6', fontFamily: 'Manrope_500Medium' },
   shiftTimer: {
     fontSize: 12,
-    color: '#6aaa84',
+    color: '#78776e',
     fontFamily: 'JetBrainsMono_400Regular',
     marginTop: 2,
   },
@@ -562,10 +567,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#3f3f46',
+    borderColor: 'rgba(250,249,246,0.10)',
   },
-  endShiftText: { fontSize: 12, color: '#a1a1aa', fontFamily: 'Manrope_500Medium' },
-  logoutBtn: { fontSize: 14, color: '#71717a', fontFamily: 'Manrope_400Regular' },
+  endShiftText: { fontSize: 12, color: '#9c9b96', fontFamily: 'Manrope_500Medium' },
+  logoutBtn: { fontSize: 14, color: '#78776e', fontFamily: 'Manrope_400Regular' },
 
   // Content
   scrollView: { flex: 1 },
@@ -576,13 +581,13 @@ const styles = StyleSheet.create({
   noShift: { alignItems: 'center', paddingHorizontal: 24 },
   noShiftTitle: {
     fontSize: 24,
-    fontFamily: 'Manrope_700Bold',
-    color: '#fafafa',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#faf9f6',
     marginBottom: 8,
   },
   noShiftSub: {
     fontSize: 15,
-    color: '#71717a',
+    color: '#78776e',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
@@ -599,50 +604,52 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#27272a',
-    backgroundColor: '#18181b',
+    borderColor: 'rgba(250,249,246,0.08)',
+    backgroundColor: '#1a1917',
   },
   presetSelected: {
-    borderColor: '#6aaa84',
-    backgroundColor: 'rgba(106,170,132,0.1)',
+    borderColor: 'rgba(250,249,246,0.22)',
+    backgroundColor: '#252420',
   },
-  presetText: { fontSize: 14, color: '#a1a1aa', fontFamily: 'Manrope_500Medium' },
-  presetTextSelected: { color: '#6aaa84' },
+  presetText: { fontSize: 14, color: '#9c9b96', fontFamily: 'Manrope_500Medium' },
+  presetTextSelected: { color: '#faf9f6' },
   plannedNote: {
     fontSize: 13,
-    color: '#6aaa84',
+    color: '#78776e',
     marginBottom: 24,
     fontFamily: 'JetBrainsMono_400Regular',
   },
   startBtn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 18,
     paddingHorizontal: 48,
     alignItems: 'center',
     width: '100%',
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
-  startBtnText: { color: '#09090b', fontSize: 17, fontFamily: 'Manrope_700Bold' },
+  startBtnText: { color: '#faf9f6', fontSize: 17, fontFamily: 'Manrope_600SemiBold' },
 
   // IdleState
   idle: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 40, paddingBottom: 32 },
-idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
-  idleSub: { fontSize: 15, color: '#71717a', textAlign: 'center', lineHeight: 22 },
+  idleTitle: { fontSize: 22, fontFamily: 'Manrope_600SemiBold', color: '#faf9f6', marginBottom: 8 },
+  idleSub: { fontSize: 15, color: '#78776e', textAlign: 'center', lineHeight: 22 },
 
   // WorkloadBlock
   workloadBlock: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1917',
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
     marginTop: 4,
   },
   workloadTitle: {
     fontSize: 11,
     fontFamily: 'Manrope_600SemiBold',
-    color: '#71717a',
+    color: '#78776e',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -653,49 +660,59 @@ idleTitle: { fontSize: 22, fontFamily: 'Manrope_700Bold', color: '#fafafa', marg
   workloadNumber: {
     fontSize: 16,
     fontFamily: 'JetBrainsMono_400Regular',
-    color: '#fafafa',
+    color: '#faf9f6',
   },
   workloadLabel: {
     fontSize: 15,
     fontFamily: 'Manrope_500Medium',
-    color: '#a1a1aa',
+    color: '#9c9b96',
   },
   workloadAvg: {
     fontSize: 13,
     fontFamily: 'Manrope_400Regular',
-    color: '#71717a',
+    color: '#78776e',
   },
 
   // Card (assigned / in_progress)
-  card: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
-  statusBadge: {
-    backgroundColor: '#6aaa84',
+  card: {
+    backgroundColor: '#1a1917',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
   },
-  statusBadgeActive: { backgroundColor: '#5c9973' },
-  statusText: { color: '#09090b', fontSize: 13, fontFamily: 'Manrope_600SemiBold' },
-  gpsLabel: { fontSize: 12, color: '#22c55e', marginBottom: 12 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9c9b96' },
+  statusDotActive: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22c55e' },
+  statusText: { color: '#9c9b96', fontSize: 13, fontFamily: 'Manrope_500Medium' },
+  gpsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  gpsDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#22c55e' },
+  gpsText: { fontSize: 12, color: '#9c9b96' },
   address: {
     fontSize: 20,
-    fontFamily: 'Manrope_700Bold',
-    color: '#fafafa',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#faf9f6',
     lineHeight: 28,
     marginBottom: 8,
   },
-  notes: { fontSize: 14, color: '#a1a1aa', marginBottom: 6 },
+  notes: { fontSize: 14, color: '#9c9b96', marginBottom: 6 },
   externalId: {
     fontSize: 13,
-    color: '#71717a',
+    color: '#78776e',
     marginBottom: 20,
     fontFamily: 'JetBrainsMono_400Regular',
   },
   btn: { borderRadius: 6, paddingVertical: 18, alignItems: 'center', marginTop: 8 },
-  btnAccept: { backgroundColor: '#6aaa84' },
-  btnComplete: { backgroundColor: '#6aaa84' },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#09090b', fontSize: 17, fontFamily: 'Manrope_700Bold' },
+  btnAccept: {
+    backgroundColor: '#3a3935',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
+  },
+  btnComplete: {
+    backgroundColor: '#3a3935',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
+  },
+  btnDisabled: { opacity: 0.5 },
+  btnText: { color: '#faf9f6', fontSize: 17, fontFamily: 'Manrope_600SemiBold' },
 });

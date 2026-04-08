@@ -212,7 +212,15 @@ export function SmartAssignmentPanel() {
     }, 300);
   }
 
-  const visibleEntries = Array.from(entries.values()).filter((e) => !e.dismissed);
+  // ready_at orders first (kitchen ready = urgent), then by creation time (oldest first)
+  const visibleEntries = Array.from(entries.values())
+    .filter((e) => !e.dismissed)
+    .sort((a, b) => {
+      const aReady = a.order.ready_at != null ? 0 : 1;
+      const bReady = b.order.ready_at != null ? 0 : 1;
+      if (aReady !== bReady) return aReady - bReady;
+      return new Date(a.order.created_at).getTime() - new Date(b.order.created_at).getTime();
+    });
 
   // Empty state
   if (visibleEntries.length === 0) {
@@ -240,9 +248,9 @@ export function SmartAssignmentPanel() {
           <span
             className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.05em]"
             style={{
-              background: 'rgba(106,170,132,0.10)',
-              color: 'var(--acm)',
-              border: '1px solid rgba(106,170,132,0.25)',
+              background: 'var(--s3)',
+              color: 'var(--t3)',
+              border: '1px solid var(--br)',
             }}
           >
             Рекомендація
@@ -292,9 +300,9 @@ export function SmartAssignmentPanel() {
         <span
           className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.05em]"
           style={{
-            background: 'rgba(106,170,132,0.10)',
-            color: 'var(--acm)',
-            border: '1px solid rgba(106,170,132,0.25)',
+            background: 'var(--s3)',
+            color: 'var(--t3)',
+            border: '1px solid var(--br)',
           }}
         >
           Рекомендація
@@ -324,9 +332,9 @@ export function SmartAssignmentPanel() {
                     <span
                       className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.04em]"
                       style={{
-                        background: 'rgba(34,197,94,0.10)',
-                        color: 'var(--ok)',
-                        border: '1px solid rgba(34,197,94,0.2)',
+                        background: 'var(--s2)',
+                        color: 'var(--t3)',
+                        border: '1px solid var(--br)',
                       }}
                     >
                       Готово
@@ -374,7 +382,7 @@ export function SmartAssignmentPanel() {
                       className="px-3 py-1.5 text-xs font-medium rounded-[6px] transition-opacity disabled:opacity-40"
                       style={{
                         background: 'var(--acm)',
-                        color: 'var(--bg)',
+                        color: 'var(--t1)',
                       }}
                     >
                       {isConfirming ? 'Призначаємо…' : 'Призначити'}

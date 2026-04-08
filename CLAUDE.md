@@ -341,7 +341,7 @@ Key decisions to remember:
 - **Compact density** — operational tool, not a marketing page. Table rows `py-2.5 px-3`.
 - **Border-radius ≤ 8px** — no `rounded-2xl` or `rounded-3xl` on cards. Buttons: 6px.
 - **Card depth** — `inset 0 1px 0 rgba(255,255,255,0.05)` top-edge shine, no box-shadow outlines.
-- **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 3px #6aaa84`.
+- **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)`. Neutral warm, no chromatic accent.
 - **Table headers** — always UPPERCASE, 11px/600/+0.05em tracking, `--text-4` color.
 - **Dashboard is info-first** — main `/` dashboard shows KPIs, alerts, pending assignments, active deliveries table, courier status panel. No map on the main page.
 - **Map is a separate `/map` page** — full-screen Leaflet map with right-side courier panel. Real routing via OSRM (free, no API key). Real ETA in minutes per transport mode.

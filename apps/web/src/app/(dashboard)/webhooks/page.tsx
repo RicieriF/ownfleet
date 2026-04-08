@@ -16,7 +16,7 @@ export default async function WebhooksPage() {
             className="px-1 py-0.5 rounded text-xs"
             style={{ fontFamily: 'var(--font-mono)', background: 'var(--s2)', border: '1px solid var(--br)', color: 'var(--t3)' }}
           >
-            X-Weego-Signature
+            X-Webhook-Signature
           </code>.
         </p>
       </div>

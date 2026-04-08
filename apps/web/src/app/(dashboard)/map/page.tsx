@@ -1,9 +1,17 @@
 import { apiFetch } from '@/lib/api';
-import { CourierWithStatus } from '@/types';
+import { CourierWithStatus, Establishment } from '@/types';
 import { LiveMap } from './live-map';
 
 export default async function MapPage() {
-  const couriers = await apiFetch<CourierWithStatus[]>('/api/v1/couriers/status');
+  const [couriers, establishment] = await Promise.all([
+    apiFetch<CourierWithStatus[]>('/api/v1/couriers/status'),
+    apiFetch<Establishment>('/api/v1/establishments/me'),
+  ]);
+
+  const initialCenter: [number, number] | undefined =
+    establishment.lat != null && establishment.lng != null
+      ? [establishment.lat, establishment.lng]
+      : undefined;
 
   return (
     <div>
@@ -12,7 +20,7 @@ export default async function MapPage() {
         className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden"
         style={{ height: 'calc(100vh - 160px)' }}
       >
-        <LiveMap couriers={couriers} />
+        <LiveMap couriers={couriers} initialCenter={initialCenter} />
       </div>
     </div>
   );

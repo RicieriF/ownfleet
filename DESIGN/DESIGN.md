@@ -41,7 +41,7 @@ The interface is quiet by default and loud only when it must be.
 
 ### Philosophy
 
-Near-monochrome warm base. A single calm accent (sage) for interactive elements. Semantic colors (green/amber/red) exist ONLY as tiny indicators — dots, thin borders, micro-tints. Color is never decorative.
+Near-monochrome warm base. No chromatic accent — interactive states expressed through neutral surface elevation only. Semantic colors (green/amber/red) exist ONLY as tiny indicators — dots, thin borders, micro-tints. Color is never decorative.
 
 The palette is intentionally warm — not cold neutral zinc, but warm-shifted grays with a subtle earthy undertone. The warmth is barely perceptible in hex values but makes a fundamental difference after 4+ hours of use.
 
@@ -58,7 +58,7 @@ The palette is intentionally warm — not cold neutral zinc, but warm-shifted gr
 | `--text-1` | `#faf9f6` | Primary text — warm parchment, NOT pure white |
 | `--text-2` | `#d5d4ce` | Secondary text |
 | `--text-3` | `#9c9b96` | Labels, placeholders |
-| `--text-4` | `#6b6a66` | Disabled, timestamps, table headers |
+| `--text-4` | `#78776e` | Disabled, timestamps, table headers |
 
 **Why warm parchment (`#faf9f6`) instead of pure white (`#fafafa`):** Pure white on a dark background creates harsh contrast that strains eyes over hours. The warm parchment has a barely-perceptible cream tint that softens the reading experience. The difference is invisible consciously but felt after extended use.
 
@@ -77,7 +77,7 @@ The palette is intentionally warm — not cold neutral zinc, but warm-shifted gr
 | `--text-1` | `#1a1918` | Primary text |
 | `--text-2` | `#454340` | Secondary text |
 | `--text-3` | `#7a7874` | Labels, placeholders |
-| `--text-4` | `#a5a39f` | Disabled |
+| `--text-4` | `#a09f9a` | Disabled |
 
 ### Interactive States — neutral elevation
 
@@ -152,7 +152,7 @@ Note the extremely low opacities: 0.03–0.04 for backgrounds, 0.10 for borders.
 | Онлайн | `#22c55e` | ping < 30s |
 | Фон | `#eab308` | ping 30s–5min |
 | Не відповідає | `#ef4444` | ping > 5min during active delivery |
-| Офлайн | `#6b6a66` (`--text-4`) | no active delivery + ping > 5min |
+| Офлайн | `#78776e` (`--text-4`) | no active delivery + ping > 5min |
 
 Dots are 6px in tables/lists, 8px in the sidebar courier list. Static — no animation (animation is for map markers only).
 
@@ -165,7 +165,7 @@ In courier lists: JetBrains Mono, `--text-4` color by default. Color coding only
 
 ### "No Info Color" Rule
 
-The system has NO dedicated info/cyan color. The previous `#06b6d4` (cyan-500) is removed. Informational states (new POS orders, system messages) use sage muted tint or plain neutral styling. Three semantic colors maximum: green, amber, red. Adding more dilutes their meaning.
+The system has NO dedicated info/cyan color. The previous `#06b6d4` (cyan-500) is removed. Informational states (new POS orders, system messages) use plain neutral styling (`--surface-2` bg, `--text-3` text). Three semantic colors maximum: green, amber, red. Adding more dilutes their meaning.
 
 ---
 
@@ -348,10 +348,10 @@ Never: bounce, spring physics, scroll animations, decorative transitions.
 
 | shadcn | Variant | Key customizations |
 |--------|---------|-------------------|
-| `Button` | default, outline, ghost, destructive | Default = sage bg, 6px radius. Ghost = `--text-2` text, `--surface-2` hover bg. No colored destructive — use ghost + confirmation dialog. |
+| `Button` | default, outline, ghost, destructive | Default = `--surface-3` (`--acm`) bg, `--text-1` text, `--acm-b` border, 6px radius. Ghost = `--text-2` text, `--surface-2` hover bg. No colored destructive — use ghost + confirmation dialog. |
 | `Badge` | neutral only | `--surface-2` bg, `--text-3` text, 4px radius. NO colored badges. Status is shown by a dot prefix, not a badge fill. |
 | `Table` | — | `py-2.5 px-3` rows, `--border` dividers, hover `--surface-2`, UPPERCASE headers (`--text-4`, Micro) |
-| `Input` | — | `var(--bg)` background, `--border-2` border, sage double-ring focus |
+| `Input` | — | `var(--bg)` background, `--border-2` border, neutral double-ring focus: `0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)` |
 | `Card` | — | `var(--surface)` bg, `--border` border, 8px radius, `--shadow-edge` |
 | `Dialog` | — | Centered, max-w-sm/md, `rgba(0,0,0,0.72)` overlay |
 | `Select` | — | Same as Input, custom SVG chevron |
@@ -560,7 +560,7 @@ Pulsing "all good" is noise. Pulsing danger draws the manager's eye to what need
 
 ### Establishment Marker
 
-Sage-bordered circle (32px) with SVG building icon. Tooltip with establishment name. `zIndexOffset: 500` (below couriers).
+Circle (32px) with SVG building icon, `--surface-3` fill, `rgba(250,249,246,0.20)` border. Tooltip with establishment name. `zIndexOffset: 500` (below couriers).
 
 ### Destination Markers
 
@@ -897,7 +897,8 @@ These principles guide decisions not covered by specific rules above.
 | 2026-04-06 | Weight cap at 600 | 700–800 weights shout. 600 speaks confidently. Size handles hierarchy, not weight. Inspired by Warp (max 500) and ElevenLabs (300 for display). Kept 600 as compromise for operational tool readability. |
 | 2026-04-06 | Multi-layer shadow system | Replaced crude 3-tier shadows with layered edge+containment+elevation at low opacity. Surfaces "barely exist" instead of "sticking out." Inspired by ElevenLabs' refined shadow stacking. |
 | 2026-04-06 | Quiet Screen Principle — max 5 colored elements | Screenshots revealed 15+ simultaneous colored elements: badges, text, borders, sparklines. Created visual chaos. New rule: 90%+ neutral, color only in dots and thin borders. |
-| 2026-04-06 | Removed info/cyan color | 4 semantic colors dilute meaning. Green/amber/red are sufficient. Info states use sage tint or neutral. |
+| 2026-04-06 | Removed info/cyan color | 4 semantic colors dilute meaning. Green/amber/red are sufficient. Info states use plain neutral styling. |
+| 2026-04-07 | `--text-4` bumped `#6b6a66` → `#78776e` | Контраст ~3.8:1 був нижче WCAG AA для малого тексту. Новий ~4.7:1 — достатньо для 8–12г роботи без втоми. Warmth ratio збережений (R−B = +10). |
 | 2026-04-06 | Status as dot + neutral text, not colored badges | Colored badge pills ("В дорозі" in green, "Не відповідає" in red) were the #1 source of color noise. 6px dot + `--text-3` text conveys the same information with 95% less visual load. |
 | 2026-04-06 | KPI cards: uniform neutral | Colored top borders, sparklines, and trend text on KPI cards made the top of the dashboard a color war zone. All KPIs now visually identical — data speaks, chrome doesn't. |
 | 2026-04-06 | "Нагадати" as ghost button, not red | A red button next to a red dot next to red text is triple-redundancy. The dot signals danger. The button is just an action. |

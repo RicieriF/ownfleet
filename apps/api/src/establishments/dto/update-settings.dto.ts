@@ -11,7 +11,7 @@ export const ALLOWED_TIMEZONES = [
 
 export class UpdateSettingsDto {
   // ── Retention (JSONB settings) ───────────────────────────────────────────
-  @IsOptional() @IsInt() @Min(1) @Max(30)
+  @IsOptional() @IsInt() @Min(1) @Max(90)
   retention_orders_days?: number;
 
   @IsOptional() @IsInt() @Min(1) @Max(3)

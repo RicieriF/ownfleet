@@ -65,7 +65,7 @@ export default function GpsConsentScreen() {
       <View style={styles.content}>
         {/* Icon */}
         <View style={styles.iconWrap}>
-          <Ionicons name="location" size={64} color="#6aaa84" />
+          <Ionicons name="location" size={64} color="#9c9b96" />
         </View>
 
         {/* Title & description */}
@@ -112,7 +112,7 @@ export default function GpsConsentScreen() {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#09090b" />
+                <ActivityIndicator color="#faf9f6" />
               ) : (
                 <Text style={styles.btnAllowText}>Надати доступ до GPS</Text>
               )}
@@ -140,14 +140,14 @@ const REASON_ICONS = {
 function ReasonRow({ icon, text }: { icon: keyof typeof REASON_ICONS; text: string }) {
   return (
     <View style={styles.reasonRow}>
-      <Ionicons name={REASON_ICONS[icon]} size={18} color="#6aaa84" />
+      <Ionicons name={REASON_ICONS[icon]} size={18} color="#78776e" />
       <Text style={styles.reasonText}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090b' },
+  safe: { flex: 1, backgroundColor: '#0c0b09' },
   content: {
     flex: 1,
     paddingHorizontal: 24,
@@ -157,63 +157,68 @@ const styles = StyleSheet.create({
   iconWrap: { alignItems: 'center', marginBottom: 20 },
   title: {
     fontSize: 26,
-    fontFamily: 'Manrope_700Bold',
-    color: '#fafafa',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#faf9f6',
     textAlign: 'center',
     letterSpacing: -0.5,
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 15,
-    color: '#a1a1aa',
+    color: '#9c9b96',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
   },
   reasonsCard: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1917',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
     padding: 20,
     gap: 14,
     marginBottom: 20,
   },
   reasonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  reasonText: { fontSize: 14, color: '#d4d4d8', flex: 1, lineHeight: 22 },
+  reasonText: { fontSize: 14, color: '#d5d4ce', flex: 1, lineHeight: 22 },
   note: {
     fontSize: 13,
-    color: '#71717a',
+    color: '#78776e',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 32,
   },
   deniedCard: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
+    backgroundColor: 'rgba(239,68,68,0.04)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.2)',
+    borderColor: 'rgba(239,68,68,0.12)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
     padding: 16,
     marginBottom: 20,
     gap: 12,
   },
-  deniedText: { fontSize: 14, color: '#fca5a5', lineHeight: 20 },
+  deniedText: { fontSize: 14, color: '#d5d4ce', lineHeight: 20 },
   settingsBtn: {
-    backgroundColor: 'rgba(239,68,68,0.15)',
     borderRadius: 6,
     paddingVertical: 10,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.14)',
   },
-  settingsBtnText: { color: '#fca5a5', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
+  settingsBtnText: { color: '#9c9b96', fontSize: 14, fontFamily: 'Manrope_600SemiBold' },
   actions: { gap: 12 },
   btnAllow: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
-  btnDisabled: { opacity: 0.7 },
-  btnAllowText: { color: '#09090b', fontSize: 15, fontFamily: 'Manrope_700Bold', letterSpacing: -0.2 },
+  btnDisabled: { opacity: 0.5 },
+  btnAllowText: { color: '#faf9f6', fontSize: 15, fontFamily: 'Manrope_600SemiBold', letterSpacing: -0.2 },
   btnSkip: { paddingVertical: 14, alignItems: 'center' },
-  btnSkipText: { color: '#71717a', fontSize: 15 },
+  btnSkipText: { color: '#78776e', fontSize: 15 },
 });

@@ -9,9 +9,9 @@ import { uk } from 'date-fns/locale';
 import { apiPost, apiPatch } from '@/lib/api-client';
 
 const STATUS_CONFIG: Record<CourierStatus, { dot: string; label: string; labelColor: string }> = {
-  online:         { dot: 'bg-[var(--ok)]',   label: 'На зміні',      labelColor: 'text-[var(--ok)]' },
-  background:     { dot: 'bg-[var(--warn)]',  label: 'Фон',           labelColor: 'text-[var(--warn)]' },
-  not_responding: { dot: 'bg-[var(--bad)]',   label: 'Не відповідає', labelColor: 'text-[var(--bad)]' },
+  online:         { dot: 'bg-[var(--ok)]',   label: 'На зміні',      labelColor: 'text-[var(--t3)]' },
+  background:     { dot: 'bg-[var(--warn)]',  label: 'Фон',           labelColor: 'text-[var(--t3)]' },
+  not_responding: { dot: 'bg-[var(--bad)]',   label: 'Не відповідає', labelColor: 'text-[var(--t3)]' },
   offline:        { dot: 'bg-[var(--t4)]',    label: 'Офлайн',        labelColor: 'text-[var(--t4)]' },
 };
 
@@ -99,7 +99,7 @@ function PlannedEndEditor({
           key={p.hours}
           onClick={() => setPreset(p.hours)}
           disabled={saving}
-          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t4)] hover:border-[var(--acm)] hover:text-[var(--acm)] transition-colors disabled:opacity-40"
+          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t4)] hover:border-[var(--br2)] hover:text-[var(--t2)] transition-colors disabled:opacity-40"
         >
           {p.label}
         </button>
@@ -233,7 +233,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                     )}
                     <button
                       onClick={() => setEditingShift(isEditingThis ? null : courier.id)}
-                      className="text-[11px] text-[var(--t4)] hover:text-[var(--acm)] transition-colors underline underline-offset-2"
+                      className="text-[11px] text-[var(--t4)] hover:text-[var(--t2)] transition-colors underline underline-offset-2"
                     >
                       {isEditingThis ? 'Закрити' : 'Змінити час'}
                     </button>

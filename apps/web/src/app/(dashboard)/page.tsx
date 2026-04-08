@@ -181,6 +181,8 @@ export default async function OrdersPage() {
           orders={orders}
           couriers={couriers}
           hostedTrackingEnabled={establishment.hosted_tracking_enabled ?? false}
+          showSlaOnDashboard={establishment.settings?.show_sla_on_dashboard ?? false}
+          stuckThresholdMinutes={establishment.settings?.dispatch_no_courier_escalation_minutes ?? 5}
         />
       </Suspense>
     </div>

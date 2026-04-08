@@ -66,7 +66,7 @@ export class TrackingGateway
         // All instances subscribe to the same Redis channel, so each handles
         // its own connected clients. Without .local, the Redis adapter would
         // re-broadcast across instances and each client would receive N copies.
-        this.server.local.to(room).emit('courier_moved', {
+        this.server.local.to(room).emit('courier:moved', {
           courier_id: event.courier_id,
           lat: event.lat,
           lng: event.lng,

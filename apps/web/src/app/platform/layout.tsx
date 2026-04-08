@@ -21,7 +21,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 h-12 border-b border-[var(--br)] bg-[var(--sf)]">
         <div className="flex items-center gap-2.5">
-          <Shield size={14} className="text-[var(--acm)]" strokeWidth={2} />
+          <Shield size={14} className="text-[var(--t3)]" strokeWidth={2} />
           <span className="text-sm font-semibold text-[var(--t1)] tracking-tight">
             Weego Platform
           </span>

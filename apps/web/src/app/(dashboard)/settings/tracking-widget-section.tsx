@@ -180,7 +180,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                   background: 'var(--s1)', border: '1px solid var(--br)',
                   color: 'var(--t1)', padding: '7px 10px',
                 }}
-                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+                onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
                 onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
               />
               <p className="text-xs" style={{ color: 'var(--t4)' }}>
@@ -192,7 +192,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
               onClick={handleGenerateKey}
               disabled={isGenerating}
               className="self-start text-sm font-medium rounded transition-opacity disabled:opacity-50"
-              style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+              style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
             >
               {isGenerating ? 'Генерується…' : 'Згенерувати API ключ'}
             </button>
@@ -203,9 +203,9 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
         {newKeyValue && (
           <div
             className="rounded-md p-3 flex flex-col gap-2"
-            style={{ background: 'rgba(106,170,132,0.08)', border: '1px solid rgba(106,170,132,0.25)' }}
+            style={{ background: 'var(--s2)', border: '1px solid var(--br2)' }}
           >
-            <p className="text-xs font-medium" style={{ color: 'var(--acm)' }}>
+            <p className="text-xs font-medium" style={{ color: 'var(--t2)' }}>
               Збережіть ключ — він більше не буде показаний
             </p>
             <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                 style={{
                   padding: '5px 10px', borderRadius: '6px',
                   background: copiedKey ? 'var(--acm)' : 'var(--s3)',
-                  color: copiedKey ? 'var(--bg)' : 'var(--t3)',
+                  color: copiedKey ? 'var(--t1)' : 'var(--t3)',
                   border: '1px solid var(--br)',
                 }}
               >
@@ -256,7 +256,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                     background: 'var(--s1)', border: '1px solid var(--br)',
                     color: 'var(--t1)', padding: '7px 10px',
                   }}
-                  onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+                  onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
                 />
                 {isSavingDomain && (
                   <span className="text-xs" style={{ color: 'var(--t4)' }}>Збереження…</span>
@@ -290,7 +290,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                   style={{
                     padding: '3px 8px', borderRadius: '4px',
                     background: copiedCode ? 'var(--acm)' : 'var(--s3)',
-                    color: copiedCode ? 'var(--bg)' : 'var(--t3)',
+                    color: copiedCode ? 'var(--t1)' : 'var(--t3)',
                     border: '1px solid var(--br)',
                   }}
                 >
@@ -337,9 +337,9 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                 className="text-xs font-medium rounded transition-all disabled:opacity-40"
                 style={{
                   padding: '4px 10px', borderRadius: '6px',
-                  background: apiKey.is_active ? 'rgba(239,68,68,0.1)' : 'rgba(106,170,132,0.1)',
-                  color: apiKey.is_active ? 'var(--bad)' : 'var(--acm)',
-                  border: `1px solid ${apiKey.is_active ? 'rgba(239,68,68,0.25)' : 'rgba(106,170,132,0.25)'}`,
+                  background: apiKey.is_active ? 'rgba(239,68,68,0.1)' : 'var(--s2)',
+                  color: apiKey.is_active ? 'var(--bad)' : 'var(--t3)',
+                  border: `1px solid ${apiKey.is_active ? 'rgba(239,68,68,0.25)' : 'var(--br)'}`,
                 }}
               >
                 {apiKey.is_active ? 'Вимкнути' : 'Увімкнути'}
@@ -350,9 +350,9 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
             {hostedTrackingEnabled && (
               <div
                 className="rounded-md p-3 flex flex-col gap-1.5"
-                style={{ background: 'rgba(106,170,132,0.06)', border: '1px solid rgba(106,170,132,0.18)' }}
+                style={{ background: 'var(--s2)', border: '1px solid var(--br)' }}
               >
-                <p className="text-xs font-semibold" style={{ color: 'var(--acm)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--t2)' }}>
                   Hosted tracking page
                 </p>
                 <p className="text-xs" style={{ color: 'var(--t4)' }}>

@@ -51,7 +51,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
       <button
         onClick={() => setOpen(true)}
         className="text-sm font-medium rounded"
-        style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+        style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
       >
         + Додати webhook
       </button>
@@ -78,7 +78,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
             placeholder="https://your-app.com/webhooks"
             className="w-full text-sm rounded outline-none"
             style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '6px 10px', borderRadius: '6px' }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           />
         </div>
@@ -95,7 +95,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
             placeholder="your-hmac-secret"
             className="w-full text-sm rounded outline-none"
             style={{ fontFamily: 'var(--font-mono)', background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '6px 10px', borderRadius: '6px' }}
-            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 3px var(--acm)')}
+            onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           />
         </div>
@@ -116,7 +116,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
                   borderRadius: '4px',
                   border: events.includes(ev) ? '1px solid var(--acm-b)' : '1px solid var(--br)',
                   background: events.includes(ev) ? 'var(--acm-m)' : 'var(--s1)',
-                  color: events.includes(ev) ? 'var(--acm)' : 'var(--t3)',
+                  color: events.includes(ev) ? 'var(--t2)' : 'var(--t3)',
                 }}
               >
                 {ev}
@@ -133,7 +133,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
           onClick={handleSubmit}
           disabled={isPending}
           className="text-sm font-medium rounded disabled:opacity-40"
-          style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+          style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
         >
           {isPending ? 'Зберігаємо…' : 'Зберегти'}
         </button>
@@ -202,7 +202,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
         style={{
           border: webhook.active ? '1px solid var(--acm-b)' : '1px solid var(--br)',
           background: webhook.active ? 'var(--acm-m)' : 'var(--s1)',
-          color: webhook.active ? 'var(--acm)' : 'var(--t4)',
+          color: webhook.active ? 'var(--t2)' : 'var(--t4)',
           borderRadius: '6px',
         }}
       >

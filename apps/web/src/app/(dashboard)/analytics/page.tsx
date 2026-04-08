@@ -81,8 +81,8 @@ export default async function AnalyticsPage() {
               <tr key={row.courier_id} className="hover:bg-[var(--s2)] transition-colors">
                 <td className="px-3 py-2.5 font-medium text-[var(--t1)]">{row.courier_name}</td>
                 <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">{row.total}</td>
-                <td className="px-3 py-2.5 text-right text-[var(--ok)] mono">{row.completed}</td>
-                <td className="px-3 py-2.5 text-right text-[var(--bad)] mono">{row.failed}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">{row.completed}</td>
+                <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">{row.failed}</td>
                 <td className="px-3 py-2.5 text-right text-[var(--t3)] mono">
                   {row.avg_delivery_minutes != null
                     ? `${Math.round(row.avg_delivery_minutes)} хв`

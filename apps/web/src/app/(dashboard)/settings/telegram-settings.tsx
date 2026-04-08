@@ -106,7 +106,10 @@ export function TelegramSettings({ initialStatus }: Props) {
         <div>
           <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>Telegram сповіщення</p>
           {connected && (
-            <p className="text-xs mt-0.5" style={{ color: 'var(--acm)' }}>● Підключено</p>
+            <p className="text-xs mt-0.5 flex items-center gap-1.5">
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--ok)', flexShrink: 0 }} />
+              <span style={{ color: 'var(--t3)' }}>Підключено</span>
+            </p>
           )}
         </div>
         {connected ? (
@@ -123,7 +126,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             onClick={handleConnect}
             disabled={isPending}
             className="text-sm font-medium rounded disabled:opacity-40"
-            style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '5px 14px', borderRadius: '6px' }}
+            style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '5px 14px', borderRadius: '6px' }}
           >
             {isPending ? 'Генеруємо…' : 'Підключити'}
           </button>
@@ -134,9 +137,9 @@ export function TelegramSettings({ initialStatus }: Props) {
       {!connected && connectCode && (
         <div
           className="mx-5 my-4 px-4 py-3 rounded-md"
-          style={{ background: 'rgba(106,170,132,0.08)', border: '1px solid var(--acm-b)' }}
+          style={{ background: 'var(--s2)', border: '1px solid var(--br2)' }}
         >
-          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--acm)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Код для підключення · діє 10 хв
           </p>
           <p
@@ -185,7 +188,7 @@ export function TelegramSettings({ initialStatus }: Props) {
                       type="checkbox"
                       checked={!!prefs[key]}
                       onChange={() => handleTogglePref(key)}
-                      className="w-4 h-4 rounded accent-[var(--acm)]"
+                      className="w-4 h-4 rounded accent-[var(--t1)]"
                     />
                     <span className="text-sm" style={{ color: 'var(--t2)' }}>{label}</span>
                   </label>
@@ -201,12 +204,12 @@ export function TelegramSettings({ initialStatus }: Props) {
               onClick={handleSavePrefs}
               disabled={isPending}
               className="text-sm font-medium rounded disabled:opacity-40"
-              style={{ background: 'var(--acm)', color: 'var(--bg)', padding: '6px 16px', borderRadius: '6px' }}
+              style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
             >
               {isPending ? 'Зберігаємо…' : 'Зберегти налаштування'}
             </button>
             {prefsSaved && (
-              <span className="text-sm" style={{ color: 'var(--ok)' }}>Збережено</span>
+              <span className="text-sm" style={{ color: 'var(--t3)' }}>Збережено</span>
             )}
           </div>
         </div>

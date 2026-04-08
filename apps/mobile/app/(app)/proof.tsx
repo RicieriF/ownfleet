@@ -124,7 +124,7 @@ export default function ProofScreen() {
       // Stop GPS after delivery
       await stopBackgroundLocationTask();
 
-      Alert.alert('✅ Доставлено!', 'Замовлення успішно здано.', [
+      Alert.alert('Доставлено', 'Замовлення успішно здано.', [
         { text: 'OK', onPress: () => router.replace('/(app)') },
       ]);
     } catch (e) {
@@ -147,18 +147,18 @@ export default function ProofScreen() {
         <View style={styles.locationBox}>
           {locationLoading ? (
             <View style={styles.locationRow}>
-              <ActivityIndicator size="small" color="#6aaa84" />
+              <ActivityIndicator size="small" color="#9c9b96" />
               <Text style={styles.locationText}>Отримуємо координати...</Text>
             </View>
           ) : locationAcquired ? (
             <View style={styles.locationRow}>
-              <Ionicons name="location" size={18} color="#6aaa84" />
-              <Text style={styles.locationOk}>Геолокація отримана</Text>
+              <View style={styles.locationDot} />
+              <Text style={styles.locationOk}>GPS підтверджено</Text>
             </View>
           ) : (
             <TouchableOpacity onPress={acquireLocation} style={styles.locationRetry}>
               <View style={styles.locationRow}>
-                <Ionicons name="warning-outline" size={18} color="#f59e0b" />
+                <Ionicons name="warning-outline" size={18} color="#eab308" />
                 <Text style={styles.locationRetryText}>Натисніть для отримання координат</Text>
               </View>
             </TouchableOpacity>
@@ -176,7 +176,7 @@ export default function ProofScreen() {
             </>
           ) : (
             <TouchableOpacity style={styles.photoBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
-              <Ionicons name="camera-outline" size={36} color="#a1a1aa" style={{ marginBottom: 8 }} />
+              <Ionicons name="camera-outline" size={36} color="#78776e" style={{ marginBottom: 8 }} />
               <Text style={styles.photoBtnText}>Додати фото (необовʼязково)</Text>
             </TouchableOpacity>
           )}
@@ -193,7 +193,7 @@ export default function ProofScreen() {
           activeOpacity={0.8}
         >
           {submitting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#faf9f6" />
           ) : (
             <Text style={styles.submitBtnText}>Підтвердити здачу</Text>
           )}
@@ -204,32 +204,40 @@ export default function ProofScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090b' },
+  safe: { flex: 1, backgroundColor: '#0c0b09' },
   content: { padding: 24, paddingBottom: 40 },
-  title: { fontSize: 24, fontFamily: 'Manrope_700Bold', color: '#fafafa', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#71717a', lineHeight: 22, marginBottom: 28 },
+  title: { fontSize: 24, fontFamily: 'Manrope_600SemiBold', color: '#faf9f6', marginBottom: 8, letterSpacing: -0.4 },
+  subtitle: { fontSize: 15, color: '#78776e', lineHeight: 22, marginBottom: 28 },
   locationBox: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1917',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
     padding: 16,
     marginBottom: 20,
   },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  locationText: { color: '#a1a1aa', fontSize: 14 },
-  locationOk: { color: '#22c55e', fontSize: 14, fontFamily: 'Manrope_500Medium' },
+  locationDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
+  locationText: { color: '#9c9b96', fontSize: 14 },
+  locationOk: { color: '#d5d4ce', fontSize: 14, fontFamily: 'Manrope_500Medium' },
   locationRetry: { alignItems: 'center' },
-  locationRetryText: { color: '#f59e0b', fontSize: 14 },
+  locationRetryText: { color: '#d5d4ce', fontSize: 14 },
   photoSection: { marginBottom: 24 },
   photoBtn: {
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1917',
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#27272a',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
     borderStyle: 'dashed',
     padding: 32,
     alignItems: 'center',
   },
-  photoBtnText: { color: '#a1a1aa', fontSize: 15 },
+  photoBtnText: { color: '#9c9b96', fontSize: 15 },
   photoPreview: {
     width: '100%',
     height: 220,
@@ -239,11 +247,13 @@ const styles = StyleSheet.create({
   removePhoto: { alignItems: 'center' },
   removePhotoText: { color: '#ef4444', fontSize: 14 },
   submitBtn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
   submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: '#09090b', fontSize: 18, fontFamily: 'Manrope_700Bold' },
+  submitBtnText: { color: '#faf9f6', fontSize: 18, fontFamily: 'Manrope_600SemiBold' },
 });

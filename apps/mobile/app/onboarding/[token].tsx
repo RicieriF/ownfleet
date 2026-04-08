@@ -29,11 +29,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 type TransportMode = 'car' | 'moto_gas' | 'moto_electric' | 'bicycle' | 'walking';
 
 const TRANSPORT_OPTIONS: { value: TransportMode; label: string; icon: string; hint: string }[] = [
-  { value: 'car',           label: 'Авто',          icon: '🚗', hint: 'Легковий або вантажний автомобіль' },
-  { value: 'moto_gas',      label: 'Мотоцикл',      icon: '🏍️', hint: 'Бензиновий мотоцикл або скутер' },
+  { value: 'car',           label: 'Авто',           icon: '🚗', hint: 'Легковий або вантажний автомобіль' },
+  { value: 'moto_gas',      label: 'Мотоцикл',       icon: '🏍️', hint: 'Бензиновий мотоцикл або скутер' },
   { value: 'moto_electric', label: 'Електромотоцикл', icon: '⚡', hint: 'Електроскутер або e-мото' },
-  { value: 'bicycle',       label: 'Велосипед',      icon: '🚲', hint: 'Звичайний або електровелосипед' },
-  { value: 'walking',       label: 'Пішки',          icon: '🚶', hint: 'Пішохідна або самокатна доставка' },
+  { value: 'bicycle',       label: 'Велосипед',       icon: '🚲', hint: 'Звичайний або електровелосипед' },
+  { value: 'walking',       label: 'Пішки',           icon: '🚶', hint: 'Пішохідна або самокатна доставка' },
 ];
 
 export default function AcceptInviteScreen() {
@@ -137,7 +137,7 @@ export default function AcceptInviteScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Мінімум 8 символів"
-                placeholderTextColor="#71717a"
+                placeholderTextColor="#78776e"
                 secureTextEntry
                 autoFocus
               />
@@ -148,7 +148,7 @@ export default function AcceptInviteScreen() {
                 value={confirm}
                 onChangeText={setConfirm}
                 placeholder="Повторіть пароль"
-                placeholderTextColor="#71717a"
+                placeholderTextColor="#78776e"
                 secureTextEntry
                 onSubmitEditing={handleNextStep}
               />
@@ -203,7 +203,7 @@ export default function AcceptInviteScreen() {
                   activeOpacity={0.8}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color="#faf9f6" />
                   ) : (
                     <Text style={styles.btnText}>Активувати акаунт</Text>
                   )}
@@ -218,15 +218,15 @@ export default function AcceptInviteScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090b' },
+  safe: { flex: 1, backgroundColor: '#0c0b09' },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 24 },
   logo: { fontSize: 48, marginBottom: 12 },
-  title: { fontSize: 26, fontFamily: 'Manrope_700Bold', color: '#fafafa', letterSpacing: -0.5 },
+  title: { fontSize: 26, fontFamily: 'Manrope_600SemiBold', color: '#faf9f6', letterSpacing: -0.5 },
   subtitle: {
     fontSize: 15,
-    color: '#a1a1aa',
+    color: '#9c9b96',
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 22,
@@ -242,45 +242,56 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#27272a',
+    backgroundColor: 'rgba(250,249,246,0.12)',
   },
-  dotActive: { backgroundColor: '#6aaa84' },
-  line: { width: 32, height: 1, backgroundColor: '#27272a', marginHorizontal: 6 },
-  form: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
-  label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d4d4d8', marginBottom: 8 },
-  input: {
-    backgroundColor: '#09090b',
+  dotActive: { backgroundColor: '#faf9f6' },
+  line: { width: 32, height: 1, backgroundColor: 'rgba(250,249,246,0.08)', marginHorizontal: 6 },
+  form: {
+    backgroundColor: '#1a1917',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
+    padding: 24,
+  },
+  label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d5d4ce', marginBottom: 8 },
+  input: {
+    backgroundColor: '#0c0b09',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.14)',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#fafafa',
+    color: '#faf9f6',
   },
   error: {
-    color: '#f87171',
+    color: '#d5d4ce',
     fontSize: 14,
     marginTop: 12,
-    backgroundColor: '#450a0a',
+    backgroundColor: 'rgba(239,68,68,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.12)',
     borderRadius: 8,
     padding: 10,
+    lineHeight: 20,
   },
   btn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
-  btnFlex: { flex: 1 },
-  btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
-  btnText: { color: '#09090b', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  btnFlex: { flex: 1, marginTop: 0 },
+  btnDisabled: { opacity: 0.5 },
+  btnText: { color: '#faf9f6', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
   transportGrid: { gap: 8 },
   transportCard: {
-    backgroundColor: '#09090b',
+    backgroundColor: '#0c0b09',
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
     borderRadius: 8,
     padding: 14,
     flexDirection: 'row',
@@ -288,23 +299,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   transportCardSelected: {
-    borderColor: '#6aaa84',
-    backgroundColor: 'rgba(106,170,132,0.08)',
+    borderColor: 'rgba(250,249,246,0.22)',
+    backgroundColor: '#252420',
   },
   transportIcon: { fontSize: 22, width: 28, textAlign: 'center' },
   transportLabel: {
     fontSize: 15,
     fontFamily: 'Manrope_600SemiBold',
-    color: '#a1a1aa',
+    color: '#9c9b96',
     flex: 1,
   },
-  transportLabelSelected: { color: '#6aaa84' },
-  transportHint: { fontSize: 12, color: '#52525b', flexShrink: 1, maxWidth: 140, textAlign: 'right' },
+  transportLabelSelected: { color: '#faf9f6' },
+  transportHint: { fontSize: 12, color: '#78776e', flexShrink: 1, maxWidth: 140, textAlign: 'right' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24 },
   backBtn: {
     paddingVertical: 16,
     paddingHorizontal: 4,
     alignItems: 'center',
   },
-  backBtnText: { color: '#71717a', fontSize: 15, fontFamily: 'Manrope_500Medium' },
+  backBtnText: { color: '#78776e', fontSize: 15, fontFamily: 'Manrope_500Medium' },
 });

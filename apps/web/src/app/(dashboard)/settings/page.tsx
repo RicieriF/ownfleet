@@ -15,9 +15,9 @@ const PLAN_LABELS: Record<string, string> = {
 const PLAN_COLORS: Record<string, string> = {
   pilot:    'bg-[var(--s1)] text-[var(--t4)] border border-[var(--br)]',
   trial:    'bg-[rgba(245,158,11,0.12)] text-[var(--warn)] border border-[rgba(245,158,11,0.25)]',
-  starter:  'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]',
-  business: 'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]',
-  pro:      'bg-[var(--acm-m)] text-[var(--acm)] border border-[var(--acm-b)]',
+  starter:  'bg-[var(--acm-m)] text-[var(--t2)] border border-[var(--acm-b)]',
+  business: 'bg-[var(--acm-m)] text-[var(--t2)] border border-[var(--acm-b)]',
+  pro:      'bg-[var(--acm-m)] text-[var(--t2)] border border-[var(--acm-b)]',
 };
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {

@@ -79,7 +79,7 @@ export default function LoginScreen() {
               value={phone}
               onChangeText={setPhone}
               placeholder="courier@example.com"
-              placeholderTextColor="#71717a"
+              placeholderTextColor="#78776e"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -96,7 +96,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
-              placeholderTextColor="#71717a"
+              placeholderTextColor="#78776e"
               secureTextEntry
               autoComplete="password"
               returnKeyType="done"
@@ -112,7 +112,7 @@ export default function LoginScreen() {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#faf9f6" />
               ) : (
                 <Text style={styles.btnText}>Увійти</Text>
               )}
@@ -125,40 +125,51 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#09090b' },
+  safe: { flex: 1, backgroundColor: '#0c0b09' },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 40 },
   logo: { fontSize: 48, marginBottom: 12 },
-  title: { fontSize: 28, fontFamily: 'Manrope_700Bold', color: '#fafafa', letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: '#a1a1aa', marginTop: 4 },
-  form: { backgroundColor: '#18181b', borderRadius: 8, padding: 24 },
-  label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d4d4d8', marginBottom: 8 },
-  input: {
-    backgroundColor: '#09090b',
+  title: { fontSize: 28, fontFamily: 'Manrope_600SemiBold', color: '#faf9f6', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, color: '#9c9b96', marginTop: 4 },
+  form: {
+    backgroundColor: '#1a1917',
+    borderRadius: 8,
+    padding: 24,
     borderWidth: 1,
-    borderColor: '#27272a',
+    borderColor: 'rgba(250,249,246,0.08)',
+  },
+  label: { fontSize: 14, fontFamily: 'Manrope_500Medium', color: '#d5d4ce', marginBottom: 8 },
+  input: {
+    backgroundColor: '#0c0b09',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.14)',
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#fafafa',
+    color: '#faf9f6',
   },
   error: {
-    color: '#f87171',
+    color: '#d5d4ce',
     fontSize: 14,
     marginTop: 12,
-    backgroundColor: '#450a0a',
+    backgroundColor: 'rgba(239,68,68,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.12)',
     borderRadius: 8,
     padding: 10,
+    lineHeight: 20,
   },
   btn: {
-    backgroundColor: '#6aaa84',
+    backgroundColor: '#3a3935',
     borderRadius: 6,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.16)',
   },
-  btnDisabled: { backgroundColor: '#5c9973', opacity: 0.7 },
-  btnText: { color: '#09090b', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
+  btnDisabled: { opacity: 0.5 },
+  btnText: { color: '#faf9f6', fontSize: 16, fontFamily: 'Manrope_600SemiBold' },
 });
