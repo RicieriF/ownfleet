@@ -357,7 +357,6 @@ Key decisions to remember:
 - **Card depth** — `inset 0 1px 0 rgba(255,255,255,0.05)` top-edge shine, no box-shadow outlines.
 - **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)`. Neutral warm, no chromatic accent.
 - **Table headers** — always UPPERCASE, 11px/600/+0.05em tracking, `--text-4` color.
-- **Text contrast rule** — `--text-3` (#9c9b96, 5.6:1 WCAG AA) for ALL readable body text: hint text, descriptions, option labels, helper text, input units. `--text-4` (#78776e, 3.5:1 — below WCAG AA) ONLY for: uppercase structural section/table headers, timestamps in table cells, disabled states, transient states ("Збереження…"). Never use `--text-4` for text the user must read to make a decision.
 - **Dashboard is info-first** — main `/` dashboard shows KPIs, alerts (AlertCard component), pending assignments, active deliveries table, CourierStatusPanel (300px sidebar). Two-column layout. No map on the main page.
 - **`/history` page** — completed/failed/cancelled orders with status tabs (all/completed/failed/cancelled) and date range filters (today/7d/30d). Includes proof drawer (`proof-drawer.tsx`) that shows geo verification, anomaly flags, GPS accuracy and delivery photos for each completed order.
 - **`/shifts` page** — active shifts table with real-time WS updates (`shift:started`/`shift:ended`), inline planned_end editing, force-end button; "Not started" section with Remind button. Real-time via WebSocket.
