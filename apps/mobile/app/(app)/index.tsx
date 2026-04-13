@@ -272,6 +272,22 @@ export default function MainScreen() {
     router.push({ pathname: '/(app)/proof', params: { deliveryId: delivery.id } });
   }
 
+  function handleNavigate() {
+    if (!delivery) return;
+    router.push({
+      pathname: '/(app)/navigate',
+      params: {
+        deliveryId: delivery.id,
+        address: delivery.order.address,
+        lat: delivery.order.lat ?? '',
+        lng: delivery.order.lng ?? '',
+        notes: delivery.order.notes ?? '',
+        externalId: delivery.order.external_id ?? '',
+        startedAt: delivery.started_at ?? '',
+      },
+    });
+  }
+
   // ── Logout ─────────────────────────────────────────────────────────────
 
   async function handleLogout() {
@@ -356,7 +372,11 @@ export default function MainScreen() {
         )}
 
         {shift && delivery?.status === 'in_progress' && (
-          <InProgressState delivery={delivery} onComplete={handleCompleteDelivery} />
+          <InProgressState
+            delivery={delivery}
+            onComplete={handleCompleteDelivery}
+            onNavigate={handleNavigate}
+          />
         )}
       </ScrollView>
     </SafeAreaView>
@@ -515,9 +535,11 @@ function AssignedState({
 function InProgressState({
   delivery,
   onComplete,
+  onNavigate,
 }: {
   delivery: ActiveDelivery;
   onComplete: () => void;
+  onNavigate: () => void;
 }) {
   return (
     <View style={styles.card}>
@@ -536,6 +558,14 @@ function InProgressState({
       {delivery.order.external_id ? (
         <Text style={styles.externalId}>№ {delivery.order.external_id}</Text>
       ) : null}
+      <TouchableOpacity
+        style={[styles.btn, styles.btnNavigate]}
+        onPress={onNavigate}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="navigate-outline" size={18} color="#faf9f6" style={{ marginRight: 6 }} />
+        <Text style={styles.btnText}>Навігація</Text>
+      </TouchableOpacity>
       <TouchableOpacity
         style={[styles.btn, styles.btnComplete]}
         onPress={onComplete}
@@ -715,11 +745,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontFamily: 'JetBrainsMono_400Regular',
   },
-  btn: { borderRadius: 6, paddingVertical: 18, alignItems: 'center', marginTop: 8 },
+  btn: {
+    borderRadius: 6,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
   btnAccept: {
     backgroundColor: '#3a3935',
     borderWidth: 1,
     borderColor: 'rgba(250,249,246,0.16)',
+  },
+  btnNavigate: {
+    backgroundColor: '#252420',
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.10)',
   },
   btnComplete: {
     backgroundColor: '#3a3935',
