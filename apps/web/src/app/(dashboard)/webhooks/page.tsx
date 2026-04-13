@@ -9,7 +9,7 @@ export default async function WebhooksPage() {
     <div className="max-w-3xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>Webhooks</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--t4)' }}>
+        <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Вихідні HTTP-повідомлення при зміні статусів замовлень та доставок.
           Підписи HMAC-SHA256 передаються в заголовку{' '}
           <code

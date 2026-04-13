@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weego CMI — Mobile Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #0c0b09;
+      --surface:    #1a1917;
+      --surface-2:  #252420;
+      --surface-3:  #3a3935;
+      --border:     rgba(250,249,246,0.08);
+      --border-2:   rgba(250,249,246,0.14);
+      --text-1:     #faf9f6;
+      --text-2:     #d5d4ce;
+      --text-3:     #9c9b96;
+      --text-4:     #78776e;
+      --ok:         #22c55e;
+      --warn:       #eab308;
+      --bad:        #ef4444;
+      --ok-tint:    rgba(34,197,94,0.04);
+      --warn-tint:  rgba(234,179,8,0.05);
+      --bad-tint:   rgba(239,68,68,0.04);
+      --ok-border:  rgba(34,197,94,0.12);
+      --warn-border:rgba(234,179,8,0.14);
+      --bad-border: rgba(239,68,68,0.12);
+      --shadow-edge:inset 0 0.5px 0 rgba(250,249,246,0.05);
+      --shadow-md:  inset 0 0.5px 0 rgba(250,249,246,0.05),
+                    0 0 0 0.5px rgba(250,249,246,0.04),
+                    0 2px 8px rgba(0,0,0,0.30);
+      --acm:        #3a3935;
+      --acm-h:      #47463f;
+      --acm-b:      rgba(250,249,246,0.16);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+
+    body {
+      background: #060504;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 40px 24px 60px;
+      font-family: 'Manrope', system-ui, sans-serif;
+    }
+
+    /* ── Page chrome ── */
+    .page-label {
+      color: var(--text-4);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+    .page-desc {
+      color: var(--text-4);
+      font-size: 12px;
+      font-weight: 400;
+      margin-bottom: 24px;
+      opacity: 0.7;
+    }
+
+    /* ── State tabs ── */
+    .state-tabs {
+      display: flex;
+      gap: 3px;
+      margin-bottom: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .tab-btn {
+      padding: 7px 14px;
+      border-radius: 5px;
+      border: none;
+      background: transparent;
+      color: var(--text-4);
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 100ms ease;
+      white-space: nowrap;
+      letter-spacing: -0.01em;
+    }
+    .tab-btn:hover { color: var(--text-2); }
+    .tab-btn.active {
+      background: var(--surface-3);
+      color: var(--text-1);
+      box-shadow: var(--shadow-edge);
+    }
+
+    /* ── Phone shell ── */
+    .phone-wrap {
+      position: relative;
+    }
+    .phone {
+      width: 375px;
+      height: 812px;
+      background: var(--bg);
+      border-radius: 50px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      box-shadow:
+        0 0 0 1px rgba(250,249,246,0.06),
+        0 0 0 9px #0e0d0b,
+        0 0 0 10px rgba(250,249,246,0.04),
+        0 40px 100px rgba(0,0,0,0.85),
+        0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Dynamic Island */
+    .island {
+      position: absolute;
+      top: 13px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 126px;
+      height: 37px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 100;
+    }
+
+    /* ── Screen states ── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+    .screen.active { display: flex; }
+
+    .safe-top { height: 62px; flex-shrink: 0; }
+    .safe-bottom { height: 8px; flex-shrink: 0; background: var(--surface); }
+
+    .screen-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none;
+    }
+    .screen-scroll::-webkit-scrollbar { display: none; }
+
+    /* ── App Header ── */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-1);
+      letter-spacing: -0.01em;
+    }
+    .header-timer {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-4);
+      margin-top: 3px;
+      letter-spacing: 0;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .end-shift-btn {
+      padding: 5px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border-2);
+      background: transparent;
+      color: var(--text-3);
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: -0.01em;
+    }
+    .header-action-text {
+      font-size: 13px;
+      color: var(--text-4);
+      font-weight: 400;
+    }
+
+    /* ── Screen content ── */
+    .screen-content {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .screen-content.centered {
+      flex: 1;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 18px 20px;
+      box-shadow: var(--shadow-edge);
+    }
+
+    /* ── Status row ── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 14px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-ok   { background: var(--ok); }
+    .dot-warn { background: var(--warn); }
+    .dot-gray { background: var(--text-4); }
+    .status-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-3);
+      letter-spacing: -0.005em;
+    }
+    .status-spacer { flex: 1; }
+    .gps-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .gps-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--ok);
+      animation: gps-pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes gps-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.35; transform: scale(0.8); }
+    }
+    .gps-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-3);
+    }
+
+    /* ── Address ── */
+    .address {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--text-1);
+      line-height: 1.35;
+      margin-bottom: 5px;
+      letter-spacing: -0.025em;
+    }
+    .address-detail {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+    .order-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-3);
+      margin-bottom: 14px;
+    }
+
+    /* ── Comment block ── */
+    .comment-block {
+      background: var(--warn-tint);
+      border: 1px solid var(--warn-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .comment-emoji { font-size: 13px; line-height: 1.55; flex-shrink: 0; }
+    .comment-text {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+
+    /* ── Terminal warning ── */
+    .terminal-warning {
+      background: var(--bad-tint);
+      border: 1px solid var(--bad-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .warn-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-2);
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-4);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      margin-bottom: 8px;
+    }
+
+    /* ── Payment row ── */
+    .payment-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .payment-icon { font-size: 15px; opacity: 0.55; }
+    .payment-method {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-1);
+    }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 6px;
+      background: var(--acm);
+      border: 1px solid var(--acm-b);
+      color: var(--text-1);
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      margin-top: 14px;
+      box-shadow: var(--shadow-edge);
+      letter-spacing: -0.015em;
+      transition: background 100ms;
+    }
+    .btn-primary:hover { background: var(--acm-h); }
+
+    .btn-ghost {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid var(--border-2);
+      color: var(--text-3);
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      margin-top: 8px;
+      letter-spacing: -0.01em;
+      transition: background 100ms;
+    }
+    .btn-ghost:hover { background: var(--surface-2); }
+
+    /* ── No-shift / idle state ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 28px 16px 12px;
+      width: 100%;
+    }
+    .empty-icon {
+      width: 52px;
+      height: 52px;
+      margin-bottom: 18px;
+      opacity: 0.18;
+    }
+    .empty-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-1);
+      margin-bottom: 8px;
+      letter-spacing: -0.025em;
+    }
+    .empty-sub {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-3);
+      line-height: 1.55;
+      margin-bottom: 26px;
+      max-width: 280px;
+    }
+
+    /* ── Duration presets ── */
+    .presets {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .preset {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border-2);
+      background: var(--surface);
+      color: var(--text-3);
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: var(--shadow-edge);
+      transition: all 100ms;
+    }
+    .preset.selected {
+      background: var(--surface-2);
+      border-color: rgba(250,249,246,0.20);
+      color: var(--text-1);
+    }
+    .preset:hover:not(.selected) { background: var(--surface-2); color: var(--text-2); }
+    .planned-note {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+    .start-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 6px;
+      background: var(--acm);
+      border: 1px solid var(--acm-b);
+      color: var(--text-1);
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-edge);
+      letter-spacing: -0.015em;
+    }
+
+    /* ── Workload block ── */
+    .workload {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow-edge);
+    }
+    .workload-header {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-4);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      margin-bottom: 10px;
+    }
+    .workload-nums {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      margin-bottom: 5px;
+      flex-wrap: wrap;
+    }
+    .wn { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; color: var(--text-1); }
+    .wu { font-size: 14px; font-weight: 500; color: var(--text-2); }
+    .workload-avg {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-4);
+    }
+
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 8px 0 0;
+      flex-shrink: 0;
+    }
+    .tab-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 4px 4px 12px;
+      cursor: pointer;
+    }
+    .tab-item svg { display: block; }
+    .tab-item span {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+    }
+    .tab-item.active svg { color: var(--text-1); }
+    .tab-item.active span { color: var(--text-1); }
+    .tab-item:not(.active) svg { color: var(--text-4); }
+    .tab-item:not(.active) span { color: var(--text-4); }
+
+    /* ── Color swatch reference ── */
+    .swatches {
+      margin-top: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 375px;
+    }
+    .swatch-row {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: 1px solid rgba(250,249,246,0.08);
+      flex-shrink: 0;
+    }
+    .swatch-label {
+      font-size: 11px;
+      color: var(--text-4);
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-label">Weego CMI — Мобільний додаток</div>
+  <div class="page-desc">Головний екран курʼєра · DESIGN.md v2 (без акцентного кольору)</div>
+
+  <div class="state-tabs">
+    <button class="tab-btn" onclick="switchState('no-shift',this)">Не на зміні</button>
+    <button class="tab-btn" onclick="switchState('idle',this)">Очікування</button>
+    <button class="tab-btn active" onclick="switchState('assigned',this)">Нова доставка</button>
+    <button class="tab-btn" onclick="switchState('progress',this)">Активна доставка</button>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="island"></div>
+
+      <!-- ═══════════════════════════════════════
+           STATE 1: Не на зміні
+      ═══════════════════════════════════════ -->
+      <div class="screen" id="screen-no-shift">
+        <div class="safe-top"></div>
+        <div class="app-header">
+          <div>
+            <div class="header-name">Дмитро Коваль</div>
+          </div>
+          <div class="header-right">
+            <span class="header-action-text">Вийти</span>
+          </div>
+        </div>
+        <div class="screen-scroll">
+          <div class="screen-content centered">
+            <div class="empty-state">
+              <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-1)">
+                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/>
+              </svg>
+              <div class="empty-title">Ви не на зміні</div>
+              <div class="empty-sub">Вкажіть тривалість зміни або пропустіть</div>
+              <div class="presets">
+                <button class="preset">4 год</button>
+                <button class="preset selected">8 год</button>
+                <button class="preset">10 год</button>
+                <button class="preset">12 год</button>
+              </div>
+              <div class="planned-note">Зміна до 22:30</div>
+              <button class="start-btn">Вийти на зміну</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab-item active">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span>Доставки</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>Маршрут</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Статистика</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Профіль</span>
+          </div>
+        </div>
+        <div class="safe-bottom"></div>
+      </div>
+
+      <!-- ═══════════════════════════════════════
+           STATE 2: На зміні, очікування
+      ═══════════════════════════════════════ -->
+      <div class="screen" id="screen-idle">
+        <div class="safe-top"></div>
+        <div class="app-header">
+          <div>
+            <div class="header-name">Дмитро Коваль</div>
+            <div class="header-timer" id="timer-idle">Зміна 03:42:17</div>
+          </div>
+          <div class="header-right">
+            <button class="end-shift-btn">Завершити зміну</button>
+          </div>
+        </div>
+        <div class="screen-scroll">
+          <div class="screen-content">
+            <div class="empty-state" style="padding-top:32px;">
+              <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-1)">
+                <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+              </svg>
+              <div class="empty-title">Очікуємо замовлення</div>
+              <div class="empty-sub">Коли менеджер призначить доставку — ви побачите її тут</div>
+            </div>
+            <div class="workload">
+              <div class="workload-header">Моя статистика сьогодні</div>
+              <div class="workload-nums">
+                <span class="wn">7</span>
+                <span class="wu">&nbsp;доставок&nbsp;·&nbsp;</span>
+                <span class="wn">218</span>
+                <span class="wu">&nbsp;хв у роботі</span>
+              </div>
+              <div class="workload-avg">Середня по команді: 5.2 · 195 хв</div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab-item active">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span>Доставки</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>Маршрут</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Статистика</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Профіль</span>
+          </div>
+        </div>
+        <div class="safe-bottom"></div>
+      </div>
+
+      <!-- ═══════════════════════════════════════
+           STATE 3: Нова доставка (assigned)
+      ═══════════════════════════════════════ -->
+      <div class="screen active" id="screen-assigned">
+        <div class="safe-top"></div>
+        <div class="app-header">
+          <div>
+            <div class="header-name">Дмитро Коваль</div>
+            <div class="header-timer" id="timer-assigned">Зміна 03:42:17</div>
+          </div>
+          <div class="header-right">
+            <button class="end-shift-btn">Завершити зміну</button>
+          </div>
+        </div>
+        <div class="screen-scroll">
+          <div class="screen-content">
+            <div class="card">
+              <div class="status-row">
+                <div class="dot dot-warn"></div>
+                <span class="status-label">Нова доставка · очікує підтвердження</span>
+              </div>
+
+              <div class="address">вул. Саксаганського 23</div>
+              <div class="address-detail">кв. 14, 4-й поверх</div>
+              <div class="order-meta">№&nbsp;4819</div>
+
+              <div class="comment-block">
+                <span class="comment-emoji">💬</span>
+                <span class="comment-text">Домофон не працює, зателефонуйте перед приїздом</span>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="section-label">Спосіб оплати</div>
+              <div class="payment-row">
+                <span class="payment-icon">💳</span>
+                <span class="payment-method">Термінал</span>
+              </div>
+
+              <button class="btn-primary">Прийняти доставку</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab-item active">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span>Доставки</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>Маршрут</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Статистика</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Профіль</span>
+          </div>
+        </div>
+        <div class="safe-bottom"></div>
+      </div>
+
+      <!-- ═══════════════════════════════════════
+           STATE 4: Доставка активна (in_progress)
+      ═══════════════════════════════════════ -->
+      <div class="screen" id="screen-progress">
+        <div class="safe-top"></div>
+        <div class="app-header">
+          <div>
+            <div class="header-name">Дмитро Коваль</div>
+            <div class="header-timer" id="timer-progress">Зміна 03:45:03</div>
+          </div>
+          <div class="header-right">
+            <button class="end-shift-btn">Завершити зміну</button>
+          </div>
+        </div>
+        <div class="screen-scroll">
+          <div class="screen-content">
+            <div class="card">
+              <div class="status-row">
+                <div class="dot dot-ok"></div>
+                <span class="status-label">Доставка активна</span>
+                <div class="status-spacer"></div>
+                <div class="gps-badge">
+                  <div class="gps-dot"></div>
+                  <span class="gps-label">GPS активний</span>
+                </div>
+              </div>
+
+              <div class="address">вул. Саксаганського 23</div>
+              <div class="address-detail">кв. 14, 4-й поверх</div>
+              <div class="order-meta">№&nbsp;4819 · ~12 хв</div>
+
+              <div class="comment-block">
+                <span class="comment-emoji">💬</span>
+                <span class="comment-text">Домофон не працює, зателефонуйте перед приїздом</span>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="section-label">Спосіб оплати</div>
+              <div class="payment-row">
+                <span class="payment-icon">💳</span>
+                <span class="payment-method">Термінал</span>
+              </div>
+
+              <div class="terminal-warning" style="margin-top:12px;">
+                <span style="font-size:14px;">⚠️</span>
+                <span class="warn-text">Не забудьте взяти термінал</span>
+              </div>
+
+              <button class="btn-primary">Здати замовлення</button>
+              <button class="btn-ghost">Звʼязатись з менеджером</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab-item active">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span>Доставки</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            <span>Маршрут</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span>Статистика</span>
+          </div>
+          <div class="tab-item">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Профіль</span>
+          </div>
+        </div>
+        <div class="safe-bottom"></div>
+      </div>
+
+    </div><!-- /phone -->
+  </div><!-- /phone-wrap -->
+
+  <script>
+    // ── State switcher ──────────────────────────────────────────
+    function switchState(id, btn) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('screen-' + id).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── Live shift timer ────────────────────────────────────────
+    let sec = 13337;
+    function tick() {
+      sec++;
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      const label = `Зміна ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      ['timer-idle','timer-assigned','timer-progress'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = label;
+      });
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ── Preset toggle ───────────────────────────────────────────
+    document.querySelectorAll('.preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preset').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+  </script>
+</body>
+</html>

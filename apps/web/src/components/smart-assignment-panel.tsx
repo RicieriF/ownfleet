@@ -73,7 +73,7 @@ function RetryCountdown({ addedAt }: { addedAt: string }) {
   }, [addedAt]);
 
   return (
-    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t4)', fontSize: '12px' }}>
+    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t3)', fontSize: '12px' }}>
       {secsLeft}с
     </span>
   );
@@ -256,7 +256,7 @@ export function SmartAssignmentPanel() {
             Рекомендація
           </span>
         </div>
-        <p className="text-sm" style={{ color: 'var(--t4)' }}>
+        <p className="text-sm" style={{ color: 'var(--t3)' }}>
           Немає замовлень на призначення
         </p>
       </div>
@@ -360,7 +360,7 @@ export function SmartAssignmentPanel() {
                           {recommendation.courier_name}
                         </span>
                       </span>
-                      <span className="text-xs" style={{ color: 'var(--t4)' }}>
+                      <span className="text-xs" style={{ color: 'var(--t3)' }}>
                         ETA ~{etaMinutes(recommendation.eta_seconds)} хв
                         {' · '}
                         {zoneLabel(recommendation.distance_meters)}{' '}
@@ -402,10 +402,10 @@ export function SmartAssignmentPanel() {
                 </>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs" style={{ color: 'var(--t4)' }}>
+                  <span className="text-xs" style={{ color: 'var(--t3)' }}>
                     Очікування курʼєра…
                   </span>
-                  <span className="text-xs" style={{ color: 'var(--t4)' }}>
+                  <span className="text-xs" style={{ color: 'var(--t3)' }}>
                     Наступна спроба через <RetryCountdown addedAt={addedAt} />
                   </span>
                 </div>

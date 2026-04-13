@@ -57,7 +57,7 @@ function CopyButton({ value }: { value: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="ml-1.5 p-1 rounded text-[var(--t4)] hover:text-[var(--t2)] hover:bg-[var(--s2)] transition-colors"
+      className="ml-1.5 p-1 rounded text-[var(--t3)] hover:text-[var(--t2)] hover:bg-[var(--s2)] transition-colors"
       title={failed ? 'Не вдалось скопіювати' : 'Копіювати'}
     >
       {copied ? <Check size={12} className="text-[var(--ok)]" /> : <Copy size={12} className={failed ? 'text-[var(--bad)]' : ''} />}
@@ -184,24 +184,24 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="Pizza Roma"
-              className="w-full bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
+              className="w-full bg-[var(--bg)] border border-[var(--br2)] rounded-md px-3 py-2 text-sm text-[var(--t1)] placeholder:text-[var(--t3)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">Slug</label>
             <div className="flex items-center gap-0">
-              <span className="px-3 py-2 bg-[var(--s2)] border border-r-0 border-[var(--br2)] rounded-l-md text-xs text-[var(--t4)] font-mono select-none">
+              <span className="px-3 py-2 bg-[var(--s2)] border border-r-0 border-[var(--br2)] rounded-l-md text-xs text-[var(--t3)] font-mono select-none">
                 owner-
               </span>
               <input
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                 placeholder="pizza-roma"
-                className="flex-1 bg-[var(--bg)] border border-[var(--br2)] rounded-r-md px-3 py-2 text-sm text-[var(--t1)] font-mono placeholder:text-[var(--t4)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
+                className="flex-1 bg-[var(--bg)] border border-[var(--br2)] rounded-r-md px-3 py-2 text-sm text-[var(--t1)] font-mono placeholder:text-[var(--t3)] focus:outline-none focus:border-[rgba(250,249,246,0.25)] transition-colors"
               />
             </div>
-            <p className="mt-1 text-[11px] text-[var(--t4)]">
+            <p className="mt-1 text-[11px] text-[var(--t3)]">
               Логін: owner-{slug || '…'}@weego.app
             </p>
             {slugIsAutoEmpty && (
@@ -327,7 +327,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
           </div>
 
           <div className="px-3 py-2.5 rounded bg-[var(--s2)] border border-[var(--br)]">
-            <p className="text-xs text-[var(--t4)] mb-0.5">Підписка до</p>
+            <p className="text-xs text-[var(--t3)] mb-0.5">Підписка до</p>
             <p className="text-sm font-mono text-[var(--t1)]">
               {preview.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
@@ -385,7 +385,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-[var(--t1)] tracking-tight">Заклади</h1>
-          <p className="mt-1 text-sm text-[var(--t4)] font-mono">
+          <p className="mt-1 text-sm text-[var(--t3)] font-mono">
             {tenants.length} всього · {active} активних · {trial} тріал{grace > 0 ? ` · ${grace} grace` : ''} · {expired} прострочених
           </p>
         </div>
@@ -414,7 +414,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
           <tbody>
             {tenants.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[var(--t4)]">
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-[var(--t3)]">
                   Закладів ще немає — створіть перший
                 </td>
               </tr>
@@ -470,7 +470,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
                 {/* Orders */}
                 <td className="px-4 py-2.5 text-center">
                   <span className="text-sm font-mono text-[var(--t2)]">{t.orders_last_30d}</span>
-                  <span className="text-xs font-mono text-[var(--t4)] ml-1">/ {t.orders_total}</span>
+                  <span className="text-xs font-mono text-[var(--t3)] ml-1">/ {t.orders_total}</span>
                 </td>
 
                 {/* Action */}

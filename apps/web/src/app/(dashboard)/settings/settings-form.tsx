@@ -45,7 +45,7 @@ function SectionCard({ title, description, children }: {
       <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--br)' }}>
         <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{title}</p>
         {description && (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--t4)' }}>{description}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{description}</p>
         )}
       </div>
       <div className="px-5 py-4">{children}</div>
@@ -62,7 +62,7 @@ function FieldRow({ label, hint, children }: {
     <div className="flex items-center justify-between py-2.5 gap-6">
       <div className="min-w-0">
         <p className="text-sm" style={{ color: 'var(--t2)' }}>{label}</p>
-        {hint && <p className="text-xs mt-0.5" style={{ color: 'var(--t4)' }}>{hint}</p>}
+        {hint && <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{hint}</p>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -92,7 +92,7 @@ function NumberInput({
         onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
         onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
       />
-      <span className="text-sm" style={{ color: 'var(--t4)' }}>{suffix}</span>
+      <span className="text-sm" style={{ color: 'var(--t3)' }}>{suffix}</span>
     </div>
   );
 }
@@ -296,7 +296,7 @@ export function SettingsForm({
                         padding: '5px 10px', borderRadius: '6px',
                         fontFamily: 'var(--font-mono)',
                         background: etaAlertDelay === opt ? 'var(--acm)' : 'transparent',
-                        color: etaAlertDelay === opt ? 'var(--t1)' : 'var(--t4)',
+                        color: etaAlertDelay === opt ? 'var(--t1)' : 'var(--t3)',
                         border: `1px solid ${etaAlertDelay === opt ? 'var(--acm)' : 'var(--br)'}`,
                       }}
                     >
@@ -362,7 +362,7 @@ export function SettingsForm({
                   <span className="text-sm font-medium" style={{ color: 'var(--t1)' }}>
                     {opt.label}
                   </span>
-                  <span className="text-xs" style={{ color: 'var(--t4)' }}>
+                  <span className="text-xs" style={{ color: 'var(--t3)' }}>
                     {opt.hint}
                   </span>
                 </span>
@@ -405,7 +405,7 @@ export function SettingsForm({
                     padding: '5px 10px', borderRadius: '6px',
                     fontFamily: 'var(--font-mono)',
                     background: courierNotRespondingMin === opt ? 'var(--acm)' : 'transparent',
-                    color: courierNotRespondingMin === opt ? 'var(--t1)' : 'var(--t4)',
+                    color: courierNotRespondingMin === opt ? 'var(--t1)' : 'var(--t3)',
                     border: `1px solid ${courierNotRespondingMin === opt ? 'var(--acm)' : 'var(--br)'}`,
                   }}
                 >

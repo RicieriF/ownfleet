@@ -148,7 +148,7 @@ export function TelegramSettings({ initialStatus }: Props) {
           >
             {connectCode}
           </p>
-          <p className="text-xs" style={{ color: 'var(--t4)' }}>
+          <p className="text-xs" style={{ color: 'var(--t3)' }}>
             Відкрийте бота <span style={{ color: 'var(--t2)' }}>@weego_notify_bot</span> і надішліть:
           </p>
           <p
@@ -157,7 +157,7 @@ export function TelegramSettings({ initialStatus }: Props) {
           >
             /start {connectCode}
           </p>
-          <p className="text-xs mt-2" style={{ color: 'var(--t4)' }}>
+          <p className="text-xs mt-2" style={{ color: 'var(--t3)' }}>
             Після підключення оновіть сторінку.
           </p>
         </div>
@@ -165,7 +165,7 @@ export function TelegramSettings({ initialStatus }: Props) {
 
       {/* Not connected placeholder */}
       {!connected && !connectCode && (
-        <div className="px-5 py-5 text-sm" style={{ color: 'var(--t4)' }}>
+        <div className="px-5 py-5 text-sm" style={{ color: 'var(--t3)' }}>
           Отримуйте сповіщення про замовлення та курʼєрів прямо в Telegram. Підключення займає 30 секунд.
         </div>
       )}

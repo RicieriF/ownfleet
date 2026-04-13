@@ -140,7 +140,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
         <button
           onClick={() => { setOpen(false); setError(''); }}
           className="text-sm"
-          style={{ color: 'var(--t4)' }}
+          style={{ color: 'var(--t3)' }}
         >
           Скасувати
         </button>
@@ -170,7 +170,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
             <span
               key={ev}
               className="text-xs px-1.5 py-0.5 rounded"
-              style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t4)', borderRadius: '3px' }}
+              style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t3)', borderRadius: '3px' }}
             >
               {ev}
             </span>
@@ -251,7 +251,7 @@ export function WebhooksManager({ initialWebhooks }: { initialWebhooks: Webhook[
       {webhooks.length === 0 ? (
         <div
           className="rounded-lg px-5 py-8 text-center text-sm"
-          style={{ background: 'var(--s2)', border: '1px solid var(--br)', color: 'var(--t4)' }}
+          style={{ background: 'var(--s2)', border: '1px solid var(--br)', color: 'var(--t3)' }}
         >
           Немає налаштованих webhooks
         </div>

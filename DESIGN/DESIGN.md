@@ -57,8 +57,29 @@ The palette is intentionally warm — not cold neutral zinc, but warm-shifted gr
 | `--border-2` | `rgba(250,249,246,0.14)` | Input borders, stronger dividers |
 | `--text-1` | `#faf9f6` | Primary text — warm parchment, NOT pure white |
 | `--text-2` | `#d5d4ce` | Secondary text |
-| `--text-3` | `#9c9b96` | Labels, placeholders |
-| `--text-4` | `#78776e` | Disabled, timestamps, table headers |
+| `--text-3` | `#9c9b96` | Labels, placeholders, hint text, helper descriptions — minimum for all readable body text |
+| `--text-4` | `#78776e` | Disabled states, timestamps, decorative uppercase structural headers (section headers, table column labels) — **NEVER for readable body text** |
+
+**`--text-3` vs `--text-4` — the critical distinction:**
+
+| Use case | Token | Why |
+|----------|-------|-----|
+| Hint text under inputs | `--text-3` | User must read to configure correctly |
+| Helper description under section title | `--text-3` | User must read to understand the section |
+| Option description in a selector | `--text-3` | User must read to make a choice |
+| Inactive option in a button group | `--text-3` | User must read each option before selecting |
+| Input unit label (suffix: "хв", "днів") | `--text-3` | User must read to understand the field |
+| Uppercase structural section header | `--text-4` | Decorative marker, not body text |
+| Table column header (uppercase) | `--text-4` | Structural chrome, user reads values not headers |
+| Timestamp in a table cell | `--text-4` | Scanned not read; column header identifies context |
+| Disabled control label | `--text-4` | Intentionally recedes to signal non-interactivity |
+| Transient state ("Збереження…") | `--text-4` | Ephemeral, disappears in < 2s |
+
+**WCAG contrast on `--s2` background (`#252420`):**
+- `--text-3` (#9c9b96): **5.6:1** — passes WCAG AA for all text sizes ✅
+- `--text-4` (#78776e): **3.5:1** — fails WCAG AA for text < 18px ❌
+
+Rule: if a user must read the text to understand or make a decision, it must be at minimum `--text-3`.
 
 **Why warm parchment (`#faf9f6`) instead of pure white (`#fafafa`):** Pure white on a dark background creates harsh contrast that strains eyes over hours. The warm parchment has a barely-perceptible cream tint that softens the reading experience. The difference is invisible consciously but felt after extended use.
 
@@ -857,8 +878,9 @@ export default {
 These principles guide decisions not covered by specific rules above.
 
 ### Eye strain reduction
-- Primary text contrast ratio: ~14:1 (warm parchment on warm near-black). High enough for readability, lower than pure white on pure black (~21:1) which causes halation over hours.
-- Secondary text at ~8:1. Labels/placeholders at ~4.5:1.
+- Primary text contrast ratio: ~15:1 (`--text-1` on `--surface-2`). High enough for readability, lower than pure white on pure black (~21:1) which causes halation over hours.
+- Secondary text (`--text-2`) at ~10:1 on `--surface-2`. Labels/helper text (`--text-3`) at ~5.6:1 — passes WCAG AA.
+- `--text-4` (#78776e) on `--surface-2` is only ~3.5:1 — below WCAG AA. Use exclusively for decorative/structural elements, never for readable text on card surfaces.
 - Never place high-contrast text next to semantic-colored elements — the combination creates visual vibration.
 
 ### Weight = volume
@@ -898,7 +920,8 @@ These principles guide decisions not covered by specific rules above.
 | 2026-04-06 | Multi-layer shadow system | Replaced crude 3-tier shadows with layered edge+containment+elevation at low opacity. Surfaces "barely exist" instead of "sticking out." Inspired by ElevenLabs' refined shadow stacking. |
 | 2026-04-06 | Quiet Screen Principle — max 5 colored elements | Screenshots revealed 15+ simultaneous colored elements: badges, text, borders, sparklines. Created visual chaos. New rule: 90%+ neutral, color only in dots and thin borders. |
 | 2026-04-06 | Removed info/cyan color | 4 semantic colors dilute meaning. Green/amber/red are sufficient. Info states use plain neutral styling. |
-| 2026-04-07 | `--text-4` bumped `#6b6a66` → `#78776e` | Контраст ~3.8:1 був нижче WCAG AA для малого тексту. Новий ~4.7:1 — достатньо для 8–12г роботи без втоми. Warmth ratio збережений (R−B = +10). |
+| 2026-04-07 | `--text-4` bumped `#6b6a66` → `#78776e` | Контраст ~3.8:1 був нижче WCAG AA для малого тексту. Новий ~4.7:1 на `--bg` — достатньо для декоративних uppercase headers. Але на `--s2` лише ~3.5:1 → заборонено для readable body text. |
+| 2026-04-08 | `--text-4` заборонено для readable тексту | hint/description/option text мусить бути `--text-3` (5.6:1 на `--s2`). `--text-4` тільки для uppercase structural headers, timestamps, disabled states. Виправлено в settings-form, tracking-widget-section, telegram-settings. |
 | 2026-04-06 | Status as dot + neutral text, not colored badges | Colored badge pills ("В дорозі" in green, "Не відповідає" in red) were the #1 source of color noise. 6px dot + `--text-3` text conveys the same information with 95% less visual load. |
 | 2026-04-06 | KPI cards: uniform neutral | Colored top borders, sparklines, and trend text on KPI cards made the top of the dashboard a color war zone. All KPIs now visually identical — data speaks, chrome doesn't. |
 | 2026-04-06 | "Нагадати" as ghost button, not red | A red button next to a red dot next to red text is triple-redundancy. The dot signals danger. The button is just an action. |

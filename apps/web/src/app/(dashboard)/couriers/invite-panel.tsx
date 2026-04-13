@@ -96,7 +96,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
       <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--br)' }}>
         <div>
           <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>Запросити курʼєра</p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--t4)' }}>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>
             Токен діє 24 години. Курʼєр вводить його при першому відкритті застосунку.
           </p>
         </div>
@@ -115,7 +115,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
             style={{
               background: 'var(--s1)',
               border: '1px solid var(--br)',
-              color: selectedCourierId ? 'var(--t1)' : 'var(--t4)',
+              color: selectedCourierId ? 'var(--t1)' : 'var(--t3)',
               padding: '6px 10px',
               borderRadius: '6px',
             }}
@@ -153,7 +153,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
             >
               {newToken.token}
             </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--t4)' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>
               Дійсний до{' '}
               <span style={{ fontFamily: 'var(--font-mono)' }}>
                 {new Date(newToken.expires_at).toLocaleString('uk-UA', {
@@ -173,7 +173,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
             <button
               onClick={() => setNewToken(null)}
               className="text-xs"
-              style={{ color: 'var(--t4)' }}
+              style={{ color: 'var(--t3)' }}
             >
               ✕
             </button>
@@ -183,7 +183,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
 
       {/* Invites list */}
       {activeInvites.length === 0 ? (
-        <div className="px-5 py-6 text-center text-sm" style={{ color: 'var(--t4)' }}>
+        <div className="px-5 py-6 text-center text-sm" style={{ color: 'var(--t3)' }}>
           Немає активних запрошень
         </div>
       ) : (
@@ -197,13 +197,13 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--t1)' }}>
                     {invite.courier.name}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--t4)', fontFamily: 'var(--font-mono)' }}>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--t3)', fontFamily: 'var(--font-mono)' }}>
                     {invite.token.slice(0, 12)}…
                   </p>
                 </div>
 
                 {/* Expiry */}
-                <span className="text-xs hidden sm:block" style={{ color: 'var(--t4)' }}>
+                <span className="text-xs hidden sm:block" style={{ color: 'var(--t3)' }}>
                   {st === 'used'
                     ? 'Прийнято'
                     : `${formatDistanceToNow(new Date(invite.expires_at), { locale: uk, addSuffix: true })}`}

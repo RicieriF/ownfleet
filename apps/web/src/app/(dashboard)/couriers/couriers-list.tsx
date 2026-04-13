@@ -43,7 +43,7 @@ function ShiftTimer({ startedAt, plannedEndAt }: { startedAt: string; plannedEnd
   }, [startedAt, plannedEndAt]);
 
   return (
-    <span className="text-xs mono text-[var(--t4)]">{label}</span>
+    <span className="text-xs mono text-[var(--t3)]">{label}</span>
   );
 }
 
@@ -99,7 +99,7 @@ function PlannedEndEditor({
           key={p.hours}
           onClick={() => setPreset(p.hours)}
           disabled={saving}
-          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t4)] hover:border-[var(--br2)] hover:text-[var(--t2)] transition-colors disabled:opacity-40"
+          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t3)] hover:border-[var(--br2)] hover:text-[var(--t2)] transition-colors disabled:opacity-40"
         >
           {p.label}
         </button>
@@ -108,7 +108,7 @@ function PlannedEndEditor({
         <button
           onClick={clearPlannedEnd}
           disabled={saving}
-          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t4)] hover:border-[var(--bad)] hover:text-[var(--bad)] transition-colors disabled:opacity-40"
+          className="px-2 py-0.5 text-[11px] rounded border border-[var(--br)] text-[var(--t3)] hover:border-[var(--bad)] hover:text-[var(--bad)] transition-colors disabled:opacity-40"
         >
           ×
         </button>
@@ -200,7 +200,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-[var(--t1)]">{courier.name}</span>
-                  <span className="text-xs text-[var(--t4)] mono">{courier.phone}</span>
+                  <span className="text-xs text-[var(--t3)] mono">{courier.phone}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={cn('text-xs font-medium', config.labelColor)}>
@@ -233,7 +233,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                     )}
                     <button
                       onClick={() => setEditingShift(isEditingThis ? null : courier.id)}
-                      className="text-[11px] text-[var(--t4)] hover:text-[var(--t2)] transition-colors underline underline-offset-2"
+                      className="text-[11px] text-[var(--t3)] hover:text-[var(--t2)] transition-colors underline underline-offset-2"
                     >
                       {isEditingThis ? 'Закрити' : 'Змінити час'}
                     </button>

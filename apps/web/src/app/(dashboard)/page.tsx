@@ -3,6 +3,8 @@ import { apiFetch } from '@/lib/api';
 import { Order, CourierWithStatus, Establishment } from '@/types';
 import { OrdersTable } from './orders-table';
 import { SmartAssignmentPanel } from '@/components/smart-assignment-panel';
+import { AlertCard } from './alert-card';
+import { CourierStatusPanel } from './courier-status-panel';
 
 async function fetchData() {
   const [orders, couriers, establishment] = await Promise.all([
@@ -83,7 +85,7 @@ function KpiCard({ value, label, sub }: KpiCardProps) {
         <div
           style={{
             fontSize: '11px',
-            color: 'var(--t4)',
+            color: 'var(--t3)',
             marginTop: '4px',
             lineHeight: 1.4,
           }}
@@ -98,6 +100,16 @@ function KpiCard({ value, label, sub }: KpiCardProps) {
 export default async function OrdersPage() {
   const { orders, couriers, establishment } = await fetchData();
   const fleet = computeFleetKpi(orders, couriers);
+
+  // Alert: not_responding couriers with an active in_progress delivery
+  const notRespondingAlerts = couriers
+    .filter((c) => c.status === 'not_responding')
+    .flatMap((c) => {
+      const activeOrder = orders.find(
+        (o) => o.delivery?.courier_id === c.id && o.status === 'in_progress',
+      );
+      return activeOrder ? [{ courier: c, order: activeOrder }] : [];
+    });
 
   return (
     <div>
@@ -115,76 +127,54 @@ export default async function OrdersPage() {
               : undefined
           }
         />
-        <KpiCard
-          value={fleet.inProgress}
-          label="У дорозі"
-        />
-        <KpiCard
-          value={fleet.free}
-          label="Вільних"
-        />
-        <KpiCard
-          value={fleet.notStarted}
-          label="Не вийшли"
-        />
-        <KpiCard
-          value={fleet.pending}
-          label="Очікують"
-          sub="без курʼєра"
-        />
+        <KpiCard value={fleet.inProgress} label="У дорозі" />
+        <KpiCard value={fleet.free} label="Вільних" />
+        <KpiCard value={fleet.notStarted} label="Не вийшли" />
+        <KpiCard value={fleet.pending} label="Очікують" sub="без курʼєра" />
       </div>
 
       {/* Smart assignment panel — only in recommend mode */}
-      {establishment.dispatch_mode === 'recommend' && (
-        <SmartAssignmentPanel />
-      )}
+      {establishment.dispatch_mode === 'recommend' && <SmartAssignmentPanel />}
 
-      {/* Orders section */}
-      <div className="flex items-center justify-between mb-3">
-        <span
-          style={{
-            fontSize: '11px',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: 'var(--t4)',
-          }}
-        >
-          Активні замовлення
-        </span>
-        <span
-          className="mono"
-          style={{ fontSize: '12px', color: 'var(--t4)' }}
-        >
-          {orders.length}
-        </span>
-      </div>
+      {/* Alert cards — not_responding couriers with active delivery */}
+      {notRespondingAlerts.map(({ courier, order }) => (
+        <AlertCard key={courier.id} courier={courier} order={order} />
+      ))}
 
-      <Suspense
-        fallback={
-          <div
-            style={{
-              background: 'var(--sf)',
-              border: '1px solid var(--br)',
-              borderRadius: '8px',
-              padding: '32px',
-              textAlign: 'center',
-              fontSize: '13px',
-              color: 'var(--t4)',
-            }}
+      {/* Two-column layout: orders (flex-1) + courier status panel (300px) */}
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  background: 'var(--sf)',
+                  border: '1px solid var(--br)',
+                  borderRadius: '8px',
+                  padding: '32px',
+                  textAlign: 'center',
+                  fontSize: '13px',
+                  color: 'var(--t4)',
+                }}
+              >
+                Завантаження…
+              </div>
+            }
           >
-            Завантаження…
-          </div>
-        }
-      >
-        <OrdersTable
-          orders={orders}
-          couriers={couriers}
-          hostedTrackingEnabled={establishment.hosted_tracking_enabled ?? false}
-          showSlaOnDashboard={establishment.settings?.show_sla_on_dashboard ?? false}
-          stuckThresholdMinutes={establishment.settings?.dispatch_no_courier_escalation_minutes ?? 5}
-        />
-      </Suspense>
+            <OrdersTable
+              orders={orders}
+              couriers={couriers}
+              hostedTrackingEnabled={establishment.hosted_tracking_enabled ?? false}
+              showSlaOnDashboard={establishment.settings?.show_sla_on_dashboard ?? false}
+              stuckThresholdMinutes={establishment.settings?.dispatch_no_courier_escalation_minutes ?? 5}
+            />
+          </Suspense>
+        </div>
+
+        <div style={{ width: '300px', flexShrink: 0 }}>
+          <CourierStatusPanel couriers={couriers} />
+        </div>
+      </div>
     </div>
   );
 }

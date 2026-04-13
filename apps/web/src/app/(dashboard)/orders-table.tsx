@@ -147,6 +147,15 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
     });
   }
 
+  function openAssignModal(order: Order) {
+    setAssignModalOrder(order);
+    setSelectedCourierId('');
+    setActionError('');
+  }
+
+  const pendingOrders = orders.filter((o) => o.status === 'pending');
+  const activeOrders = orders.filter((o) => o.status !== 'pending');
+
   return (
     <>
       {actionError && (
@@ -162,6 +171,161 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
           {actionError}
         </div>
       )}
+
+      {/* ── Pending assignments ───────────────────────────────────── */}
+      {pendingOrders.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                color: 'var(--t4)',
+              }}
+            >
+              Очікують призначення
+            </span>
+            <span className="mono" style={{ fontSize: '12px', color: 'var(--t3)' }}>
+              {pendingOrders.length}
+            </span>
+          </div>
+
+          <div
+            style={{
+              background: 'var(--sf)',
+              border: '1px solid var(--br)',
+              borderRadius: '8px',
+              boxShadow: 'var(--shadow-edge)',
+              overflow: 'hidden',
+            }}
+          >
+            {pendingOrders.map((order, i) => (
+              <div
+                key={order.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 12px',
+                  borderTop: i > 0 ? '1px solid var(--br)' : undefined,
+                  background: isStuck(order) ? 'var(--bad-tint)' : undefined,
+                }}
+              >
+                {/* Order id */}
+                <span
+                  className="mono"
+                  style={{ fontSize: '12px', color: 'var(--t3)', flexShrink: 0, minWidth: '52px' }}
+                >
+                  {order.external_id ? `#${order.external_id}` : '—'}
+                </span>
+
+                {/* Address */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: 'var(--t1)',
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {order.address}
+                  </span>
+                  {order.notes && (
+                    <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{order.notes}</span>
+                  )}
+                </div>
+
+                {/* Age */}
+                <span
+                  className="mono"
+                  style={{ fontSize: '11px', color: isStuck(order) ? 'var(--bad)' : 'var(--t4)', flexShrink: 0 }}
+                >
+                  {formatDistanceToNow(new Date(order.ready_at ?? order.created_at), {
+                    addSuffix: false,
+                    locale: uk,
+                  })}
+                </span>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                  <button
+                    onClick={() => openAssignModal(order)}
+                    disabled={isPending}
+                    className="transition-colors disabled:opacity-40"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      borderRadius: '6px',
+                      background: 'var(--acm)',
+                      color: 'var(--t1)',
+                      border: '1px solid var(--acm-b)',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm-h)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm)';
+                    }}
+                  >
+                    Призначити
+                  </button>
+                  <button
+                    onClick={() => handleCancel(order.id)}
+                    disabled={isPending}
+                    className="transition-colors disabled:opacity-40"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                      background: 'var(--s2)',
+                      color: 'var(--t3)',
+                      border: '1px solid var(--br)',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = 'var(--s3)';
+                      el.style.color = 'var(--t1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLButtonElement;
+                      el.style.background = 'var(--s2)';
+                      el.style.color = 'var(--t3)';
+                    }}
+                  >
+                    Скасувати
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Active deliveries table ───────────────────────────────── */}
+      <div className="flex items-center justify-between mb-2">
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 500,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: 'var(--t4)',
+          }}
+        >
+          Активні доставки
+        </span>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--t3)' }}>
+          {activeOrders.length}
+        </span>
+      </div>
 
       <div
         className="rounded-md overflow-hidden"
@@ -192,32 +356,29 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
             </tr>
           </thead>
           <tbody>
-            {orders.length === 0 && (
+            {activeOrders.length === 0 && (
               <tr>
                 <td
                   colSpan={hostedTrackingEnabled ? 6 : 5}
                   className="px-4 py-10 text-center text-sm"
-                  style={{ color: 'var(--t4)' }}
+                  style={{ color: 'var(--t3)' }}
                 >
-                  Активних замовлень немає
+                  Активних доставок немає
                 </td>
               </tr>
             )}
-            {orders.map((order, i) => (
+            {activeOrders.map((order, i) => (
               <tr
                 key={order.id}
                 className="transition-colors"
                 style={{
                   borderTop: i > 0 ? '1px solid var(--br)' : undefined,
-                  background: isStuck(order) ? 'var(--bad-tint)' : undefined,
                 }}
                 onMouseEnter={(e) => {
-                  if (!isStuck(order)) {
-                    (e.currentTarget as HTMLTableRowElement).style.background = 'var(--s2)';
-                  }
+                  (e.currentTarget as HTMLTableRowElement).style.background = 'var(--s2)';
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLTableRowElement).style.background = isStuck(order) ? 'var(--bad-tint)' : '';
+                  (e.currentTarget as HTMLTableRowElement).style.background = '';
                 }}
               >
                 {/* Address */}
@@ -227,24 +388,8 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                       {order.address}
                     </span>
                     {order.notes && (
-                      <span className="text-xs shrink-0" style={{ color: 'var(--t4)' }}>
+                      <span className="text-xs shrink-0" style={{ color: 'var(--t3)' }}>
                         ({order.notes})
-                      </span>
-                    )}
-                    {order.ready_at && (
-                      <span
-                        className="shrink-0 px-1.5 py-0.5 rounded-sm"
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 500,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.04em',
-                          background: 'var(--s2)',
-                          color: 'var(--t3)',
-                          border: '1px solid var(--br)',
-                        }}
-                      >
-                        Готово
                       </span>
                     )}
                   </div>
@@ -264,15 +409,6 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                     <span style={{ color: 'var(--t3)', fontSize: '13px' }}>
                       {STATUS_LABELS[order.status]}
                     </span>
-                    {isStuck(order) && (
-                      <span
-                        className="mono"
-                        style={{ fontSize: '11px', color: 'var(--t4)', letterSpacing: '0.03em' }}
-                        title="Автодиспетчер не зміг знайти курʼєра. Призначте вручну."
-                      >
-                        — немає курʼєра
-                      </span>
-                    )}
                   </div>
                 </td>
 
@@ -283,7 +419,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                   )}
                 </td>
 
-                {/* Age + ETA — always show creation age; ETA countdown shown alongside when enabled */}
+                {/* Age + ETA */}
                 <td className="px-3 py-2.5">
                   <div className="flex flex-col gap-0.5">
                     <span className="mono" style={{ fontSize: '12px', color: 'var(--t4)' }}>
@@ -331,35 +467,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                 {/* Actions */}
                 <td className="px-3 py-2.5">
                   <div className="flex gap-2">
-                    {order.status === 'pending' && (
-                      <button
-                        onClick={() => {
-                          setAssignModalOrder(order);
-                          setSelectedCourierId('');
-                          setActionError('');
-                        }}
-                        className="transition-colors disabled:opacity-40"
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          borderRadius: '6px',
-                          background: 'var(--acm)',
-                          color: 'var(--t1)',
-                          border: '1px solid var(--acm-b)',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm-h)';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm)';
-                        }}
-                        disabled={isPending}
-                      >
-                        Призначити
-                      </button>
-                    )}
-                    {(order.status === 'pending' || order.status === 'assigned') && (
+                    {(order.status === 'assigned') && (
                       <button
                         onClick={() => handleCancel(order.id)}
                         className="transition-colors disabled:opacity-40"

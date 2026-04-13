@@ -26,19 +26,19 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             Weego Platform
           </span>
           <span className="text-[var(--br2)] text-xs">|</span>
-          <span className="text-xs text-[var(--t4)] font-mono">admin</span>
+          <span className="text-xs text-[var(--t3)] font-mono">admin</span>
         </div>
         <div className="flex items-center gap-4">
           <Link
             href="/"
-            className="text-xs text-[var(--t4)] hover:text-[var(--t2)] transition-colors"
+            className="text-xs text-[var(--t3)] hover:text-[var(--t2)] transition-colors"
           >
             ← Назад до дашборду
           </Link>
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
-              className="flex items-center gap-1.5 text-xs text-[var(--t4)] hover:text-[var(--bad)] transition-colors"
+              className="flex items-center gap-1.5 text-xs text-[var(--t3)] hover:text-[var(--bad)] transition-colors"
             >
               <LogOut size={12} strokeWidth={2} />
               Вийти

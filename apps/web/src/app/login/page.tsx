@@ -57,7 +57,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:ring-1 focus:ring-[rgba(250,249,246,0.25)] focus:border-[rgba(250,249,246,0.25)] transition-colors"
+              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t3)] focus:outline-none focus:ring-1 focus:ring-[rgba(250,249,246,0.25)] focus:border-[rgba(250,249,246,0.25)] transition-colors"
               placeholder="manager@restaurant.ua"
             />
           </div>
@@ -73,7 +73,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t4)] focus:outline-none focus:ring-1 focus:ring-[rgba(250,249,246,0.25)] focus:border-[rgba(250,249,246,0.25)] transition-colors"
+              className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--br)] rounded-md text-sm text-[var(--t1)] placeholder:text-[var(--t3)] focus:outline-none focus:ring-1 focus:ring-[rgba(250,249,246,0.25)] focus:border-[rgba(250,249,246,0.25)] transition-colors"
               placeholder="••••••••"
             />
           </div>

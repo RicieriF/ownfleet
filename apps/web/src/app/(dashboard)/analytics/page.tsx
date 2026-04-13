@@ -14,7 +14,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
     <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] px-5 py-4 card-shine">
       <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{label}</p>
       <p className="text-3xl font-bold text-[var(--t1)] mt-1.5 mono">{value}</p>
-      {sub && <p className="text-xs text-[var(--t4)] mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-[var(--t3)] mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -72,7 +72,7 @@ export default async function AnalyticsPage() {
           <tbody className="divide-y divide-[var(--br)]">
             {perCourier.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-[var(--t4)] text-sm">
+                <td colSpan={6} className="px-4 py-8 text-center text-[var(--t3)] text-sm">
                   Немає даних за обраний період
                 </td>
               </tr>

@@ -131,7 +131,7 @@ function IntegrationCard({
           />
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{meta.label}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--t4)' }}>{meta.description}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{meta.description}</p>
           </div>
         </div>
 
@@ -212,7 +212,7 @@ function IntegrationCard({
               >
                 {isPending ? 'Зберігаємо…' : 'Зберегти'}
               </button>
-              <button onClick={() => setOpen(false)} className="text-sm" style={{ color: 'var(--t4)' }}>
+              <button onClick={() => setOpen(false)} className="text-sm" style={{ color: 'var(--t3)' }}>
                 Скасувати
               </button>
             </div>

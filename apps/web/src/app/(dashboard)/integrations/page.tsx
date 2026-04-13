@@ -16,7 +16,7 @@ export default async function IntegrationsPage() {
     <div className="p-6 max-w-2xl">
       <div className="mb-6">
         <h1 className="text-xl font-semibold" style={{ color: 'var(--t1)' }}>Інтеграції</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--t4)' }}>
+        <p className="text-sm mt-1" style={{ color: 'var(--t3)' }}>
           Підключіть POS-систему для автоматичного імпорту замовлень.
         </p>
       </div>
