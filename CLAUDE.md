@@ -54,7 +54,7 @@ B2B SaaS платформа для управління власними кур�
 | `ShiftsModule` | Зміни курʼєрів: старт/завершення, авто-закриття, Telegram-нагадування (shift_ending_soon, courier_not_responding) |
 | `OrdersModule` | Замовлення, state machine, призначення курʼєра + розрахунок ETA при assign; dispatch алгоритм (manual/recommend/auto): `POST /ready`, `POST /assign-recommended`, `POST /reassign`; `GET /couriers/workload-today` |
 | `TrackingModule` | GPS пінги → Redis → WebSocket → дашборд; fire-and-forget виклик EtaService для детекції виїзду |
-| `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка |
+| `ProofOfDeliveryModule` | Гео-пруф (обовʼязк.) + фото (опц.), 300м перевірка; `GET /deliveries/:id/proof` — перегляд пруфу менеджером (geo_flags, фото, точність GPS) |
 | `RetentionModule` | Cron: очищення orders + location_pings + tracking_tokens (де expires_at < NOW()); авто-закриття змін; shift_ending_soon; courier_not_responding; eta-overdue-alert; shift-anomaly-check; recommend-timeout-check; weekly S3 backup delivery_proofs (9 cron jobs) |
 | `EtaModule` | Розрахунок ETA через OSRM, детекція виїзду курʼєра (100м), cron-алерти про запізнення |
 | `GeocodingModule` | Геокодування адрес через Nominatim; Redis кеш TTL 30 днів; Bull queue rate limit 1 req/s; якщо координати вже є в payload — Nominatim не викликається; timeout 2с — замовлення зберігається без блокування; після успішного geocoding: `redis.publish('geocoding:done', ...)` → PublicTrackingModule емітить `order:coords_ready` |
@@ -357,7 +357,10 @@ Key decisions to remember:
 - **Card depth** — `inset 0 1px 0 rgba(255,255,255,0.05)` top-edge shine, no box-shadow outlines.
 - **Focus ring** — double-ring: `0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)`. Neutral warm, no chromatic accent.
 - **Table headers** — always UPPERCASE, 11px/600/+0.05em tracking, `--text-4` color.
-- **Dashboard is info-first** — main `/` dashboard shows KPIs, alerts, pending assignments, active deliveries table, courier status panel. No map on the main page.
+- **Text contrast rule** — `--text-3` (#9c9b96, 5.6:1 WCAG AA) for ALL readable body text: hint text, descriptions, option labels, helper text, input units. `--text-4` (#78776e, 3.5:1 — below WCAG AA) ONLY for: uppercase structural section/table headers, timestamps in table cells, disabled states, transient states ("Збереження…"). Never use `--text-4` for text the user must read to make a decision.
+- **Dashboard is info-first** — main `/` dashboard shows KPIs, alerts (AlertCard component), pending assignments, active deliveries table, CourierStatusPanel (300px sidebar). Two-column layout. No map on the main page.
+- **`/history` page** — completed/failed/cancelled orders with status tabs (all/completed/failed/cancelled) and date range filters (today/7d/30d). Includes proof drawer (`proof-drawer.tsx`) that shows geo verification, anomaly flags, GPS accuracy and delivery photos for each completed order.
+- **`/shifts` page** — active shifts table with real-time WS updates (`shift:started`/`shift:ended`), inline planned_end editing, force-end button; "Not started" section with Remind button. Real-time via WebSocket.
 - **Map is a separate `/map` page** — full-screen Leaflet map with right-side courier panel. Real routing via OSRM (free, no API key). Real ETA in minutes per transport mode.
 - **Map stack:** Leaflet.js v1.9 + CartoDB Dark Matter tiles. No Mapbox, no Google Maps.
 - **Courier markers:** Circle with initials only (no transport badge). Pulse animation on 🔴 danger (1.4s, red glow) and 🟡 background (3.5s, amber glow). 🟢 online is static — pulsing "all good" is noise.
