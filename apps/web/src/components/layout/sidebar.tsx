@@ -13,6 +13,7 @@ import {
   Plug,
   LogOut,
   CalendarClock,
+  History,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/couriers',      label: 'Курʼєри',       icon: Users },
   { href: '/shifts',        label: 'Зміни',         icon: CalendarClock },
   { href: '/map',           label: 'Карта',          icon: Map },
+  { href: '/history',       label: 'Історія',       icon: History },
   { href: '/analytics',     label: 'Аналітика',     icon: BarChart2 },
   { href: '/integrations',  label: 'Інтеграції',    icon: Plug },
   { href: '/webhooks',      label: 'Webhooks',      icon: Webhook },
