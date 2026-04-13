@@ -6,19 +6,19 @@ import { cn } from '@/lib/utils';
 import {
   ClipboardList,
   Users,
-  Clock,
   Map,
   BarChart2,
   Settings,
   Webhook,
   Plug,
   LogOut,
+  CalendarClock,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/',              label: 'Замовлення',    icon: ClipboardList },
   { href: '/couriers',      label: 'Курʼєри',       icon: Users },
-  { href: '/shifts',        label: 'Зміни',         icon: Clock },
+  { href: '/shifts',        label: 'Зміни',         icon: CalendarClock },
   { href: '/map',           label: 'Карта',          icon: Map },
   { href: '/analytics',     label: 'Аналітика',     icon: BarChart2 },
   { href: '/integrations',  label: 'Інтеграції',    icon: Plug },
@@ -26,7 +26,11 @@ const NAV_ITEMS = [
   { href: '/settings',      label: 'Налаштування',  icon: Settings },
 ] as const;
 
-export function Sidebar() {
+interface SidebarProps {
+  establishmentName?: string;
+}
+
+export function Sidebar({ establishmentName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -39,7 +43,9 @@ export function Sidebar() {
   return (
     <aside className="flex flex-col w-56 min-h-screen bg-[var(--sf)] border-r border-[var(--br)]">
       <div className="px-5 py-5 border-b border-[var(--br)]">
-        <span className="text-lg font-bold tracking-tight text-[var(--t1)]">Weego CMI</span>
+        <span className="text-lg font-bold tracking-tight text-[var(--t1)]">
+          {establishmentName ?? 'Weego CMI'}
+        </span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
@@ -63,7 +69,7 @@ export function Sidebar() {
       <div className="px-3 py-4 border-t border-[var(--br)]">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm text-[var(--t4)] hover:bg-[var(--s2)] hover:text-[var(--bad)] transition-colors border border-transparent"
+          className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--bad)] transition-colors border border-transparent"
         >
           <LogOut size={16} strokeWidth={1.75} />
           Вийти
