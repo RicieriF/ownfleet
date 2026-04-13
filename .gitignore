@@ -44,3 +44,10 @@ coverage/
 # Misc
 *.pem
 .gstack/
+
+# Claude Code
+.claude/worktrees/
+
+# Preview / dev tools
+preview-*.html
+preview-*.js
