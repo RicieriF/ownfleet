@@ -7,9 +7,8 @@ import {
   Req,
   Inject,
   NotFoundException,
-  TooManyRequestsException,
 } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, ThrottlerException } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type IORedis from 'ioredis';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
@@ -79,7 +78,7 @@ export class PublicTrackingController {
       .then((results) => (results?.[0]?.[1] as number | null) ?? 1)
       .catch(() => 0); // Redis unavailable — fail open (don't block legitimate users)
     if (count > SNAPSHOT_RATE_LIMIT) {
-      throw new TooManyRequestsException('Too many requests');
+      throw new ThrottlerException();
     }
 
     const snapshot = await this.service.getSnapshot(token);

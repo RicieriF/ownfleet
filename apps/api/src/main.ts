@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
@@ -9,7 +10,7 @@ import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.i
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   const logger = new Logger('Bootstrap');
 
   // Redis-backed Socket.IO adapter — must be set before app.listen() so that

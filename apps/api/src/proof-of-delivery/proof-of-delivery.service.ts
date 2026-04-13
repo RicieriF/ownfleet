@@ -18,7 +18,7 @@ import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
-import { OrderStatus, DeliveryStatus } from '@prisma/client';
+import { OrderStatus, DeliveryStatus, Prisma } from '@prisma/client';
 import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL, PUBLIC_DELIVERY_COMPLETED_CHANNEL } from '../shared/redis/redis.constants.js';
 
 const GEO_RADIUS_METERS = 300;
@@ -29,7 +29,7 @@ const PRESIGNED_URL_TTL_SEC = 300; // 5 min
  * All keys are optional — a flag is present only when the condition fired.
  * This type is the single source of truth; the DB column stores it as Json.
  */
-interface GeoFlags {
+export interface GeoFlags extends Record<string, unknown> {
   /** Proof was submitted after the POS order_closed_at timestamp */
   proof_after_close?: true;
   /** GPS accuracy was >100 m — reading may be imprecise */
@@ -258,7 +258,7 @@ export class ProofOfDeliveryService {
           photo_key: dto.photo_key ?? null,
           geo_match: geoMatch,
           accuracy: dto.accuracy ?? null,
-          geo_flags: geoFlags,
+          geo_flags: geoFlags as Prisma.InputJsonValue,
         },
       });
 
@@ -356,7 +356,7 @@ export class ProofOfDeliveryService {
           photo_key: null,
           geo_match: false,
           accuracy: null,
-          geo_flags: forceFlags,
+          geo_flags: forceFlags as Prisma.InputJsonValue,
         },
       });
 
