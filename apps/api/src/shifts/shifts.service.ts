@@ -113,7 +113,7 @@ export class ShiftsService {
   // ── Manager: end any courier shift ───────────────────────────────────────
 
   async endShiftByManager(shiftId: string, user: JwtPayload) {
-    if (user.courier_id) {
+    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
       throw new ForbiddenException('Only managers and owners can end other couriers\' shifts');
     }
 
@@ -147,7 +147,7 @@ export class ShiftsService {
   // ── Manager: update planned_end_at ────────────────────────────────────────
 
   async updatePlannedEnd(shiftId: string, user: JwtPayload, dto: UpdatePlannedEndDto) {
-    if (user.courier_id) {
+    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
       throw new ForbiddenException('Only managers and owners can update planned end time');
     }
 
@@ -167,7 +167,7 @@ export class ShiftsService {
   // ── Manager: get all active shifts for establishment ─────────────────────
 
   async getActiveShiftsForEstablishment(user: JwtPayload) {
-    if (user.courier_id) {
+    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
       throw new ForbiddenException('Only managers and owners can view all active shifts');
     }
 

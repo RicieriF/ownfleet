@@ -7,7 +7,10 @@ import { Order } from '@/types';
 const PAGE_TITLES: Record<string, string> = {
   '/':             'Дашборд',
   '/couriers':     'Курʼєри',
+  '/team':         'Команда',
+  '/shifts':       'Зміни',
   '/map':          'Карта',
+  '/history':      'Історія',
   '/analytics':    'Аналітика',
   '/integrations': 'Інтеграції',
   '/webhooks':     'Webhooks',

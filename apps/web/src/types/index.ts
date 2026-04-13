@@ -230,6 +230,15 @@ export interface Webhook {
   updated_at: string;
 }
 
+// ── Team ───────────────────────────────────────────────────────────────────
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  created_at: string;
+  telegram_chat_id: string | null;
+}
+
 // ── WebSocket events ───────────────────────────────────────────────────────
 
 export interface CourierMovedEvent {

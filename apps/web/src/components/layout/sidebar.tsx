@@ -14,11 +14,13 @@ import {
   LogOut,
   CalendarClock,
   History,
+  UsersRound,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/',              label: 'Замовлення',    icon: ClipboardList },
   { href: '/couriers',      label: 'Курʼєри',       icon: Users },
+  { href: '/team',          label: 'Команда',       icon: UsersRound },
   { href: '/shifts',        label: 'Зміни',         icon: CalendarClock },
   { href: '/map',           label: 'Карта',          icon: Map },
   { href: '/history',       label: 'Історія',       icon: History },
