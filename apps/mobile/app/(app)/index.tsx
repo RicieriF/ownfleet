@@ -440,6 +440,7 @@ function IdleState() {
 }
 
 function WorkloadBlock({ workload }: { workload: WorkloadToday | null }) {
+  const router = useRouter();
   if (!workload) return null;
 
   const { myStats, teamAvg } = workload;
@@ -451,8 +452,15 @@ function WorkloadBlock({ workload }: { workload: WorkloadToday | null }) {
     : teamAvg.activeMinutes.toFixed(0);
 
   return (
-    <View style={styles.workloadBlock}>
-      <Text style={styles.workloadTitle}>Моя статистика сьогодні</Text>
+    <TouchableOpacity
+      style={styles.workloadBlock}
+      onPress={() => router.push('/(app)/history')}
+      activeOpacity={0.75}
+    >
+      <View style={styles.workloadHeader}>
+        <Text style={styles.workloadTitle}>Моя статистика сьогодні</Text>
+        <Ionicons name="chevron-forward" size={14} color="#3a3935" />
+      </View>
       <Text style={styles.workloadMain}>
         <Text style={styles.workloadNumber}>{myStats.deliveriesCount}</Text>
         <Text style={styles.workloadLabel}> доставок · </Text>
@@ -462,7 +470,7 @@ function WorkloadBlock({ workload }: { workload: WorkloadToday | null }) {
       <Text style={styles.workloadAvg}>
         Середня по команді: {avgDeliveries} · {avgMinutes} хв
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -646,13 +654,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(250,249,246,0.08)',
     marginTop: 4,
   },
+  workloadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
   workloadTitle: {
     fontSize: 11,
     fontFamily: 'Manrope_600SemiBold',
     color: '#78776e',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 10,
   },
   workloadMain: {
     marginBottom: 6,

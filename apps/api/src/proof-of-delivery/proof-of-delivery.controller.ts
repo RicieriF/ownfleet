@@ -24,6 +24,13 @@ export class ProofOfDeliveryController {
     return this.service.getActiveDelivery(req.user as AuthenticatedUser);
   }
 
+  /** Courier: get their completed/failed delivery history (last 50) */
+  @Get('my-history')
+  @HttpCode(HttpStatus.OK)
+  getMyHistory(@Req() req: any) {
+    return this.service.getMyDeliveryHistory(req.user as AuthenticatedUser);
+  }
+
   @Get(':id/upload-url')
   getUploadUrl(@Param('id') id: string, @Req() req: any) {
     return this.service.getUploadUrl(id, req.user as AuthenticatedUser);

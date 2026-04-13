@@ -63,6 +63,19 @@ export interface WorkloadToday {
   };
 }
 
+export interface DeliveryHistoryItem {
+  id: string;
+  status: 'completed' | 'failed';
+  assigned_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  order: {
+    id: string;
+    address: string;
+    external_id: string | null;
+  };
+}
+
 export interface PingPayload {
   lat: number;
   lng: number;

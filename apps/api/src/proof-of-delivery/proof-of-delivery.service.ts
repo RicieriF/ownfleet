@@ -66,6 +66,36 @@ export class ProofOfDeliveryService {
     this.bucket = config.getOrThrow<string>('S3_BUCKET');
   }
 
+  async getMyDeliveryHistory(user: AuthenticatedUser, limit = 50) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can access delivery history');
+    }
+
+    return this.prisma.delivery.findMany({
+      where: {
+        courier_id: user.courier_id,
+        establishment_id: user.establishment_id,
+        status: { in: [DeliveryStatus.completed, DeliveryStatus.failed] },
+      },
+      orderBy: { completed_at: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        status: true,
+        assigned_at: true,
+        started_at: true,
+        completed_at: true,
+        order: {
+          select: {
+            id: true,
+            address: true,
+            external_id: true,
+          },
+        },
+      },
+    });
+  }
+
   async getActiveDelivery(user: AuthenticatedUser) {
     if (!user.courier_id) {
       throw new ForbiddenException('Only courier accounts can access active deliveries');
