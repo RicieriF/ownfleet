@@ -65,6 +65,7 @@ B2B SaaS платформа для управління власними кур�
 | `AnalyticsModule` | Статистика доставок та ефективності |
 | `ApiKeysModule` | API ключі для закладів (customer tracking widget); HMAC-SHA256 key_hash; `is_active` для soft-disable; `allowed_domains` + auto-www; `last_used_domain` аудит; `ApiKeyGuard` з throttle унікальних external_id |
 | `PublicTrackingModule` | Публічні endpoints без auth для customer tracking widget; `ApiKeyGuard`; окремий WS namespace `/public`; кімнати `order:{order_id}:public`; snapshot всіх 6 станів; hosted tracking + `/t/[token]` redirect |
+| `MetricsModule` | Prometheus метрики: `http_request_duration_seconds` (через MetricsInterceptor), `bull_queue_depth` (5 черг: ping, webhook, dispatch, geocoding, tracking_disconnect; cron кожні 30с); Node.js default metrics; `GET /metrics` захищений Bearer `METRICS_SECRET` |
 
 ---
 
@@ -84,9 +85,13 @@ establishments  (id, name, plan, trial_ends_at, paid_until, onboarding_status, s
                  hosted_tracking_enabled BOOLEAN NOT NULL DEFAULT FALSE)
                 -- hosted_tracking_enabled: тільки super admin. Коли FALSE — кнопка "Копіювати посилання
                 -- клієнту" і фраза про hosted page в /settings приховані; embed-код і ключ доступні.
-users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin)
-couriers        (id, establishment_id, name, phone, device_token, device_platform, active,
-                 transport_mode TransportMode NULL)   -- car|moto_gas|moto_electric|bicycle|walking
+users           (id, establishment_id, role CHECK IN ('owner','manager','dispatcher'), email, password_hash, courier_id UNIQUE, is_platform_admin,
+                 telegram_chat_id TEXT UNIQUE NULL, telegram_prefs JSONB DEFAULT '{}')
+couriers        (id, establishment_id, name, phone, device_token, device_platform DevicePlatform NULL, active,
+                 transport_mode TransportMode NULL,   -- car|moto_gas|moto_electric|bicycle|walking
+                 battery_optimization_exempt BOOLEAN DEFAULT FALSE,
+                 device_brand TEXT NULL, telegram_chat_id TEXT UNIQUE NULL, telegram_prefs JSONB DEFAULT '{}',
+                 last_reminder_sent_at TIMESTAMPTZ NULL, reminder_count INT DEFAULT 0)
 shifts          (id, courier_id, establishment_id, started_at, ended_at TIMESTAMPTZ NULL,
                  ended_by CHECK IN ('courier','manager','auto'), planned_end_at,
                  total_deliveries, total_distance_km, anomaly_alerted_at)
@@ -101,15 +106,21 @@ delivery_proofs (id, delivery_id, lat, lng, captured_at, order_closed_at, photo_
                  geo_match, accuracy, geo_flags JSONB)  -- НІКОЛИ не видаляється
 location_pings  (id, courier_id, location GEOMETRY(Point,4326), battery, created_at)
 integrations    (id, establishment_id, type, config JSONB, active)
-webhooks        (id, establishment_id, url, secret, events TEXT[], active, consecutive_failures, last_error_at)
+webhooks        (id, establishment_id, url, secret, events TEXT[], active, consecutive_failures, last_error_at, last_error TEXT NULL)
 invite_tokens   (id, establishment_id, token, courier_id, expires_at, used_at)
-retention_logs  (id, establishment_id, deleted_orders, deleted_pings, run_at)
+retention_logs  (id, establishment_id, deleted_orders, deleted_pings,
+                 deleted_order_ids JSONB DEFAULT '[]',  -- [{id, external_id}] для аудиту
+                 run_at)
 tracking_tokens (id, order_id UNIQUE, token UNIQUE, expires_at, created_at)
                 -- НЕ має establishment_id — навмисний виняток: ізоляція через 122-bit UUID token
                 -- expires_at = created_at + 4h; RetentionModule прибирає прострочені
 api_keys        (id, establishment_id, key_hash, key_prefix, name, is_active, allowed_domains TEXT[], last_used_domain)
                 -- Origin-based domain check: non-browser clients можуть spoofити — прийнятний trade-off
                 -- порожній allowed_domains = заблоковано; key_prefix для lookup без повного скану
+refresh_tokens  (id, user_id, token_hash UNIQUE, expires_at, created_at)
+                -- Persistent refresh token storage; onDelete Cascade від users
+billing_events  (id, establishment_id, type BillingEventType, created_at, metadata JSONB)
+                -- Аудит білінгових подій: trial_started|trial_expired|payment_received|plan_changed|grace_period_started|access_revoked
 ```
 
 ---
@@ -293,9 +304,12 @@ FIREBASE_SERVICE_ACCOUNT_JSON
 TELEGRAM_BOT_TOKEN
 TELEGRAM_WEBHOOK_SECRET  (required when bot is active — webhook rejects all requests if unset)
 S3_ENDPOINT / S3_ACCESS_KEY / S3_SECRET_KEY / S3_BUCKET
-BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY
+BACKUP_S3_ENDPOINT / BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY / BACKUP_S3_BUCKET
+                     (weekly delivery_proofs backup; gracefully skipped if unset)
 WEBHOOK_HMAC_SECRET  (per-establishment, stored in DB)
 OSRM_URL             (optional; default: https://router.project-osrm.org)
+OSRM_URL_DRIVING / OSRM_URL_CYCLING / OSRM_URL_FOOT
+                     (optional per-profile overrides; fallback to OSRM_URL if unset)
 API_KEY_SECRET       (HMAC-SHA256 key for API key hashing; rotate 90 days — app crashes on startup if unset)
 NEXT_PUBLIC_APP_URL  (web app public URL, e.g. https://weego.app; used in tracker.js base URL fallback and embed code generation in /settings)
 METRICS_SECRET       (Bearer token protecting GET /metrics; required in prod — if unset, /metrics is open. Must match Alloy config. Not loaded by the app on startup, but Alloy scrape will fail with 401 if mismatched.)
