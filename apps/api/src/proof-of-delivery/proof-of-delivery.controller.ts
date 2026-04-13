@@ -11,6 +11,12 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 export class ProofOfDeliveryController {
   constructor(private readonly service: ProofOfDeliveryService) {}
 
+  /** Manager: fetch delivery proof for a completed delivery */
+  @Get(':id/proof')
+  getProof(@Param('id') id: string, @Req() req: any) {
+    return this.service.getDeliveryProof(id, req.user as AuthenticatedUser);
+  }
+
   /** Courier: get their currently active delivery (assigned or in_progress) */
   @Get('active')
   @HttpCode(HttpStatus.OK)

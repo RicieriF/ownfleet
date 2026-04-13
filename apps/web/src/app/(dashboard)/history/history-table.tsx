@@ -4,6 +4,8 @@ import { useState, useMemo } from 'react';
 import { Order, OrderStatus, OrderSource } from '@/types';
 import { cn } from '@/lib/utils';
 import { isAfter, subDays } from 'date-fns';
+import { ProofDrawer } from './proof-drawer';
+import { CheckCircle2, MinusCircle } from 'lucide-react';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -106,9 +108,30 @@ interface Props {
   orders: Order[];
 }
 
+function ProofCell({ order }: { order: Order }) {
+  if (order.status !== 'completed') {
+    return <span style={{ color: 'var(--t4)' }}>—</span>;
+  }
+  if (!order.delivery) {
+    return <MinusCircle size={14} strokeWidth={1.75} style={{ color: 'var(--t4)' }} />;
+  }
+  // We show a static indicator; actual geo_match fetched on drawer open
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs"
+      style={{ color: 'var(--t3)' }}
+      title="Натисніть рядок для перегляду пруфу"
+    >
+      <CheckCircle2 size={14} strokeWidth={1.75} />
+      Переглянути
+    </span>
+  );
+}
+
 export function HistoryTable({ orders }: Props) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [dateFilter, setDateFilter] = useState<DateFilter>('7d');
+  const [proofDeliveryId, setProofDeliveryId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const now = new Date();
@@ -233,13 +256,16 @@ export function HistoryTable({ orders }: Props) {
               <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
                 Тривалість
               </th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
+                Пруф
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--br)]">
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-10 text-center text-sm text-[var(--t3)]"
                 >
                   Замовлень за обраний період немає
@@ -253,11 +279,14 @@ export function HistoryTable({ orders }: Props) {
                 startedAt && completedAt && order.status === 'completed'
                   ? formatDuration(startedAt, completedAt)
                   : '—';
+              const isClickable = order.status === 'completed' && !!order.delivery;
 
               return (
                 <tr
                   key={order.id}
                   className="hover:bg-[var(--s2)] transition-colors"
+                  style={{ cursor: isClickable ? 'pointer' : undefined }}
+                  onClick={isClickable ? () => setProofDeliveryId(order.delivery!.id) : undefined}
                 >
                   {/* Order ID */}
                   <td className="px-3 py-2.5">
@@ -306,6 +335,11 @@ export function HistoryTable({ orders }: Props) {
                   <td className="px-3 py-2.5 text-right mono text-xs text-[var(--t3)]">
                     {duration}
                   </td>
+
+                  {/* Proof */}
+                  <td className="px-3 py-2.5">
+                    <ProofCell order={order} />
+                  </td>
                 </tr>
               );
             })}
@@ -318,6 +352,11 @@ export function HistoryTable({ orders }: Props) {
           {filtered.length} замовлень
         </p>
       )}
+
+      <ProofDrawer
+        deliveryId={proofDeliveryId}
+        onClose={() => setProofDeliveryId(null)}
+      />
     </div>
   );
 }

@@ -150,6 +150,29 @@ export interface Delivery {
   courier: { id: string; name: string } | null;
 }
 
+// ── Delivery Proofs ────────────────────────────────────────────────────────
+
+export interface GeoFlags {
+  proof_after_close?: true;
+  low_accuracy?: true;
+  no_destination_coords?: true;
+  force_closed?: true;
+  closed_by?: string;
+}
+
+export interface DeliveryProof {
+  id: string;
+  delivery_id: string;
+  lat: number;
+  lng: number;
+  captured_at: string;
+  geo_match: boolean;
+  accuracy: number | null;
+  geo_flags: GeoFlags;
+  photo_key: string | null;
+  photo_url: string | null;
+}
+
 // ── Analytics ──────────────────────────────────────────────────────────────
 
 export interface AnalyticsSummary {

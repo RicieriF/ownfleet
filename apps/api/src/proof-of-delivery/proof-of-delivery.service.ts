@@ -7,7 +7,7 @@ import {
   Logger,
   Inject,
 } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import type IORedis from 'ioredis';
@@ -449,6 +449,44 @@ export class ProofOfDeliveryService {
     ).catch(() => {});
 
     return { status: DeliveryStatus.failed };
+  }
+
+  /**
+   * Manager: fetch delivery proof for a completed delivery.
+   * Returns null when the delivery was never completed (no proof row exists).
+   * photo_url is a short-lived presigned S3 URL (5 min TTL) when photo_key is set.
+   */
+  async getDeliveryProof(deliveryId: string, user: AuthenticatedUser) {
+    await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+
+    const proof = await this.prisma.deliveryProof.findFirst({
+      where: { delivery_id: deliveryId },
+      orderBy: { captured_at: 'desc' },
+    });
+
+    if (!proof) return null;
+
+    let photo_url: string | null = null;
+    if (proof.photo_key) {
+      photo_url = await getSignedUrl(
+        this.s3,
+        new GetObjectCommand({ Bucket: this.bucket, Key: proof.photo_key }),
+        { expiresIn: PRESIGNED_URL_TTL_SEC },
+      );
+    }
+
+    return {
+      id: proof.id,
+      delivery_id: proof.delivery_id,
+      lat: proof.lat,
+      lng: proof.lng,
+      captured_at: proof.captured_at,
+      geo_match: proof.geo_match,
+      accuracy: proof.accuracy,
+      geo_flags: proof.geo_flags as GeoFlags,
+      photo_key: proof.photo_key,
+      photo_url,
+    };
   }
 
   private async assertDeliveryBelongs(deliveryId: string, establishmentId: string) {
