@@ -40,6 +40,22 @@ export interface Establishment {
   hosted_tracking_enabled: boolean;
 }
 
+// ── Shifts ─────────────────────────────────────────────────────────────────
+
+export interface ActiveShiftWithCourier {
+  id: string;
+  courier_id: string;
+  started_at: string;
+  planned_end_at: string | null;
+  total_deliveries: number;
+  total_distance_km: number | null;
+  courier: {
+    id: string;
+    name: string;
+    phone: string;
+  };
+}
+
 // ── API Keys ───────────────────────────────────────────────────────────────
 
 export interface ApiKeyMeta {

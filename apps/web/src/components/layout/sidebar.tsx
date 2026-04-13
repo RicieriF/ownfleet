@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import {
   ClipboardList,
   Users,
+  Clock,
   Map,
   BarChart2,
   Settings,
@@ -17,6 +18,7 @@ import {
 const NAV_ITEMS = [
   { href: '/',              label: 'Замовлення',    icon: ClipboardList },
   { href: '/couriers',      label: 'Курʼєри',       icon: Users },
+  { href: '/shifts',        label: 'Зміни',         icon: Clock },
   { href: '/map',           label: 'Карта',          icon: Map },
   { href: '/analytics',     label: 'Аналітика',     icon: BarChart2 },
   { href: '/integrations',  label: 'Інтеграції',    icon: Plug },
