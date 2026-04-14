@@ -6,17 +6,20 @@ const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'courier_user';
 const GPS_CONSENT_KEY = 'gps_consent_done';
+const NOTIF_CONSENT_KEY = 'notif_consent_done';
 
 interface AuthState {
   user: CourierUser | null;
   accessToken: string | null;
   isLoaded: boolean;
   gpsConsentDone: boolean;
+  notifConsentDone: boolean;
   setAuth: (user: CourierUser, accessToken: string, refreshToken: string) => Promise<void>;
   clearAuth: () => Promise<void>;
   loadFromStorage: () => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
   setGpsConsentDone: () => Promise<void>;
+  setNotifConsentDone: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -24,6 +27,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   isLoaded: false,
   gpsConsentDone: false,
+  notifConsentDone: false,
 
   setAuth: async (user, accessToken, refreshToken) => {
     await Promise.all([
@@ -44,22 +48,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadFromStorage: async () => {
-    const [token, userJson, gpsConsent] = await Promise.all([
+    const [token, userJson, gpsConsent, notifConsent] = await Promise.all([
       AsyncStorage.getItem(ACCESS_TOKEN_KEY),
       AsyncStorage.getItem(USER_KEY),
       AsyncStorage.getItem(GPS_CONSENT_KEY),
+      AsyncStorage.getItem(NOTIF_CONSENT_KEY),
     ]);
     const gpsConsentDone = gpsConsent === '1';
+    const notifConsentDone = notifConsent === '1';
     if (token && userJson) {
-      set({ user: JSON.parse(userJson), accessToken: token, isLoaded: true, gpsConsentDone });
+      set({ user: JSON.parse(userJson), accessToken: token, isLoaded: true, gpsConsentDone, notifConsentDone });
     } else {
-      set({ isLoaded: true, gpsConsentDone });
+      set({ isLoaded: true, gpsConsentDone, notifConsentDone });
     }
   },
 
   setGpsConsentDone: async () => {
     await AsyncStorage.setItem(GPS_CONSENT_KEY, '1');
     set({ gpsConsentDone: true });
+  },
+
+  setNotifConsentDone: async () => {
+    await AsyncStorage.setItem(NOTIF_CONSENT_KEY, '1');
+    set({ notifConsentDone: true });
   },
 
   refreshAccessToken: async () => {
