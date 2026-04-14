@@ -78,6 +78,16 @@ export interface DeliveryHistoryItem {
   };
 }
 
+export interface ShiftHistoryItem {
+  id: string;
+  started_at: string;
+  ended_at: string;
+  ended_by: 'courier' | 'manager' | 'auto';
+  planned_end_at: string | null;
+  total_deliveries: number;
+  total_distance_km: string;
+}
+
 export interface PingPayload {
   lat: number;
   lng: number;

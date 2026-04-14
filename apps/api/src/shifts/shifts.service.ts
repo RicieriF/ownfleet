@@ -180,6 +180,27 @@ export class ShiftsService {
     });
   }
 
+  // ── Courier: get own shift history ───────────────────────────────────────
+
+  async getMyShiftHistory(user: JwtPayload) {
+    if (!user.courier_id) return [];
+
+    return this.prisma.shift.findMany({
+      where: { courier_id: user.courier_id, ended_at: { not: null } },
+      select: {
+        id: true,
+        started_at: true,
+        ended_at: true,
+        ended_by: true,
+        planned_end_at: true,
+        total_deliveries: true,
+        total_distance_km: true,
+      },
+      orderBy: { started_at: 'desc' },
+      take: 60,
+    });
+  }
+
   // ── Internal: check active shift for a courier (used by ShiftActiveGuard) ─
 
   async hasActiveShift(courierId: string): Promise<boolean> {

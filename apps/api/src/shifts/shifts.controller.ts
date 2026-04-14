@@ -48,6 +48,12 @@ export class ShiftsController {
     return this.shiftsService.endShift(req.user);
   }
 
+  /** GET /api/v1/shifts/my-history — courier gets their last 60 completed shifts */
+  @Get('my-history')
+  getMyShiftHistory(@Request() req: RequestWithUser) {
+    return this.shiftsService.getMyShiftHistory(req.user);
+  }
+
   // ── Manager endpoints ─────────────────────────────────────────────────────
 
   /** GET /api/v1/shifts/active — manager gets all active shifts for their establishment */

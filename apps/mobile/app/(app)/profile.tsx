@@ -17,7 +17,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/api/client';
@@ -68,6 +68,7 @@ const THRESHOLD_OPTIONS = [10, 15, 30, 60] as const;
 
 export default function ProfileScreen() {
   const { user } = useAuthStore();
+  const router = useRouter();
 
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -229,6 +230,19 @@ export default function ProfileScreen() {
               <Text style={styles.infoValue}>{user?.phone ?? '—'}</Text>
             </View>
           </View>
+
+          {/* ── Shifts history link ─────────────────────────────────────── */}
+          <TouchableOpacity
+            style={styles.navRow}
+            onPress={() => router.push('/(app)/shifts')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.navRowLeft}>
+              <Ionicons name="time-outline" size={18} color="#78776e" />
+              <Text style={styles.navRowLabel}>Мої зміни</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#3a3935" />
+          </TouchableOpacity>
 
           {/* ── Transport mode ──────────────────────────────────────────── */}
           <View style={styles.card}>
@@ -517,6 +531,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   infoValue: {
+    fontFamily: 'Manrope_500Medium',
+    fontSize: 14,
+    color: '#9c9b96',
+  },
+
+  // Nav row (shifts history link)
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#1a1917',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
+  },
+  navRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  navRowLabel: {
     fontFamily: 'Manrope_500Medium',
     fontSize: 14,
     color: '#9c9b96',
