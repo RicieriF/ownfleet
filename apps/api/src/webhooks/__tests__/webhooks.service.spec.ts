@@ -58,7 +58,7 @@ describe('WebhooksService', () => {
 
   describe('create', () => {
     it('creates a webhook for the authenticated establishment', async () => {
-      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] };
+      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] } as CreateWebhookDto;
       const result = await service.create(dto, userA);
 
       expect(mockWebhook.create).toHaveBeenCalledWith({
@@ -68,7 +68,7 @@ describe('WebhooksService', () => {
     });
 
     it('throws ForbiddenException for dispatcher role', async () => {
-      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] };
+      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] } as CreateWebhookDto;
       await expect(service.create(dto, dispatcher)).rejects.toThrow(ForbiddenException);
     });
   });

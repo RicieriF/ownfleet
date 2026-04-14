@@ -106,7 +106,7 @@ describe('RedisIoAdapter', () => {
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(adapter)), 'createIOServer')
         .mockReturnValue(mockServer as any);
 
-      adapter.createIOServer(3000, {});
+      adapter.createIOServer(3000, {} as any);
 
       expect(mockServer.adapter).toHaveBeenCalledTimes(1);
       // The adapter factory is a function returned by createAdapter(pub, sub)
@@ -124,7 +124,7 @@ describe('RedisIoAdapter', () => {
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(adapter)), 'createIOServer')
         .mockReturnValue(mockServer as any);
 
-      const opts = { transports: ['websocket'] as any };
+      const opts = { transports: ['websocket'] } as any;
       adapter.createIOServer(4000, opts);
 
       expect(superSpy).toHaveBeenCalledWith(4000, opts);
@@ -139,7 +139,7 @@ describe('RedisIoAdapter', () => {
         .mockReturnValue(mockServer as any);
 
       // adapterConstructor is undefined — just verify it doesn't throw in JS land
-      expect(() => adapter.createIOServer(3000, {})).not.toThrow();
+      expect(() => adapter.createIOServer(3000, {} as any)).not.toThrow();
       expect(mockServer.adapter).toHaveBeenCalledWith(undefined);
 
       superSpy.mockRestore();

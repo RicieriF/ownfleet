@@ -74,7 +74,6 @@ export class ProofOfDeliveryService {
     return this.prisma.delivery.findMany({
       where: {
         courier_id: user.courier_id,
-        establishment_id: user.establishment_id,
         status: { in: [DeliveryStatus.completed, DeliveryStatus.failed] },
       },
       orderBy: { completed_at: 'desc' },

@@ -35,6 +35,8 @@ const mockPrisma = {
 
 const mockShiftsService = {
   autoCloseStaleShifts: jest.fn().mockResolvedValue(0),
+  checkShiftEndingSoon: jest.fn().mockResolvedValue(0),
+  checkCourierNotResponding: jest.fn().mockResolvedValue(0),
 };
 
 const mockTelegramService = {
@@ -49,7 +51,7 @@ const mockDispatchQueue = {
 // This keeps existing tests working unchanged while allowing lock-key assertions
 // in the dedicated "distributed lock" suite below.
 const mockLockService = {
-  withLock: jest.fn((key: string, ttl: number, fn: () => Promise<void>) => fn()),
+  withLock: jest.fn((key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> => fn().then(() => true)),
 };
 
 describe('RetentionService', () => {
@@ -73,7 +75,7 @@ describe('RetentionService', () => {
     service = module.get<RetentionService>(RetentionService);
     jest.clearAllMocks();
     // Restore call-through behaviour after clearAllMocks resets the implementation
-    mockLockService.withLock.mockImplementation((key: string, ttl: number, fn: () => Promise<void>) => fn());
+    mockLockService.withLock.mockImplementation((key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> => fn().then(() => true));
     mockOrder.deleteMany.mockResolvedValue({ count: 0 });
     mockOrder.findMany.mockResolvedValue([]);
     mockDeliveryProof.findMany.mockResolvedValue([]);
