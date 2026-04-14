@@ -106,6 +106,7 @@ model Establishment {
   delivery_sla_minutes Int?
   lat               Float?
   lng               Float?
+  city              String?
   hosted_tracking_enabled Boolean  @default(false)
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt

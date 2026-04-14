@@ -61,7 +61,7 @@ describe('GeocodingService', () => {
 
     it('calls Nominatim on cache miss, caches and returns coords', async () => {
       mockFetch.mockResolvedValue(
-        makeResponse(200, [{ lat: '50.4501', lon: '30.5234' }]),
+        makeResponse(200, [{ lat: '50.4501', lon: '30.5234', importance: 0.75 }]),
       );
 
       const result = await service.geocode('вул. Тестова 5, Київ');
@@ -75,6 +75,29 @@ describe('GeocodingService', () => {
       );
     });
 
+    it('returns null (no cache) when Nominatim importance is too low (city/district match)', async () => {
+      mockFetch.mockResolvedValue(
+        makeResponse(200, [{ lat: '50.4501', lon: '30.5234', importance: 0.15 }]),
+      );
+
+      const result = await service.geocode('Київ');
+
+      expect(result).toBeNull();
+      // Must NOT cache — a future retry should try Nominatim again, not hit negative cache
+      expect(mockRedis.set).not.toHaveBeenCalled();
+    });
+
+    it('accepts result when importance is absent (old Nominatim compatibility)', async () => {
+      // If Nominatim does not return importance field, we trust the result
+      mockFetch.mockResolvedValue(
+        makeResponse(200, [{ lat: '50.4501', lon: '30.5234' }]),
+      );
+
+      const result = await service.geocode('вул. Без-Importance 1');
+
+      expect(result).toEqual({ lat: 50.4501, lng: 30.5234 });
+    });
+
     it('returns null and caches negative result when Nominatim returns empty array', async () => {
       mockFetch.mockResolvedValue(makeResponse(200, []));
 
@@ -85,7 +108,7 @@ describe('GeocodingService', () => {
         expect.stringMatching(/^geocode:/),
         'null',
         'EX',
-        3600,
+        600, // 10-minute negative cache TTL
       );
     });
 
@@ -98,15 +121,14 @@ describe('GeocodingService', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('returns null on Nominatim HTTP error', async () => {
-      mockFetch.mockResolvedValue(makeResponse(500));
+    it('throws on Nominatim HTTP error so Bull can retry the job', async () => {
+      mockFetch.mockResolvedValue(makeResponse(503));
 
-      const result = await service.geocode('вул. Тестова 1');
-
-      expect(result).toBeNull();
+      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow('Nominatim HTTP 503');
+      expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
-    it('returns null and logs warning on 2s timeout', async () => {
+    it('throws on 2s timeout so Bull can retry the job', async () => {
       mockFetch.mockImplementation(
         () => new Promise((_, reject) => {
           const err = new Error('The operation was aborted');
@@ -115,21 +137,19 @@ describe('GeocodingService', () => {
         }),
       );
 
-      const result = await service.geocode('вул. Повільна 1');
-
-      expect(result).toBeNull();
+      await expect(service.geocode('вул. Повільна 1')).rejects.toThrow('Nominatim timeout');
       expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
-    it('returns null on unexpected fetch error without throwing', async () => {
+    it('throws on unexpected network error so Bull can retry the job', async () => {
       mockFetch.mockRejectedValue(new Error('network error'));
 
-      await expect(service.geocode('вул. Тестова 1')).resolves.toBeNull();
+      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow('network error');
     });
 
     it('uses the same cache key for same address regardless of case/whitespace', async () => {
       mockFetch.mockResolvedValue(
-        makeResponse(200, [{ lat: '50.45', lon: '30.52' }]),
+        makeResponse(200, [{ lat: '50.45', lon: '30.52', importance: 0.7 }]),
       );
 
       // First call — populate cache
@@ -155,26 +175,26 @@ describe('GeocodingService', () => {
     it('adds a job with jobId=orderId to prevent duplicate enqueue', async () => {
       mockQueue.add.mockResolvedValue({});
 
-      await service.enqueueGeocode('order-1', 'вул. Тестова 5');
+      await service.enqueueGeocode('order-1', 'вул. Тестова 5', 'est-1');
 
       expect(mockQueue.add).toHaveBeenCalledWith(
-        { orderId: 'order-1', address: 'вул. Тестова 5' },
+        { orderId: 'order-1', address: 'вул. Тестова 5', establishmentId: 'est-1' },
         { jobId: 'order-1' },
       );
     });
 
     it('does not add a job for "Unknown" address', async () => {
-      await service.enqueueGeocode('order-2', 'Unknown');
+      await service.enqueueGeocode('order-2', 'Unknown', 'est-1');
       expect(mockQueue.add).not.toHaveBeenCalled();
     });
 
     it('does not add a job for empty address', async () => {
-      await service.enqueueGeocode('order-3', '');
+      await service.enqueueGeocode('order-3', '', 'est-1');
       expect(mockQueue.add).not.toHaveBeenCalled();
     });
 
     it('does not add a job for whitespace-only address', async () => {
-      await service.enqueueGeocode('order-5', '   ');
+      await service.enqueueGeocode('order-5', '   ', 'est-1');
       expect(mockQueue.add).not.toHaveBeenCalled();
     });
 
@@ -182,7 +202,7 @@ describe('GeocodingService', () => {
       mockQueue.add.mockRejectedValue(new Error('Redis unavailable'));
 
       await expect(
-        service.enqueueGeocode('order-4', 'вул. Тестова 5'),
+        service.enqueueGeocode('order-4', 'вул. Тестова 5', 'est-1'),
       ).resolves.not.toThrow();
     });
   });

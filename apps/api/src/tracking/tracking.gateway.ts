@@ -13,6 +13,8 @@ import { RedisSubscriberFactory } from '../shared/redis/redis-subscriber.factory
 import type IORedis from 'ioredis';
 import type { JwtPayload } from '../auth/auth.types.js';
 import type { CourierMovedEvent } from './tracking.service.js';
+import { GEOCODING_DONE_CHANNEL, GEOCODING_FAILED_CHANNEL } from '../geocoding/geocoding.constants.js';
+import type { GeocodingDonePayload, GeocodingFailedPayload } from '../geocoding/processors/geocoding.processor.js';
 
 const PUBSUB_CHANNEL = 'courier_moved';
 
@@ -54,27 +56,47 @@ export class TrackingGateway
   onModuleInit(): void {
     this.redisSub = this.redisSubscriberFactory.create();
 
-    this.redisSub.subscribe(PUBSUB_CHANNEL, (err) => {
+    this.redisSub.subscribe(PUBSUB_CHANNEL, GEOCODING_DONE_CHANNEL, GEOCODING_FAILED_CHANNEL, (err) => {
       if (err) this.logger.error('Redis subscribe failed', err);
     });
 
-    this.redisSub.on('message', (_channel: string, message: string) => {
+    this.redisSub.on('message', (channel: string, message: string) => {
       try {
-        const event = JSON.parse(message) as CourierMovedEvent;
-        const room = `est:${event.establishment_id}`;
-        // server.local: emit only to clients on THIS instance.
-        // All instances subscribe to the same Redis channel, so each handles
-        // its own connected clients. Without .local, the Redis adapter would
-        // re-broadcast across instances and each client would receive N copies.
-        this.server.local.to(room).emit('courier:moved', {
-          courier_id: event.courier_id,
-          lat: event.lat,
-          lng: event.lng,
-          battery: event.battery,
-          ts: event.ts,
-        });
+        if (channel === PUBSUB_CHANNEL) {
+          const event = JSON.parse(message) as CourierMovedEvent;
+          const room = `est:${event.establishment_id}`;
+          // server.local: emit only to clients on THIS instance.
+          // All instances subscribe to the same Redis channel, so each handles
+          // its own connected clients. Without .local, the Redis adapter would
+          // re-broadcast across instances and each client would receive N copies.
+          this.server.local.to(room).emit('courier:moved', {
+            courier_id: event.courier_id,
+            lat: event.lat,
+            lng: event.lng,
+            battery: event.battery,
+            ts: event.ts,
+          });
+        } else if (channel === GEOCODING_DONE_CHANNEL) {
+          const payload = JSON.parse(message) as GeocodingDonePayload;
+          const room = `est:${payload.establishmentId}`;
+          this.server.local.to(room).emit('order:coords_ready', {
+            order_id: payload.orderId,
+            lat: payload.lat,
+            lng: payload.lng,
+          });
+        } else if (channel === GEOCODING_FAILED_CHANNEL) {
+          const payload = JSON.parse(message) as GeocodingFailedPayload;
+          const room = `est:${payload.establishmentId}`;
+          // Dashboard listens for this event to show an immediate alert
+          // without waiting for a page refresh.
+          this.server.local.to(room).emit('order:geocode_failed', {
+            order_id: payload.orderId,
+            address: payload.address,
+            reason: payload.reason,
+          });
+        }
       } catch (err) {
-        this.logger.error('Failed to parse courier_moved event', err);
+        this.logger.error('Failed to parse pubsub event', err);
       }
     });
   }

@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { DispatchMode } from '@prisma/client';
 
 export const ALLOWED_TIMEZONES = [
@@ -45,6 +45,11 @@ export class UpdateSettingsDto {
 
   @IsOptional() @IsNumber() @Min(-180) @Max(180)
   lng?: number;
+
+  @IsOptional()
+  @ValidateIf((o: UpdateSettingsDto) => o.city !== null)
+  @IsString() @MinLength(2) @MaxLength(100)
+  city?: string | null;
 
   // ── Dispatch mode ────────────────────────────────────────────────────────
   @IsOptional() @IsEnum(DispatchMode)

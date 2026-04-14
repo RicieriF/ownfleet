@@ -11,6 +11,7 @@ import { EtaModule } from '../eta/eta.module.js';
 import { TrackingModule } from '../tracking/tracking.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { CouriersModule } from '../couriers/couriers.module.js';
+import { GeocodingModule } from '../geocoding/geocoding.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CouriersModule } from '../couriers/couriers.module.js';
     TrackingModule,
     NotificationsModule,
     CouriersModule,
+    GeocodingModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, DispatchProcessor, DispatchService],

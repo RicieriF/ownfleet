@@ -10,6 +10,7 @@ export interface ManagerTelegramPrefs {
   courier_not_responding?: boolean;
   shift_anomaly?: boolean;
   dispatch_no_courier?: boolean;
+  geocode_failed?: boolean;
 }
 
 export interface CourierTelegramPrefs {
@@ -43,6 +44,7 @@ export const MANAGER_EVENT = {
   COURIER_NOT_RESPONDING: 'courier_not_responding',
   SHIFT_ANOMALY: 'shift_anomaly',
   DISPATCH_NO_COURIER: 'dispatch_no_courier',
+  GEOCODE_FAILED: 'geocode_failed',
 } as const satisfies Record<string, ManagerTelegramEvent>;
 
 /** Named constants for courier Telegram event types. */
@@ -58,6 +60,7 @@ export const DEFAULT_MANAGER_PREFS: ManagerTelegramPrefs = {
   courier_shift_auto_closed: true,
   courier_not_responding: true,
   dispatch_no_courier: true,
+  geocode_failed: true,
 };
 
 export const DEFAULT_COURIER_PREFS: CourierTelegramPrefs = {

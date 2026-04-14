@@ -21,6 +21,7 @@ import { OrdersService } from './orders.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { AssignRecommendedDto } from './dto/assign-recommended.dto.js';
+import { UpdateCoordinatesDto } from './dto/update-coordinates.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
 class ReassignOrderDto {
@@ -77,6 +78,16 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   cancel(@Param('id') id: string, @Req() req: any) {
     return this.service.cancel(id, req.user as AuthenticatedUser);
+  }
+
+  @Patch(':id/coordinates')
+  @HttpCode(HttpStatus.OK)
+  updateCoordinates(
+    @Param('id') id: string,
+    @Body() dto: UpdateCoordinatesDto,
+    @Req() req: any,
+  ) {
+    return this.service.updateCoordinates(id, dto.lat, dto.lng, req.user as AuthenticatedUser);
   }
 
   /** @deprecated Removed in auto-dispatch v2 — self-assignment is no longer supported */

@@ -111,6 +111,14 @@ export default async function OrdersPage() {
       return activeOrder ? [{ courier: c, order: activeOrder }] : [];
     });
 
+  // Alert: active orders (pending / assigned / in_progress) with no coordinates.
+  // These orders cannot be auto-dispatched and require manual coordinate entry.
+  const noCoordOrders = orders.filter(
+    (o) =>
+      (o.status === 'pending' || o.status === 'assigned' || o.status === 'in_progress') &&
+      o.lat == null,
+  );
+
   return (
     <div>
       {/* KPI cards row */}
@@ -140,6 +148,47 @@ export default async function OrdersPage() {
       {notRespondingAlerts.map(({ courier, order }) => (
         <AlertCard key={courier.id} courier={courier} order={order} />
       ))}
+
+      {/* Alert: orders without coordinates — cannot be dispatched, require manual fix */}
+      {noCoordOrders.length > 0 && (
+        <div
+          className="flex items-start gap-3 mb-3 px-4 py-3 rounded-md"
+          style={{
+            background: 'rgba(245,158,11,0.08)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            borderLeft: '3px solid var(--warn)',
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--warn)"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ flexShrink: 0, marginTop: '1px' }}
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--t1)' }}>
+              {noCoordOrders.length === 1
+                ? '1 замовлення без координат'
+                : `${noCoordOrders.length} замовлень без координат`}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--t3)', marginTop: '2px' }}>
+              {noCoordOrders.map((o) => o.address).join(' · ')}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--t4)', marginTop: '4px' }}>
+              Натисніть «Карта» навпроти замовлення щоб встановити координати вручну
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two-column layout: orders (flex-1) + courier status panel (300px) */}
       <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>

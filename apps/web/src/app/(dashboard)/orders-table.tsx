@@ -4,9 +4,10 @@ import { useState, useTransition, useEffect } from 'react';
 import { Order, OrderStatus, CourierWithStatus } from '@/types';
 import { apiPost, apiPatch } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
+import { OrderCoordDrawer } from './order-coord-drawer';
+import { getSocket } from '@/lib/socket';
 
 function EtaTimer({ etaSeconds, etaStartedAt }: { etaSeconds: number; etaStartedAt: string }) {
   const [remaining, setRemaining] = useState<number>(() => {
@@ -82,6 +83,10 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
   const [trackingTokens, setTrackingTokens] = useState<Record<string, string>>({});
   const [copiedTrackingId, setCopiedTrackingId] = useState<string | null>(null);
   const [tokenLoadingId, setTokenLoadingId] = useState<string | null>(null);
+  // Coordinate drawer
+  const [coordDrawerOrder, setCoordDrawerOrder] = useState<Order | null>(null);
+  // Local coord overrides (set after manual save so we don't wait for router.refresh)
+  const [localCoords, setLocalCoords] = useState<Record<string, { lat: number; lng: number }>>({});
 
   const activeCouriers = couriers.filter((c) => c.active && c.on_shift);
 
@@ -153,6 +158,50 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
     setActionError('');
   }
 
+  function openCoordDrawer(order: Order, e: React.MouseEvent) {
+    e.stopPropagation();
+    const override = localCoords[order.id];
+    setCoordDrawerOrder(
+      override ? { ...order, lat: override.lat, lng: override.lng } : order,
+    );
+  }
+
+  function handleCoordSaved(orderId: string, lat: number, lng: number) {
+    setLocalCoords((prev) => ({ ...prev, [orderId]: { lat, lng } }));
+    setCoordDrawerOrder((prev) => (prev?.id === orderId ? { ...prev, lat, lng } : prev));
+  }
+
+  // Real-time geocoding updates via WebSocket.
+  // order:coords_ready — geocoding succeeded: update local coords so the «Карта» button
+  //   stops showing the "no coords" warning badge and the drawer shows the correct pin.
+  // order:geocode_failed — geocoding permanently failed: trigger a full router.refresh()
+  //   so the server-rendered alert in page.tsx picks up the correct no-coord order list.
+  useEffect(() => {
+    const socket = getSocket();
+
+    const onCoordsReady = ({ order_id, lat, lng }: { order_id: string; lat: number; lng: number }) => {
+      setLocalCoords((prev) => ({ ...prev, [order_id]: { lat, lng } }));
+      setCoordDrawerOrder((prev) =>
+        prev?.id === order_id ? { ...prev, lat, lng } : prev,
+      );
+      // Refresh server state so the no-coord alert in page.tsx disappears
+      startTransition(() => router.refresh());
+    };
+
+    const onGeocodeFailed = () => {
+      // Refresh so the no-coord alert in page.tsx reflects the latest state
+      startTransition(() => router.refresh());
+    };
+
+    socket.on('order:coords_ready', onCoordsReady);
+    socket.on('order:geocode_failed', onGeocodeFailed);
+
+    return () => {
+      socket.off('order:coords_ready', onCoordsReady);
+      socket.off('order:geocode_failed', onGeocodeFailed);
+    };
+  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const pendingOrders = orders.filter((o) => o.status === 'pending');
   const activeOrders = orders.filter((o) => o.status !== 'pending');
 
@@ -223,18 +272,39 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
 
                 {/* Address */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      color: 'var(--t1)',
-                      display: 'block',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {order.address}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--t1)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {order.address}
+                    </span>
+                    {(localCoords[order.id] == null && order.lat == null) && (
+                      <button
+                        title="Координати не визначені — натисніть щоб виправити"
+                        onClick={(e) => openCoordDrawer(order, e)}
+                        style={{
+                          flexShrink: 0,
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: 'rgba(245,158,11,0.15)',
+                          color: 'var(--warn)',
+                          border: '1px solid rgba(245,158,11,0.3)',
+                          cursor: 'pointer',
+                          lineHeight: '16px',
+                        }}
+                      >
+                        ! Гео
+                      </button>
+                    )}
+                  </div>
                   {order.notes && (
                     <span style={{ fontSize: '11px', color: 'var(--t3)' }}>{order.notes}</span>
                   )}
@@ -392,6 +462,26 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                         ({order.notes})
                       </span>
                     )}
+                    {(localCoords[order.id] == null && order.lat == null) && (
+                      <button
+                        title="Координати не визначені — натисніть щоб виправити"
+                        onClick={(e) => openCoordDrawer(order, e)}
+                        style={{
+                          flexShrink: 0,
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: 'rgba(245,158,11,0.15)',
+                          color: 'var(--warn)',
+                          border: '1px solid rgba(245,158,11,0.3)',
+                          cursor: 'pointer',
+                          lineHeight: '16px',
+                        }}
+                      >
+                        ! Гео
+                      </button>
+                    )}
                   </div>
                 </td>
 
@@ -467,6 +557,32 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                 {/* Actions */}
                 <td className="px-3 py-2.5">
                   <div className="flex gap-2">
+                    <button
+                      onClick={(e) => openCoordDrawer(order, e)}
+                      className="transition-colors"
+                      title="Переглянути / виправити координати"
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        borderRadius: '6px',
+                        background: 'var(--s2)',
+                        color: 'var(--t3)',
+                        border: '1px solid var(--br)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        const el = e.currentTarget as HTMLButtonElement;
+                        el.style.background = 'var(--s3)';
+                        el.style.color = 'var(--t1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget as HTMLButtonElement;
+                        el.style.background = 'var(--s2)';
+                        el.style.color = 'var(--t3)';
+                      }}
+                    >
+                      Карта
+                    </button>
                     {(order.status === 'assigned') && (
                       <button
                         onClick={() => handleCancel(order.id)}
@@ -603,6 +719,13 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
           </div>
         </div>
       )}
+
+      {/* Coordinate drawer */}
+      <OrderCoordDrawer
+        order={coordDrawerOrder}
+        onClose={() => setCoordDrawerOrder(null)}
+        onSaved={handleCoordSaved}
+      />
     </>
   );
 }

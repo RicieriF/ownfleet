@@ -22,6 +22,7 @@ import { assertOrderTransition } from './order-state-machine.js';
 import { EtaService } from '../eta/eta.service.js';
 import { TrackingGateway } from '../tracking/tracking.gateway.js';
 import { TrackingService } from '../tracking/tracking.service.js';
+import { GeocodingService } from '../geocoding/geocoding.service.js';
 import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL } from '../shared/redis/redis.constants.js';
 import { haversineMeters } from '../shared/geo.js';
 import { MANAGER_EVENT, COURIER_EVENT } from '../telegram/telegram.types.js';
@@ -80,6 +81,7 @@ export class OrdersService {
     private readonly gateway: TrackingGateway,
     private readonly trackingService: TrackingService,
     private readonly couriersService: CouriersService,
+    private readonly geocodingService: GeocodingService,
     @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
     @Inject(REDIS_CLIENT) private readonly redis: IORedis,
   ) {}
@@ -131,6 +133,10 @@ export class OrdersService {
           notes: dto.notes,
         },
       });
+      // Geocode if coordinates are missing or the 0,0 sentinel (same logic as POS integrations)
+      if (order.lat == null || order.lng == null || (order.lat === 0 && order.lng === 0)) {
+        void this.geocodingService.enqueueGeocode(order.id, order.address, user.establishment_id);
+      }
       this.webhooks.dispatch(user.establishment_id, 'order.created', { order_id: order.id }).catch(
         (err) => this.logger.warn('webhook dispatch failed for order.created', err),
       );
@@ -1131,6 +1137,65 @@ export class OrdersService {
       throw new ForbiddenException('Order does not belong to your establishment');
     }
     return order;
+  }
+
+  // ── Manual coordinate correction ─────────────────────────────────────────
+
+  /**
+   * Manager manually corrects order coordinates by dragging a pin on the map.
+   * Publishes order:coords_ready to WS so all connected managers see the update in real time.
+   * Returns a proximity_warning when the chosen coordinates are suspiciously far from the
+   * establishment — the manager can override but should double-check before confirming.
+   */
+  async updateCoordinates(id: string, lat: number, lng: number, user: AuthenticatedUser) {
+    this.assertManagerOrOwner(user);
+    const order = await this.assertBelongs(id, user.establishment_id);
+
+    const establishment = await this.prisma.establishment.findUnique({
+      where: { id: user.establishment_id },
+      select: { lat: true, lng: true, dispatch_mode: true },
+    });
+
+    let proximityWarning: string | undefined;
+    if (establishment?.lat != null && establishment?.lng != null) {
+      const distanceKm =
+        haversineMeters(establishment.lat, establishment.lng, lat, lng) / 1000;
+      if (distanceKm > 25) {
+        proximityWarning = `Вказані координати знаходяться ${distanceKm.toFixed(0)} км від вашого закладу. Переконайтесь, що адреса правильна.`;
+        this.logger.warn(
+          `Manual coord update for order ${id}: ${distanceKm.toFixed(1)} km from establishment (${lat},${lng})`,
+        );
+      }
+    }
+
+    await this.prisma.order.update({
+      where: { id },
+      data: { lat, lng },
+    });
+
+    // Broadcast to all managers of this establishment so the dashboard updates in real time
+    this.gateway.broadcastToEstablishment(user.establishment_id, 'order:coords_ready', {
+      order_id: order.id,
+      lat,
+      lng,
+    });
+
+    // Re-trigger auto-dispatch if the order is still pending.
+    // Covers the case where geocoding failed (address not found / proximity check rejected)
+    // and the manager manually corrected the coordinates — without this, the order would
+    // remain stuck in 'pending' forever in auto-dispatch mode.
+    if (order.status === 'pending' && establishment?.dispatch_mode === 'auto') {
+      this.dispatchQueue
+        .add(
+          { orderId: id, establishmentId: user.establishment_id, attempt: 1 },
+          { jobId: `dispatch:${id}` },
+        )
+        .catch((err) =>
+          this.logger.warn(`Failed to enqueue dispatch after manual coord update for order ${id}`, err),
+        );
+    }
+
+    return { id, lat, lng, ...(proximityWarning ? { proximity_warning: proximityWarning } : {}) };
   }
 
   private assertManagerOrOwner(user: AuthenticatedUser): void {

@@ -116,6 +116,7 @@ export default async function SettingsPage() {
         initialSlaMinutes={establishment.delivery_sla_minutes ?? null}
         initialLat={establishment.lat ?? null}
         initialLng={establishment.lng ?? null}
+        initialCity={establishment.city ?? null}
         initialDispatchMode={establishment.dispatch_mode ?? 'manual'}
       />
 

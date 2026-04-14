@@ -35,6 +35,7 @@ export interface Establishment {
   delivery_sla_minutes?: number | null;
   lat?: number | null;
   lng?: number | null;
+  city?: string | null;
   dispatch_mode: 'manual' | 'recommend' | 'auto';
   ready_at?: string | null;
   hosted_tracking_enabled: boolean;

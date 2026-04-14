@@ -5,6 +5,7 @@ import { RetentionService } from './retention.service.js';
 import { ShiftsModule } from '../shifts/shifts.module.js';
 import { EtaModule } from '../eta/eta.module.js';
 import { TelegramModule } from '../telegram/telegram.module.js';
+import { GeocodingModule } from '../geocoding/geocoding.module.js';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { TelegramModule } from '../telegram/telegram.module.js';
     ShiftsModule,
     EtaModule,
     TelegramModule,
+    GeocodingModule,
   ],
   providers: [RetentionService],
 })

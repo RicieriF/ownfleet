@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ShiftsService } from '../shifts/shifts.service.js';
 import { EtaService } from '../eta/eta.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
+import { GeocodingService } from '../geocoding/geocoding.service.js';
 import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { OrderStatus } from '@prisma/client';
 import {
@@ -35,6 +36,7 @@ export class RetentionService {
     private readonly shiftsService: ShiftsService,
     private readonly etaService: EtaService,
     private readonly telegram: TelegramService,
+    private readonly geocodingService: GeocodingService,
     private readonly lock: DistributedLockService,
     private readonly config: ConfigService,
     @InjectQueue('dispatch') private readonly dispatchQueue: Queue,
@@ -233,6 +235,47 @@ export class RetentionService {
         );
       }
     }
+    });
+  }
+
+  /**
+   * Runs every 30 minutes.
+   * Re-enqueues geocoding for active orders that still have no coordinates.
+   * Covers two failure modes:
+   *  1. Bull exhausted all 3 retry attempts (Nominatim was down at creation time).
+   *  2. Manual orders created via POST /orders before geocoding was wired in.
+   * Only targets non-terminal orders (pending/assigned/in_progress) created
+   * more than 10 minutes ago — long enough for the initial geocoding queue to process.
+   * The 10-minute grace period prevents re-queueing orders whose first geocoding
+   * attempt is still in flight.
+   * Bull jobId=orderId deduplication prevents double-processing while a job is active.
+   */
+  @Cron('5 */30 * * * *', { name: 'geocode-recovery', timeZone: 'UTC' })
+  async retryMissingGeocode(): Promise<void> {
+    await this.lock.withLock('geocode-recovery', 1500, async () => {
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+      const orders = await this.prisma.order.findMany({
+        where: {
+          lat: null,
+          status: { in: ['pending', 'assigned', 'in_progress'] },
+          created_at: { lt: tenMinutesAgo },
+          NOT: [
+            { address: '' },
+            { address: 'Unknown' },
+          ],
+        },
+        select: { id: true, address: true, establishment_id: true },
+        take: 100,
+      });
+
+      for (const order of orders) {
+        void this.geocodingService.enqueueGeocode(order.id, order.address, order.establishment_id);
+      }
+
+      if (orders.length > 0) {
+        this.logger.log(`Geocode recovery: re-enqueued ${orders.length} order(s) without coordinates`);
+      }
     });
   }
 

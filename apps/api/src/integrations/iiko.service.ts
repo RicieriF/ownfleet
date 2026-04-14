@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GeocodingService } from '../geocoding/geocoding.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
+import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
 
@@ -32,6 +34,7 @@ export class IikoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geocodingService: GeocodingService,
+    private readonly telegram: TelegramService,
     private readonly lock: DistributedLockService,
   ) {}
 
@@ -83,13 +86,15 @@ export class IikoService {
       this.clearBackoff(establishmentId);
 
       if (orders.length > 0) {
+        // iiko-provided coordinates are intentionally ignored — always geocode from
+        // the address string for consistent accuracy across all order sources.
         const result = await this.prisma.order.createMany({
           data: orders.map((order) => ({
             establishment_id: establishmentId,
             external_id: order.id,
             address: order.address ?? 'Unknown',
-            lat: order.latitude ?? null,
-            lng: order.longitude ?? null,
+            lat: null,
+            lng: null,
             notes: order.comment ?? null,
             source: OrderSource.iiko,
           })),
@@ -100,21 +105,49 @@ export class IikoService {
           this.logger.log(`[iiko:${establishmentId}] ingested ${result.count} new orders`);
         }
 
-        // Enqueue geocoding for orders that have no coordinates in the iiko payload
-        const needsGeocode = orders.filter(
-          (o) => (o.latitude == null || o.longitude == null) && o.address && o.address !== 'Unknown',
-        );
-        if (needsGeocode.length > 0) {
+        // Enqueue geocoding for all newly ingested orders with a valid address.
+        // Fetch only orders that are still lat=null (skipDuplicates means some may
+        // already exist with geocoded coords from a prior poll cycle).
+        const withAddress = orders.filter((o) => o.address && o.address !== 'Unknown');
+        if (withAddress.length > 0) {
           const forGeocode = await this.prisma.order.findMany({
             where: {
               establishment_id: establishmentId,
-              external_id: { in: needsGeocode.map((o) => o.id) },
+              external_id: { in: withAddress.map((o) => o.id) },
               lat: null,
             },
             select: { id: true, address: true },
           });
           for (const order of forGeocode) {
-            void this.geocodingService.enqueueGeocode(order.id, order.address);
+            void this.geocodingService.enqueueGeocode(order.id, order.address, establishmentId);
+          }
+        }
+
+        // Alert managers immediately for orders that arrived with no address at all.
+        // These cannot be auto-geocoded and require manual coordinate entry.
+        const unknownExternalIds = orders
+          .filter((o) => !o.address || o.address === 'Unknown')
+          .map((o) => o.id);
+        if (unknownExternalIds.length > 0) {
+          // Only alert for orders created in this cycle (not pre-existing ones)
+          const newNoAddrOrders = await this.prisma.order.findMany({
+            where: {
+              establishment_id: establishmentId,
+              external_id: { in: unknownExternalIds },
+              address: 'Unknown',
+              created_at: { gt: new Date(Date.now() - 120_000) },
+            },
+            select: { id: true, external_id: true },
+          });
+          for (const order of newNoAddrOrders) {
+            const label = order.external_id ? ` #${order.external_id}` : '';
+            void this.telegram
+              .notifyEstablishmentManagers(
+                establishmentId,
+                `⚠️ Замовлення${label} від iiko надійшло без адреси.\nВстановіть координати вручну через кнопку «Карта» у дашборді.`,
+                MANAGER_EVENT.GEOCODE_FAILED,
+              )
+              .catch((err) => this.logger.warn(`Telegram alert failed for no-address iiko order ${order.id}`, err));
           }
         }
       }

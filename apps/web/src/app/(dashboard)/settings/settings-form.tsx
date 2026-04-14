@@ -16,6 +16,7 @@ interface SettingsPayload {
   delivery_sla_minutes?: number | null;
   lat?: number;
   lng?: number;
+  city?: string;
   dispatch_mode?: DispatchMode;
 }
 
@@ -25,6 +26,7 @@ interface Props {
   initialSlaMinutes: number | null;
   initialLat: number | null;
   initialLng: number | null;
+  initialCity: string | null;
   initialDispatchMode: DispatchMode;
 }
 
@@ -152,6 +154,7 @@ export function SettingsForm({
   initialSlaMinutes,
   initialLat,
   initialLng,
+  initialCity,
   initialDispatchMode,
 }: Props) {
   const [retentionOrders, setRetentionOrders] = useState(initialSettings?.retention_orders_days ?? 14);
@@ -170,6 +173,7 @@ export function SettingsForm({
 
   const [latStr, setLatStr] = useState(initialLat !== null && initialLat !== undefined ? String(initialLat) : '');
   const [lngStr, setLngStr] = useState(initialLng !== null && initialLng !== undefined ? String(initialLng) : '');
+  const [city, setCity] = useState(initialCity ?? '');
 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -195,6 +199,8 @@ export function SettingsForm({
           dispatch_mode: dispatchMode,
           ...(lat !== undefined && !isNaN(lat) && { lat }),
           ...(lng !== undefined && !isNaN(lng) && { lng }),
+          // Send null to clear city when field is empty; omit entirely if unchanged
+          city: city.trim() || null,
         });
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
@@ -227,22 +233,49 @@ export function SettingsForm({
         </select>
       </SectionCard>
 
-      {/* ETA & SLA */}
+      {/* Location — city + establishment coordinates for geocoding accuracy */}
       <SectionCard
-        title="ETA та SLA доставок"
-        description="Автоматичний розрахунок часу доставки та налаштування стандарту"
+        title="Локація закладу"
+        description="Використовується для геокодування адрес та розрахунку маршрутів"
       >
         <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
           <FieldRow
+            label="Місто / населений пункт"
+            hint="Додається до адрес при геокодуванні — запобігає плутанині однойменних вулиць"
+          >
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Харків"
+              maxLength={100}
+              className="w-36 text-sm rounded outline-none transition-all"
+              style={{
+                background: 'var(--s1)', border: '1px solid var(--br)',
+                color: 'var(--t1)', padding: '5px 8px',
+              }}
+              onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
+              onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
+            />
+          </FieldRow>
+          <FieldRow
             label="Координати закладу"
-            hint="Потрібні для розрахунку маршруту по вулицях"
+            hint="Використовуються для перевірки геокодування (результати далі 25 км відхиляються)"
           >
             <div className="flex items-center gap-2">
               <CoordInput value={latStr} onChange={setLatStr} placeholder="50.4501" />
               <CoordInput value={lngStr} onChange={setLngStr} placeholder="30.5234" />
             </div>
           </FieldRow>
+        </div>
+      </SectionCard>
 
+      {/* ETA & SLA */}
+      <SectionCard
+        title="ETA та SLA доставок"
+        description="Автоматичний розрахунок часу доставки та налаштування стандарту"
+      >
+        <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
           <FieldRow
             label="SLA доставки"
             hint="Ваш публічний стандарт для клієнтів"

@@ -2,6 +2,8 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GeocodingService } from '../geocoding/geocoding.service.js';
+import { TelegramService } from '../telegram/telegram.service.js';
+import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
 
 interface PosterOrderPayload {
@@ -12,10 +14,7 @@ interface PosterOrderPayload {
     phone?: string;
     address?: string;
     comment?: string;
-    delivery?: {
-      lat?: number;
-      lng?: number;
-    };
+    delivery?: Record<string, unknown>; // coords intentionally not read — always geocoded
   };
 }
 
@@ -26,6 +25,7 @@ export class PosterService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geocodingService: GeocodingService,
+    private readonly telegram: TelegramService,
   ) {}
 
   /**
@@ -89,9 +89,9 @@ export class PosterService {
 
     const externalId = String(payload.object_id);
     const address = payload.data?.address ?? 'Unknown';
-    const lat = payload.data?.delivery?.lat ?? null;
-    const lng = payload.data?.delivery?.lng ?? null;
     const notes = payload.data?.comment ?? null;
+    // POS-provided coordinates are intentionally ignored — Poster coordinates are often
+    // inaccurate or missing (sentinel 0,0). We always geocode from the address string.
 
     // Idempotent: return existing if already ingested
     const existing = await this.prisma.order.findFirst({
@@ -104,8 +104,8 @@ export class PosterService {
         establishment_id: establishmentId,
         external_id: externalId,
         address,
-        lat,
-        lng,
+        lat: null,
+        lng: null,
         notes,
         source: OrderSource.poster,
       },
@@ -113,10 +113,17 @@ export class PosterService {
 
     this.logger.log(`Poster order ingested: ${order.id} (ext: ${externalId})`);
 
-    // Geocode when coords are absent (null) or the POS sentinel 0,0 (Poster sends 0,0 for
-    // orders without delivery address coordinates — physically impossible for Ukraine).
-    if (lat == null || lng == null || (lat === 0 && lng === 0)) {
-      void this.geocodingService.enqueueGeocode(order.id, address);
+    if (address === 'Unknown') {
+      // Cannot geocode — alert manager immediately so they can set coordinates manually
+      void this.telegram
+        .notifyEstablishmentManagers(
+          establishmentId,
+          `⚠️ Замовлення #${externalId} від Poster надійшло без адреси.\nВстановіть координати вручну через кнопку «Карта» у дашборді.`,
+          MANAGER_EVENT.GEOCODE_FAILED,
+        )
+        .catch((err) => this.logger.warn(`Telegram alert failed for no-address Poster order ${order.id}`, err));
+    } else {
+      void this.geocodingService.enqueueGeocode(order.id, address, establishmentId);
     }
 
     return { received: true, order_id: order.id };
