@@ -272,6 +272,18 @@ export default function MainScreen() {
     router.push({ pathname: '/(app)/proof', params: { deliveryId: delivery.id } });
   }
 
+  function handleFailDelivery() {
+    if (!delivery) return;
+    router.push({
+      pathname: '/(app)/fail',
+      params: {
+        deliveryId: delivery.id,
+        address: delivery.order.address,
+        externalId: delivery.order.external_id ?? '',
+      },
+    });
+  }
+
   function handleNavigate() {
     if (!delivery) return;
     router.push({
@@ -376,6 +388,7 @@ export default function MainScreen() {
             delivery={delivery}
             onComplete={handleCompleteDelivery}
             onNavigate={handleNavigate}
+            onFail={handleFailDelivery}
           />
         )}
       </ScrollView>
@@ -536,10 +549,12 @@ function InProgressState({
   delivery,
   onComplete,
   onNavigate,
+  onFail,
 }: {
   delivery: ActiveDelivery;
   onComplete: () => void;
   onNavigate: () => void;
+  onFail: () => void;
 }) {
   return (
     <View style={styles.card}>
@@ -572,6 +587,13 @@ function InProgressState({
         activeOpacity={0.8}
       >
         <Text style={styles.btnText}>Здати замовлення</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.failLink}
+        onPress={onFail}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.failLinkText}>Не вдалося доставити</Text>
       </TouchableOpacity>
     </View>
   );
@@ -770,4 +792,18 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.5 },
   btnText: { color: '#faf9f6', fontSize: 17, fontFamily: 'Manrope_600SemiBold' },
+
+  // Fail delivery link
+  failLink: {
+    alignItems: 'center',
+    paddingTop: 14,
+    marginTop: 4,
+  },
+  failLinkText: {
+    fontFamily: 'Manrope_500Medium',
+    fontSize: 13,
+    color: '#78776e',
+    textDecorationLine: 'underline' as const,
+    textDecorationColor: 'rgba(120,119,110,0.5)',
+  },
 });
