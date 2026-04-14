@@ -11,6 +11,7 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
+import { UpdateTransportModeDto } from './dto/update-transport-mode.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
 import { COURIER_EVENT } from '../telegram/telegram.types.js';
@@ -144,6 +145,29 @@ export class CouriersService {
     await this.assertBelongs(id, user.establishment_id);
 
     return this.prisma.courier.delete({ where: { id } });
+  }
+
+  /** Courier fetches their own profile including transport_mode (GET /me) */
+  async getMyProfile(user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can access this endpoint');
+    }
+    return this.prisma.courier.findUniqueOrThrow({
+      where: { id: user.courier_id },
+      select: { id: true, name: true, phone: true, transport_mode: true },
+    });
+  }
+
+  /** Courier updates their own transport mode (PATCH /me/transport-mode) */
+  async updateMyTransportMode(dto: UpdateTransportModeDto, user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only courier accounts can update transport mode');
+    }
+    await this.prisma.courier.update({
+      where: { id: user.courier_id },
+      data: { transport_mode: dto.transport_mode },
+    });
+    return { ok: true };
   }
 
   /** Courier self-registers their own FCM token (PATCH /me/device-token) */

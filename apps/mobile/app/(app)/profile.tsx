@@ -21,6 +21,17 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/api/client';
+import type { TransportMode } from '@/types';
+
+// ── Transport mode config ────────────────────────────────────────────────────
+
+const TRANSPORT_OPTIONS: { value: TransportMode; label: string; icon: string }[] = [
+  { value: 'car',           label: 'Авто',            icon: '🚗' },
+  { value: 'moto_gas',      label: 'Мотоцикл',        icon: '🏍️' },
+  { value: 'moto_electric', label: 'Електромотоцикл', icon: '⚡' },
+  { value: 'bicycle',       label: 'Велосипед',        icon: '🚲' },
+  { value: 'walking',       label: 'Пішки',            icon: '🚶' },
+];
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +78,30 @@ export default function ProfileScreen() {
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [error, setError] = useState('');
 
+  // Transport mode state
+  const [currentMode, setCurrentMode] = useState<TransportMode | null>(null);
+  const [selectedMode, setSelectedMode] = useState<TransportMode | null>(null);
+  const [modeLoading, setModeLoading] = useState(true);
+  const [modeSaving, setModeSaving] = useState(false);
+  const [modeSavedFeedback, setModeSavedFeedback] = useState(false);
+  const [modeError, setModeError] = useState('');
+
+  // ── Load courier profile (transport mode) ────────────────────────────────
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const profile = await apiGet<{ id: string; name: string; phone: string; transport_mode: TransportMode | null }>(
+        '/api/v1/couriers/me',
+      );
+      setCurrentMode(profile.transport_mode);
+      setSelectedMode(profile.transport_mode);
+    } catch {
+      // Non-critical: just show picker without preselection
+    } finally {
+      setModeLoading(false);
+    }
+  }, []);
+
   // ── Load status on mount ──────────────────────────────────────────────────
 
   const loadStatus = useCallback(async () => {
@@ -81,9 +116,29 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => {
+    loadProfile();
+    loadStatus();
+  }, [loadProfile, loadStatus]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
+
+  async function handleSaveMode() {
+    if (!selectedMode || selectedMode === currentMode) return;
+    setModeError('');
+    setModeSavedFeedback(false);
+    setModeSaving(true);
+    try {
+      await apiPatch('/api/v1/couriers/me/transport-mode', { transport_mode: selectedMode });
+      setCurrentMode(selectedMode);
+      setModeSavedFeedback(true);
+      setTimeout(() => setModeSavedFeedback(false), 3000);
+    } catch {
+      setModeError('Не вдалось зберегти. Спробуйте ще раз.');
+    } finally {
+      setModeSaving(false);
+    }
+  }
 
   async function handleConnect() {
     setError('');
@@ -173,6 +228,64 @@ export default function ProfileScreen() {
               <Text style={styles.infoLabel}>ТЕЛЕФОН</Text>
               <Text style={styles.infoValue}>{user?.phone ?? '—'}</Text>
             </View>
+          </View>
+
+          {/* ── Transport mode ──────────────────────────────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Вид транспорту</Text>
+            </View>
+
+            {modeLoading ? (
+              <ActivityIndicator color="#9c9b96" style={{ marginVertical: 20 }} />
+            ) : (
+              <View style={styles.modeContainer}>
+                <Text style={styles.modeHint}>
+                  Впливає на розрахунок часу доставки. Оновіть при зміні транспортного засобу.
+                </Text>
+                <View style={styles.modeGrid}>
+                  {TRANSPORT_OPTIONS.map((opt) => {
+                    const selected = selectedMode === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={[styles.modeCard, selected && styles.modeCardSelected]}
+                        onPress={() => { setSelectedMode(opt.value); setModeError(''); setModeSavedFeedback(false); }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.modeIcon}>{opt.icon}</Text>
+                        <Text style={[styles.modeLabel, selected && styles.modeLabelSelected]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {modeError ? (
+                  <Text style={styles.errorText}>{modeError}</Text>
+                ) : null}
+                <View style={styles.saveRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.saveBtn,
+                      (!selectedMode || selectedMode === currentMode || modeSaving) && styles.disabled,
+                    ]}
+                    onPress={handleSaveMode}
+                    disabled={!selectedMode || selectedMode === currentMode || modeSaving}
+                    activeOpacity={0.8}
+                  >
+                    {modeSaving ? (
+                      <ActivityIndicator color="#faf9f6" size="small" />
+                    ) : (
+                      <Text style={styles.saveBtnText}>Зберегти</Text>
+                    )}
+                  </TouchableOpacity>
+                  {modeSavedFeedback && (
+                    <Text style={styles.savedText}>Збережено</Text>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
 
           {/* ── Telegram section ────────────────────────────────────────── */}
@@ -407,6 +520,51 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_500Medium',
     fontSize: 14,
     color: '#9c9b96',
+  },
+
+  // Transport mode
+  modeContainer: {
+    padding: 16,
+    gap: 14,
+  },
+  modeHint: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: 13,
+    color: '#78776e',
+    lineHeight: 18,
+  },
+  modeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modeCard: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
+    backgroundColor: '#252420',
+    gap: 4,
+  },
+  modeCardSelected: {
+    backgroundColor: '#3a3935',
+    borderColor: 'rgba(250,249,246,0.22)',
+  },
+  modeIcon: {
+    fontSize: 22,
+  },
+  modeLabel: {
+    fontFamily: 'Manrope_500Medium',
+    fontSize: 12,
+    color: '#78776e',
+    textAlign: 'center',
+  },
+  modeLabelSelected: {
+    color: '#faf9f6',
   },
 
   // Not connected

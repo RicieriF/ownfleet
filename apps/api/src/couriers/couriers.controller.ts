@@ -17,6 +17,7 @@ import { CouriersService } from './couriers.service.js';
 import { CreateCourierDto } from './dto/create-courier.dto.js';
 import { UpdateCourierDto } from './dto/update-courier.dto.js';
 import { UpdateDeviceTokenDto } from './dto/update-device-token.dto.js';
+import { UpdateTransportModeDto } from './dto/update-transport-mode.dto.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 
 @Controller('couriers')
@@ -45,6 +46,19 @@ export class CouriersController {
   getWorkloadToday(@Req() req: any) {
     const user = req.user as AuthenticatedUser;
     return this.service.getWorkloadToday(user.establishment_id);
+  }
+
+  /** Courier fetches own profile including transport_mode */
+  @Get('me')
+  getMyProfile(@Req() req: any) {
+    return this.service.getMyProfile(req.user as AuthenticatedUser);
+  }
+
+  /** Courier updates own transport mode */
+  @Patch('me/transport-mode')
+  @HttpCode(HttpStatus.OK)
+  updateMyTransportMode(@Body() dto: UpdateTransportModeDto, @Req() req: any) {
+    return this.service.updateMyTransportMode(dto, req.user as AuthenticatedUser);
   }
 
   /** Courier self-registers FCM token after login */

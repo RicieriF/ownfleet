@@ -10,6 +10,8 @@ export interface Shift {
   total_distance_km: string;
 }
 
+export type TransportMode = 'car' | 'moto_gas' | 'moto_electric' | 'bicycle' | 'walking';
+
 export interface CourierUser {
   id: string;
   establishment_id: string;
