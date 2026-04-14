@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { TabBar } from '@/components/tab-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/store/auth';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/api/client';
@@ -213,7 +214,7 @@ export default function ProfileScreen() {
           headerTitleStyle: { fontFamily: 'Manrope_600SemiBold', fontSize: 17 },
         }}
       />
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
           {/* ── Courier info ────────────────────────────────────────────── */}
@@ -453,6 +454,7 @@ export default function ProfileScreen() {
           </View>
 
         </ScrollView>
+        <TabBar />
       </SafeAreaView>
     </>
   );

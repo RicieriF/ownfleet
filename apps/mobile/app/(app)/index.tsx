@@ -8,6 +8,7 @@
  *  - Delivery in_progress → address + [Здати замовлення] + GPS active + shift timer
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { TabBar } from '@/components/tab-bar';
 import {
   View,
   Text,
@@ -392,6 +393,7 @@ export default function MainScreen() {
           />
         )}
       </ScrollView>
+      <TabBar />
     </SafeAreaView>
   );
 }
