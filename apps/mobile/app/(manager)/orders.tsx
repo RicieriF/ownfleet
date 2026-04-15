@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { apiGet, apiPost } from '@/api/client';
 import type { ManagerOrder, ManagerCourier, OrderStatus } from '@/types';
 
@@ -161,6 +162,7 @@ function AssignModal({ order, mode, onClose, onSuccess }: AssignModalProps) {
 }
 
 export default function OrdersScreen() {
+  const router = useRouter();
   const [orders, setOrders] = useState<ManagerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,6 +229,15 @@ export default function OrdersScreen() {
       <SafeAreaView style={styles.root} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Замовлення</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => router.navigate('/(manager)/history' as Parameters<typeof router.navigate>[0])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.historyBtn}
+            >
+              <Ionicons name="time-outline" size={20} color="#78776e" />
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.centered}>
           <ActivityIndicator color="#78776e" />
@@ -239,7 +250,16 @@ export default function OrdersScreen() {
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Замовлення</Text>
-        <Text style={styles.headerCount}>{orders.length}</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerCount}>{orders.length}</Text>
+          <TouchableOpacity
+            onPress={() => router.navigate('/(manager)/history' as Parameters<typeof router.navigate>[0])}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.historyBtn}
+          >
+            <Ionicons name="time-outline" size={20} color="#78776e" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {error ? (
@@ -319,6 +339,14 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Manrope_700Bold' : undefined,
     fontWeight: '700',
     color: '#faf9f6',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historyBtn: {
+    padding: 2,
   },
   headerCount: {
     fontSize: 14,

@@ -241,6 +241,49 @@ export interface AnalyticsCourierStat {
   completion_rate: number;
 }
 
+// ── Delivery Proofs ────────────────────────────────────────────────────────
+
+export interface GeoFlags {
+  proof_after_close?: true;
+  low_accuracy?: true;
+  no_destination_coords?: true;
+  force_closed?: true;
+  closed_by?: string;
+}
+
+export interface DeliveryProof {
+  id: string;
+  delivery_id: string;
+  lat: number;
+  lng: number;
+  captured_at: string;
+  geo_match: boolean;
+  accuracy: number | null;
+  geo_flags: GeoFlags;
+  photo_key: string | null;
+  photo_url: string | null;
+}
+
+// ── Manager History ────────────────────────────────────────────────────────
+
+export interface HistoryOrder {
+  id: string;
+  external_id: string | null;
+  address: string;
+  status: 'completed' | 'failed' | 'cancelled';
+  created_at: string;
+  delivery?: {
+    id: string;
+    courier_id: string;
+    status: string;
+    completed_at: string | null;
+    courier: {
+      id: string;
+      name: string;
+    };
+  } | null;
+}
+
 export interface InviteItem {
   id: string;
   courier_id: string;
