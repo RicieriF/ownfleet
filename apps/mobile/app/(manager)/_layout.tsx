@@ -13,6 +13,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="analytics" />
         <Stack.Screen name="couriers" />
         <Stack.Screen name="history" />
+        <Stack.Screen name="settings" />
       </Stack>
       <ManagerTabBar />
     </View>

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { apiGet } from '@/api/client';
 import { useAuthStore } from '@/store/auth';
 import type { ManagerCourier, ManagerOrder, ManagerKpi } from '@/types';
@@ -62,6 +63,7 @@ function KpiCard({ label, value, sub, urgent }: KpiCardProps) {
 
 export default function ManagerDashboard() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [kpi, setKpi] = useState<ManagerKpi | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +100,17 @@ export default function ManagerDashboard() {
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Дашборд</Text>
-        {user?.name ? <Text style={styles.headerSub}>{user.name}</Text> : null}
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Дашборд</Text>
+          {user?.name ? <Text style={styles.headerSub}>{user.name}</Text> : null}
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/(manager)/settings')}
+          hitSlop={8}
+          style={styles.settingsBtn}
+        >
+          <Ionicons name="settings-outline" size={22} color="#78776e" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -169,11 +180,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#0c0b09',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(250,249,246,0.08)',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  settingsBtn: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: 20,
