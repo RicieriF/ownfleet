@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from './auth.types.js';
 import { LoginDto } from './dto/login.dto.js';
+import { UpdateUserDeviceTokenDto } from './dto/update-device-token.dto.js';
 
 const REFRESH_COOKIE = 'refresh_token';
 const COOKIE_OPTS = {
@@ -75,6 +77,25 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   wsToken(@CurrentUser() user: AuthenticatedUser): { token: string } {
     return { token: this.authService.issueWsToken(user) };
+  }
+
+  /**
+   * Registers manager FCM push token for mobile notifications.
+   * Callable by any authenticated user (manager/owner/dispatcher).
+   * Handles device-swap: clears token from any other user who had this device.
+   */
+  @Patch('me/device-token')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  async updateDeviceToken(
+    @Body() dto: UpdateUserDeviceTokenDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<void> {
+    await this.authService.updateDeviceToken(
+      user.id,
+      dto.device_token,
+      dto.device_platform,
+    );
   }
 
   // logout does NOT require JwtAuthGuard — access token may be expired

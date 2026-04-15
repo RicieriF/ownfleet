@@ -100,3 +100,104 @@ export interface ProofPayload {
   accuracy: number;
   photo_key?: string;
 }
+
+// ── Manager types ─────────────────────────────────────────────────────────────
+
+export type UserRole = 'owner' | 'manager' | 'dispatcher';
+
+export interface ManagerUser {
+  id: string;
+  establishment_id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export type OrderStatus =
+  | 'pending'
+  | 'assigned'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+export interface ManagerOrder {
+  id: string;
+  external_id: string | null;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  status: OrderStatus;
+  created_at: string;
+  ready_at: string | null;
+  delivery?: {
+    id: string;
+    courier_id: string;
+    status: string;
+    eta_seconds: number | null;
+    courier: {
+      id: string;
+      name: string;
+    };
+  } | null;
+}
+
+/** Courier status for manager dashboard — based on last ping timestamp */
+export type CourierOnlineStatus = 'online' | 'background' | 'no_response' | 'offline';
+
+export interface ManagerCourier {
+  id: string;
+  name: string;
+  phone: string;
+  active: boolean;
+  transport_mode: TransportMode | null;
+  last_ping?: {
+    lat: number;
+    lng: number;
+    battery: number | null;
+    created_at: string;
+  } | null;
+  active_shift?: {
+    id: string;
+    started_at: string;
+    planned_end_at: string | null;
+  } | null;
+  active_delivery?: {
+    id: string;
+    order: {
+      address: string;
+    };
+  } | null;
+  online_status: CourierOnlineStatus;
+}
+
+export interface ActiveShiftItem {
+  id: string;
+  started_at: string;
+  planned_end_at: string | null;
+  courier: {
+    id: string;
+    name: string;
+    phone: string;
+    transport_mode: TransportMode | null;
+    last_ping: {
+      lat: number;
+      lng: number;
+      battery: number | null;
+      created_at: string;
+    } | null;
+    active_delivery: {
+      id: string;
+      order: { address: string };
+    } | null;
+  };
+}
+
+export interface ManagerKpi {
+  onShiftCount: number;
+  pendingOrdersCount: number;
+  activeDeliveriesCount: number;
+  notStartedCount: number;
+  inRideCount: number;
+  freeCount: number;
+}

@@ -146,6 +146,10 @@ model User {
   telegram_chat_id String? @unique
   telegram_prefs   Json    @default("{}")
 
+  // Push notifications for manager mobile app
+  device_token    String?         @unique
+  device_platform DevicePlatform?
+
   establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   refresh_tokens RefreshToken[]
   courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull, onUpdate: NoAction)

@@ -67,6 +67,7 @@
       "expo-font"
     ],
     "scheme": "weego-courier",
+    "_note_maps": "react-native-maps requires EAS development builds — does not work in Expo Go",
     "extra": {
       "eas": {
         "projectId": "YOUR_EAS_PROJECT_ID"

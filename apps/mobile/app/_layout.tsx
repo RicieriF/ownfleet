@@ -16,36 +16,53 @@ import {
 } from '@expo-google-fonts/jetbrains-mono';
 import { useAuthStore } from '@/store/auth';
 import { registerPushToken } from '@/services/notifications';
+import { registerManagerPushToken } from '@/services/manager-notifications';
 
 const PREVIEW_MODE = process.env.EXPO_PUBLIC_PREVIEW_MODE === '1';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
-  const { user, isLoaded, gpsConsentDone, notifConsentDone } = useAuthStore();
+  const { user, isLoaded, gpsConsentDone, notifConsentDone, role, courierId } = useAuthStore();
 
   useEffect(() => {
     if (PREVIEW_MODE) return;
-
     if (!isLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === 'onboarding';
     const inGpsConsent = segments[0] === 'gps-consent';
     const inNotifConsent = segments[0] === 'notifications-consent';
+    const inManagerGroup = segments[0] === '(manager)';
 
     if (!user && !inAuthGroup && !inOnboarding) {
       router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
+      return;
+    }
+
+    if (!user) return;
+
+    // Manager flow: role-based users (owner/manager/dispatcher)
+    // They skip GPS & notification consent — those are courier-specific
+    const isManager = role === 'owner' || role === 'manager' || role === 'dispatcher';
+    if (isManager) {
+      if (inAuthGroup || (!inManagerGroup && !inOnboarding)) {
+        router.replace('/(manager)');
+      }
+      return;
+    }
+
+    // Courier flow (has courier_id in JWT, or no role — legacy fallback)
+    if (inAuthGroup) {
       if (!gpsConsentDone) router.replace('/gps-consent');
       else if (!notifConsentDone) router.replace('/notifications-consent');
       else router.replace('/(app)');
-    } else if (user && !gpsConsentDone && !inGpsConsent && !inOnboarding) {
+    } else if (!gpsConsentDone && !inGpsConsent && !inOnboarding) {
       router.replace('/gps-consent');
-    } else if (user && gpsConsentDone && !notifConsentDone && !inNotifConsent && !inOnboarding) {
+    } else if (gpsConsentDone && !notifConsentDone && !inNotifConsent && !inOnboarding) {
       router.replace('/notifications-consent');
     }
-  }, [user, isLoaded, segments, router, gpsConsentDone, notifConsentDone]);
+  }, [user, isLoaded, segments, router, gpsConsentDone, notifConsentDone, role, courierId]);
 
   return <>{children}</>;
 }
@@ -64,17 +81,19 @@ export default function RootLayout() {
 
   useEffect(() => {
     loadFromStorage().then(() => {
-      // Re-register FCM token on each launch only if already consented,
-      // to handle token rotation. First-time registration happens in
-      // notifications-consent.tsx after the user explicitly allows it.
-      const { notifConsentDone } = useAuthStore.getState();
-      if (notifConsentDone) {
+      const { notifConsentDone, role } = useAuthStore.getState();
+      const isManager = role === 'owner' || role === 'manager' || role === 'dispatcher';
+
+      if (isManager) {
+        // Register manager push token via users endpoint
+        registerManagerPushToken().catch(() => {});
+      } else if (notifConsentDone) {
+        // Re-register courier FCM token on each launch to handle token rotation
         registerPushToken().catch(() => {});
       }
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // In design preview mode allow render even if font loading is delayed/failed.
   if (!fontsLoaded && !PREVIEW_MODE) return null;
 
   return (
@@ -88,6 +107,7 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
+            <Stack.Screen name="(manager)" />
             <Stack.Screen name="onboarding" />
             <Stack.Screen name="gps-consent" />
             <Stack.Screen name="notifications-consent" />

@@ -139,6 +139,31 @@ export class AuthService {
     });
   }
 
+  /**
+   * Saves manager FCM push token for the authenticated user.
+   * Uses upsert semantics: if another user has the same token (device swap),
+   * clear it first to maintain the UNIQUE constraint.
+   */
+  async updateDeviceToken(
+    userId: string,
+    deviceToken: string,
+    devicePlatform: string,
+  ): Promise<void> {
+    // Clear token from any other user who had this device (device transfer scenario)
+    await this.prisma.user.updateMany({
+      where: { device_token: deviceToken, NOT: { id: userId } },
+      data: { device_token: null, device_platform: null },
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        device_token: deviceToken,
+        device_platform: devicePlatform as import('@prisma/client').DevicePlatform,
+      },
+    });
+  }
+
   async logout(rawToken: string): Promise<void> {
     const tokenHash = this.hashToken(rawToken);
     await this.prisma.refreshToken
