@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +31,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_COLOR: Partial<Record<OrderStatus, string>> = {
   pending: '#f59e0b',
-  assigned: '#9c9b96',
+  assigned: '#d5d4ce',  // Warm light — distinguishable from disabled gray (#78776e)
   in_progress: '#22c55e',
 };
 
@@ -110,7 +109,9 @@ function AssignModal({ order, mode, onClose, onSuccess }: AssignModalProps) {
           ) : null}
 
           {error ? (
-            <Text style={styles.modalError}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)} activeOpacity={0.7}>
+              <Text style={styles.modalError}>{error} (торкніться, щоб закрити)</Text>
+            </TouchableOpacity>
           ) : null}
 
           {loading ? (

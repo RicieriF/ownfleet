@@ -33,14 +33,23 @@ async function fetchWsToken(): Promise<string | null> {
     return data.token ?? null;
   };
 
-  let result = await doFetch(accessToken).catch(() => null);
+  let result = await doFetch(accessToken).catch((e: unknown) => {
+    console.warn('[WS] ws-token fetch failed:', e);
+    return null;
+  });
   if (!result) {
     // access token may be expired — try refresh first
     const refreshed = await refreshAccessToken();
-    if (!refreshed) return null;
+    if (!refreshed) {
+      console.warn('[WS] token refresh failed — WS will not connect');
+      return null;
+    }
     const { accessToken: newToken } = useAuthStore.getState();
     if (!newToken) return null;
-    result = await doFetch(newToken).catch(() => null);
+    result = await doFetch(newToken).catch((e: unknown) => {
+      console.warn('[WS] ws-token fetch failed after refresh:', e);
+      return null;
+    });
   }
   return result;
 }

@@ -93,6 +93,7 @@ export class AuthController {
   ): Promise<void> {
     await this.authService.updateDeviceToken(
       user.id,
+      user.establishment_id,
       dto.device_token,
       dto.device_platform,
     );

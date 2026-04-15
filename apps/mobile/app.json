@@ -48,6 +48,13 @@
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": ""
+        }
+      ],
       [
         "expo-location",
         {

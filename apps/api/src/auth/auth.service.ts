@@ -146,12 +146,18 @@ export class AuthService {
    */
   async updateDeviceToken(
     userId: string,
+    establishmentId: string,
     deviceToken: string,
     devicePlatform: string,
   ): Promise<void> {
-    // Clear token from any other user who had this device (device transfer scenario)
+    // Clear token from another user WITHIN THE SAME ESTABLISHMENT (device hand-off scenario).
+    // Scoped to establishment_id to prevent cross-tenant token manipulation.
     await this.prisma.user.updateMany({
-      where: { device_token: deviceToken, NOT: { id: userId } },
+      where: {
+        device_token: deviceToken,
+        establishment_id: establishmentId,
+        NOT: { id: userId },
+      },
       data: { device_token: null, device_platform: null },
     });
 

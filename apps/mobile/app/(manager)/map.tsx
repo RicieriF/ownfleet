@@ -85,28 +85,7 @@ function CourierMarker({ courier, selected, onPress }: CourierMarkerProps) {
   );
 }
 
-interface OsrmPoint {
-  latitude: number;
-  longitude: number;
-}
-
-async function fetchOsrmRoute(
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number },
-): Promise<OsrmPoint[]> {
-  const OSRM_URL =
-    process.env.EXPO_PUBLIC_OSRM_URL ?? 'https://router.project-osrm.org';
-  const url = `${OSRM_URL}/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json() as {
-    routes?: Array<{
-      geometry: { coordinates: Array<[number, number]> };
-    }>;
-  };
-  const coords = data.routes?.[0]?.geometry?.coordinates ?? [];
-  return coords.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
-}
+type OsrmPoint = { latitude: number; longitude: number };
 
 // Kyiv center as default region
 const DEFAULT_REGION = {
@@ -162,27 +141,11 @@ export default function MapScreen() {
     return () => { socket.off('courier:moved', handler); };
   }, [socket]);
 
-  // Fetch OSRM route when a courier with active delivery is selected
+  // Route polyline: cleared on deselect or courier change.
+  // Full OSRM routing deferred to v2 — requires order detail endpoint with lat/lng.
   useEffect(() => {
     setRoute([]);
-    if (!selectedId) return;
-    const courier = couriers.find((c) => c.id === selectedId);
-    if (!courier?.last_ping || !courier.active_delivery) return;
-
-    // We don't have the delivery destination lat/lng in list response
-    // Route is only shown if the order has coordinates
-    const order = courier.active_delivery?.order;
-    // Active delivery order doesn't carry lat/lng in the list endpoint
-    // Route rendering requires a separate order detail call — skip for list view
-    // This is a known limitation; route shown only on map detail endpoint (future)
-    void fetchOsrmRoute(
-      { lat: courier.last_ping.lat, lng: courier.last_ping.lng },
-      { lat: courier.last_ping.lat + 0.005, lng: courier.last_ping.lng + 0.005 },
-    ).then(() => {
-      // Route destination coords not available from list — skip polyline
-      setRoute([]);
-    });
-  }, [selectedId, couriers]);
+  }, [selectedId]);
 
   const selectedCourier = couriers.find((c) => c.id === selectedId) ?? null;
 
