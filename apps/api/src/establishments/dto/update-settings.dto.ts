@@ -1,4 +1,17 @@
-import { IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { DispatchMode } from '@prisma/client';
 
 export const ALLOWED_TIMEZONES = [
@@ -11,23 +24,37 @@ export const ALLOWED_TIMEZONES = [
 
 export class UpdateSettingsDto {
   // ── Retention (JSONB settings) ───────────────────────────────────────────
-  @IsOptional() @IsInt() @Min(1) @Max(90)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(90)
   retention_orders_days?: number;
 
-  @IsOptional() @IsInt() @Min(1) @Max(3)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
   retention_pings_days?: number;
 
-  @IsOptional() @IsInt() @Min(10) @Max(60)
+  @IsOptional()
+  @IsInt()
+  @Min(10)
+  @Max(60)
   courier_not_responding_min?: number;
 
   // ── ETA alerts (JSONB settings) ──────────────────────────────────────────
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   show_sla_on_dashboard?: boolean;
 
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   eta_alert_enabled?: boolean;
 
-  @IsOptional() @IsInt() @Min(1) @Max(60)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(60)
   eta_alert_delay_minutes?: number;
 
   // ── Separate columns ─────────────────────────────────────────────────────
@@ -37,25 +64,37 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @ValidateIf((o: UpdateSettingsDto) => o.delivery_sla_minutes !== null)
-  @IsInt() @Min(5) @Max(180)
+  @IsInt()
+  @Min(5)
+  @Max(180)
   delivery_sla_minutes?: number | null;
 
-  @IsOptional() @IsNumber() @Min(-90) @Max(90)
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
   lat?: number;
 
-  @IsOptional() @IsNumber() @Min(-180) @Max(180)
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
   lng?: number;
 
   @IsOptional()
   @ValidateIf((o: UpdateSettingsDto) => o.city !== null)
-  @IsString() @MinLength(2) @MaxLength(100)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
   city?: string | null;
 
   // ── Dispatch mode ────────────────────────────────────────────────────────
-  @IsOptional() @IsEnum(DispatchMode)
+  @IsOptional()
+  @IsEnum(DispatchMode)
   dispatch_mode?: DispatchMode;
 
   // ── Tracking widget locale ────────────────────────────────────────────────
-  @IsOptional() @IsIn(['uk', 'en'])
+  @IsOptional()
+  @IsIn(['uk', 'en'])
   locale?: string;
 }

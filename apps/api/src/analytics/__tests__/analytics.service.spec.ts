@@ -3,7 +3,12 @@ import { AnalyticsService } from '../analytics.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 const EST_ID = 'est-1';
-const userA: any = { id: 'u1', establishment_id: EST_ID, role: 'manager', is_platform_admin: false };
+const userA: any = {
+  id: 'u1',
+  establishment_id: EST_ID,
+  role: 'manager',
+  is_platform_admin: false,
+};
 
 const mockPrisma = { $queryRaw: jest.fn() };
 
@@ -43,8 +48,18 @@ const courierRows = [
 ];
 
 const timelineRows = [
-  { period: new Date('2026-03-01'), total: BigInt(3), completed: BigInt(2), failed: BigInt(1) },
-  { period: new Date('2026-03-02'), total: BigInt(5), completed: BigInt(4), failed: BigInt(0) },
+  {
+    period: new Date('2026-03-01'),
+    total: BigInt(3),
+    completed: BigInt(2),
+    failed: BigInt(1),
+  },
+  {
+    period: new Date('2026-03-02'),
+    total: BigInt(5),
+    completed: BigInt(4),
+    failed: BigInt(0),
+  },
 ];
 
 describe('AnalyticsService', () => {
@@ -86,7 +101,11 @@ describe('AnalyticsService', () => {
     });
 
     it('includes period with from/to dates', async () => {
-      const result = await service.getSummary(userA, '2026-03-01', '2026-03-31');
+      const result = await service.getSummary(
+        userA,
+        '2026-03-01',
+        '2026-03-31',
+      );
 
       expect(result.period.from).toBeInstanceOf(Date);
       expect(result.period.to).toBeInstanceOf(Date);
@@ -95,7 +114,8 @@ describe('AnalyticsService', () => {
     it('defaults to last 30 days when no dates provided', async () => {
       const result = await service.getSummary(userA);
       const diffDays =
-        (result.period.to.getTime() - result.period.from.getTime()) / (1000 * 60 * 60 * 24);
+        (result.period.to.getTime() - result.period.from.getTime()) /
+        (1000 * 60 * 60 * 24);
 
       expect(diffDays).toBeCloseTo(30, 0);
     });
@@ -162,8 +182,12 @@ describe('AnalyticsService', () => {
     });
 
     it('accepts day/week/month granularity without error', async () => {
-      await expect(service.getTimeline(userA, undefined, undefined, 'week')).resolves.toBeDefined();
-      await expect(service.getTimeline(userA, undefined, undefined, 'month')).resolves.toBeDefined();
+      await expect(
+        service.getTimeline(userA, undefined, undefined, 'week'),
+      ).resolves.toBeDefined();
+      await expect(
+        service.getTimeline(userA, undefined, undefined, 'month'),
+      ).resolves.toBeDefined();
     });
 
     it('defaults granularity to day', async () => {

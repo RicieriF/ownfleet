@@ -42,7 +42,10 @@ export class PublicTrackingController {
     @Req() req: Request,
   ) {
     const apiKey = req.apiKey as ApiKeyContext;
-    return this.service.getTokenByExternalId(externalId, apiKey.establishment_id);
+    return this.service.getTokenByExternalId(
+      externalId,
+      apiKey.establishment_id,
+    );
   }
 
   /**

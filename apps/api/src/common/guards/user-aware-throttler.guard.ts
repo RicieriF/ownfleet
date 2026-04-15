@@ -16,8 +16,8 @@ import { AuthenticatedUser } from '../../auth/auth.types.js';
  */
 @Injectable()
 export class UserAwareThrottlerGuard extends ThrottlerGuard {
-  protected async getTracker(req: Request): Promise<string> {
+  protected getTracker(req: Request): Promise<string> {
     const user = (req as Request & { user?: AuthenticatedUser }).user;
-    return user?.id ?? req.ip ?? 'anonymous';
+    return Promise.resolve(user?.id ?? req.ip ?? 'anonymous');
   }
 }

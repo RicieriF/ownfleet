@@ -1,4 +1,9 @@
-import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import type IORedis from 'ioredis';
@@ -47,15 +52,34 @@ export class HealthController {
   async check(): Promise<{
     status: string;
     timestamp: string;
-    services: { database: string; redis: string; queues: Record<string, QueueHealth>; version: string };
+    services: {
+      database: string;
+      redis: string;
+      queues: Record<string, QueueHealth>;
+      version: string;
+    };
   }> {
-    const [dbOk, redisOk, pingPaused, webhookPaused, pingCounts, webhookCounts] = await Promise.all([
+    const [
+      dbOk,
+      redisOk,
+      pingPaused,
+      webhookPaused,
+      pingCounts,
+      webhookCounts,
+    ] = await Promise.all([
       this.prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
-      this.redis.ping().then((r) => r === 'PONG').catch(() => false),
+      this.redis
+        .ping()
+        .then((r) => r === 'PONG')
+        .catch(() => false),
       this.pingQueue.isPaused().catch(() => null as boolean | null),
       this.webhookQueue.isPaused().catch(() => null as boolean | null),
-      this.pingQueue.getJobCounts().catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
-      this.webhookQueue.getJobCounts().catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
+      this.pingQueue
+        .getJobCounts()
+        .catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
+      this.webhookQueue
+        .getJobCounts()
+        .catch(() => null as Awaited<ReturnType<Queue['getJobCounts']>> | null),
     ]);
 
     const toQueueHealth = (

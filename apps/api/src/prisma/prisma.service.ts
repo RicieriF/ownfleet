@@ -10,7 +10,9 @@ export class PrismaService
   constructor() {
     // Prisma v7 uses a driver adapter instead of the legacy library engine.
     // PrismaPg reads DATABASE_URL from process.env by default.
-    const adapter = new PrismaPg({ connectionString: process.env['DATABASE_URL'] });
+    const adapter = new PrismaPg({
+      connectionString: process.env['DATABASE_URL'],
+    });
     super({ adapter });
   }
 

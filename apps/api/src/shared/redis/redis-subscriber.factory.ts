@@ -15,7 +15,9 @@ export class RedisSubscriberFactory {
    */
   create(): IORedis {
     const client = new IORedis(this.config.getOrThrow<string>('REDIS_URL'));
-    client.on('error', (err) => this.logger.error('Redis subscriber connection error', err));
+    client.on('error', (err) =>
+      this.logger.error('Redis subscriber connection error', err),
+    );
     return client;
   }
 }

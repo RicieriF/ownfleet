@@ -13,7 +13,12 @@ const mockUser = {
   establishment_id: 'est-1',
   role: 'manager' as const,
   is_platform_admin: false,
-  establishment: { id: 'est-1', plan: 'starter', trial_ends_at: null, paid_until: null },
+  establishment: {
+    id: 'est-1',
+    plan: 'starter',
+    trial_ends_at: null,
+    paid_until: null,
+  },
 };
 
 const mockPrisma = {
@@ -85,7 +90,10 @@ describe('AuthService', () => {
     it('JWT payload contains sub, establishment_id, role', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
 
-      await service.login({ email: 'manager@test.com', password: 'password123' });
+      await service.login({
+        email: 'manager@test.com',
+        password: 'password123',
+      });
 
       expect(mockJwt.sign).toHaveBeenCalledWith(
         expect.objectContaining({

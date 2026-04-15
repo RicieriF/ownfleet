@@ -56,7 +56,9 @@ export class RetentionService {
     } else {
       this.backupS3 = null;
       this.backupBucket = null;
-      this.logger.warn('Backup S3 not configured — weekly delivery_proofs export disabled');
+      this.logger.warn(
+        'Backup S3 not configured — weekly delivery_proofs export disabled',
+      );
     }
   }
 
@@ -127,57 +129,68 @@ export class RetentionService {
   @Cron('0 */30 * * * *', { name: 'shift-anomaly-check', timeZone: 'UTC' })
   async checkShiftAnomalies(): Promise<void> {
     await this.lock.withLock('shift-anomaly-check', 1500, async () => {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
-    // Fetch all active shifts (candidate + comparison pool) in a single query
-    const allActiveShifts = await this.prisma.shift.findMany({
-      where: { ended_at: null, started_at: { lt: twoHoursAgo } },
-      include: { courier: { select: { name: true } } },
-    });
+      // Fetch all active shifts (candidate + comparison pool) in a single query
+      const allActiveShifts = await this.prisma.shift.findMany({
+        where: { ended_at: null, started_at: { lt: twoHoursAgo } },
+        include: { courier: { select: { name: true } } },
+      });
 
-    // Group by establishment for O(1) comparison lookups
-    const byEstablishment = new Map<string, typeof allActiveShifts>();
-    for (const s of allActiveShifts) {
-      const list = byEstablishment.get(s.establishment_id) ?? [];
-      list.push(s);
-      byEstablishment.set(s.establishment_id, list);
-    }
+      // Group by establishment for O(1) comparison lookups
+      const byEstablishment = new Map<string, typeof allActiveShifts>();
+      for (const s of allActiveShifts) {
+        const list = byEstablishment.get(s.establishment_id) ?? [];
+        list.push(s);
+        byEstablishment.set(s.establishment_id, list);
+      }
 
-    // Only consider shifts that need an alert and have enough data
-    const candidates = allActiveShifts.filter(
-      (s) => s.anomaly_alerted_at === null && s.total_deliveries > 5,
-    );
-
-    for (const shift of candidates) {
-      const hoursActive = (Date.now() - shift.started_at.getTime()) / (1000 * 60 * 60);
-      const ratePerHour = shift.total_deliveries / hoursActive;
-
-      const otherActiveShifts = (byEstablishment.get(shift.establishment_id) ?? []).filter(
-        (s) => s.id !== shift.id && s.total_deliveries > 0,
+      // Only consider shifts that need an alert and have enough data
+      const candidates = allActiveShifts.filter(
+        (s) => s.anomaly_alerted_at === null && s.total_deliveries > 5,
       );
 
-      if (otherActiveShifts.length === 0) continue; // Cannot compare without others
+      for (const shift of candidates) {
+        const hoursActive =
+          (Date.now() - shift.started_at.getTime()) / (1000 * 60 * 60);
+        const ratePerHour = shift.total_deliveries / hoursActive;
 
-      const avgRate =
-        otherActiveShifts.reduce((sum, s) => {
-          const hrs = (Date.now() - s.started_at.getTime()) / (1000 * 60 * 60);
-          return sum + s.total_deliveries / Math.max(hrs, 0.5);
-        }, 0) / otherActiveShifts.length;
+        const otherActiveShifts = (
+          byEstablishment.get(shift.establishment_id) ?? []
+        ).filter((s) => s.id !== shift.id && s.total_deliveries > 0);
 
-      if (avgRate > 0 && ratePerHour > 2 * avgRate) {
-        const msg = `⚠️ ${shift.courier.name}: ${shift.total_deliveries} доставок за ${hoursActive.toFixed(1)} год — у ${(ratePerHour / avgRate).toFixed(1)}x більше за середнє по команді`;
-        this.telegram
-          .notifyEstablishmentManagers(shift.establishment_id, msg, MANAGER_EVENT.SHIFT_ANOMALY)
-          .catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_anomaly)', err));
-        await this.prisma.shift.update({
-          where: { id: shift.id },
-          data: { anomaly_alerted_at: new Date() },
-        });
-        this.logger.log(
-          `Shift anomaly alert: courier ${shift.courier.name} (shift ${shift.id})`,
-        );
+        if (otherActiveShifts.length === 0) continue; // Cannot compare without others
+
+        const avgRate =
+          otherActiveShifts.reduce((sum, s) => {
+            const hrs =
+              (Date.now() - s.started_at.getTime()) / (1000 * 60 * 60);
+            return sum + s.total_deliveries / Math.max(hrs, 0.5);
+          }, 0) / otherActiveShifts.length;
+
+        if (avgRate > 0 && ratePerHour > 2 * avgRate) {
+          const msg = `⚠️ ${shift.courier.name}: ${shift.total_deliveries} доставок за ${hoursActive.toFixed(1)} год — у ${(ratePerHour / avgRate).toFixed(1)}x більше за середнє по команді`;
+          this.telegram
+            .notifyEstablishmentManagers(
+              shift.establishment_id,
+              msg,
+              MANAGER_EVENT.SHIFT_ANOMALY,
+            )
+            .catch((err: unknown) =>
+              this.logger.warn(
+                'Telegram notification failed (shift_anomaly)',
+                err,
+              ),
+            );
+          await this.prisma.shift.update({
+            where: { id: shift.id },
+            data: { anomaly_alerted_at: new Date() },
+          });
+          this.logger.log(
+            `Shift anomaly alert: courier ${shift.courier.name} (shift ${shift.id})`,
+          );
+        }
       }
-    }
     });
   }
 
@@ -190,51 +203,58 @@ export class RetentionService {
   @Cron('0 */5 * * * *', { name: 'recommend-timeout-check', timeZone: 'UTC' })
   async checkRecommendTimeout(): Promise<void> {
     await this.lock.withLock('recommend-timeout-check', 240, async () => {
-    const establishments = await this.prisma.establishment.findMany({
-      where: { dispatch_mode: 'recommend' },
-      select: { id: true, settings: true },
-    });
-
-    for (const est of establishments) {
-      const settings = parseEstablishmentSettings(est.settings);
-      const timeoutMinutes = settings.dispatch_recommend_timeout_minutes;
-      if (!timeoutMinutes) continue;
-
-      const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
-      const staleOrders = await this.prisma.order.findMany({
-        where: {
-          establishment_id: est.id,
-          status: 'pending',
-          // ready_at: when the order was marked ready (POST /ready).
-          // Using ready_at — not created_at — so the timeout starts when
-          // the kitchen finished, not when the order arrived in the system.
-          // Orders without ready_at have not been dispatched yet — skip them.
-          ready_at: { not: null, lt: cutoff },
-        },
-        select: { id: true, establishment_id: true },
+      const establishments = await this.prisma.establishment.findMany({
+        where: { dispatch_mode: 'recommend' },
+        select: { id: true, settings: true },
       });
 
-      for (const order of staleOrders) {
-        // attempt: 1 is intentional — this cron starts a fresh dispatch wave,
-        // not a retry of a prior wave. The processor's 30-attempt cap applies
-        // within each wave. Escalation for persistently unassigned orders is
-        // handled separately via dispatch_no_courier_escalation_minutes (planned).
-        await this.dispatchQueue
-          .add(
-            { orderId: order.id, establishmentId: order.establishment_id, attempt: 1 },
-            { jobId: `dispatch:${order.id}` },
-          )
-          .catch((err: unknown) =>
-            this.logger.warn(`Failed to re-enqueue stale order ${order.id}`, err),
-          );
-      }
+      for (const est of establishments) {
+        const settings = parseEstablishmentSettings(est.settings);
+        const timeoutMinutes = settings.dispatch_recommend_timeout_minutes;
+        if (!timeoutMinutes) continue;
 
-      if (staleOrders.length > 0) {
-        this.logger.log(
-          `Recommend timeout: re-enqueued ${staleOrders.length} stale order(s) for establishment ${est.id}`,
-        );
+        const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+        const staleOrders = await this.prisma.order.findMany({
+          where: {
+            establishment_id: est.id,
+            status: 'pending',
+            // ready_at: when the order was marked ready (POST /ready).
+            // Using ready_at — not created_at — so the timeout starts when
+            // the kitchen finished, not when the order arrived in the system.
+            // Orders without ready_at have not been dispatched yet — skip them.
+            ready_at: { not: null, lt: cutoff },
+          },
+          select: { id: true, establishment_id: true },
+        });
+
+        for (const order of staleOrders) {
+          // attempt: 1 is intentional — this cron starts a fresh dispatch wave,
+          // not a retry of a prior wave. The processor's 30-attempt cap applies
+          // within each wave. Escalation for persistently unassigned orders is
+          // handled separately via dispatch_no_courier_escalation_minutes (planned).
+          await this.dispatchQueue
+            .add(
+              {
+                orderId: order.id,
+                establishmentId: order.establishment_id,
+                attempt: 1,
+              },
+              { jobId: `dispatch:${order.id}` },
+            )
+            .catch((err: unknown) =>
+              this.logger.warn(
+                `Failed to re-enqueue stale order ${order.id}`,
+                err,
+              ),
+            );
+        }
+
+        if (staleOrders.length > 0) {
+          this.logger.log(
+            `Recommend timeout: re-enqueued ${staleOrders.length} stale order(s) for establishment ${est.id}`,
+          );
+        }
       }
-    }
     });
   }
 
@@ -260,21 +280,24 @@ export class RetentionService {
           lat: null,
           status: { in: ['pending', 'assigned', 'in_progress'] },
           created_at: { lt: tenMinutesAgo },
-          NOT: [
-            { address: '' },
-            { address: 'Unknown' },
-          ],
+          NOT: [{ address: '' }, { address: 'Unknown' }],
         },
         select: { id: true, address: true, establishment_id: true },
         take: 100,
       });
 
       for (const order of orders) {
-        void this.geocodingService.enqueueGeocode(order.id, order.address, order.establishment_id);
+        void this.geocodingService.enqueueGeocode(
+          order.id,
+          order.address,
+          order.establishment_id,
+        );
       }
 
       if (orders.length > 0) {
-        this.logger.log(`Geocode recovery: re-enqueued ${orders.length} order(s) without coordinates`);
+        this.logger.log(
+          `Geocode recovery: re-enqueued ${orders.length} order(s) without coordinates`,
+        );
       }
     });
   }
@@ -290,8 +313,10 @@ export class RetentionService {
     const result = await this.prisma.$executeRaw`
       DELETE FROM tracking_tokens WHERE expires_at < NOW()
     `;
-    if ((result as number) > 0) {
-      this.logger.log(`Tracking tokens cleanup: deleted ${result as number} expired token(s)`);
+    if (result > 0) {
+      this.logger.log(
+        `Tracking tokens cleanup: deleted ${result} expired token(s)`,
+      );
     }
   }
 
@@ -300,7 +325,10 @@ export class RetentionService {
    * Deletes old terminal orders and location_pings per establishment.
    * delivery_proofs are NEVER deleted — retention exempt by design.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'retention-cleanup', timeZone: 'UTC' })
+  @Cron(CronExpression.EVERY_DAY_AT_3AM, {
+    name: 'retention-cleanup',
+    timeZone: 'UTC',
+  })
   async runRetention(): Promise<void> {
     await this.lock.withLock('retention-cleanup', 7200, async () => {
       this.logger.log('Starting retention cleanup');
@@ -325,13 +353,15 @@ export class RetentionService {
         totalEstablishments += page.length;
 
         for (const est of page) {
-          const { deletedOrders, deletedPings } = await this.cleanupEstablishment(
-        est.id,
-        parseEstablishmentSettings(est.settings),
-      );
+          const { deletedOrders, deletedPings } =
+            await this.cleanupEstablishment(
+              est.id,
+              parseEstablishmentSettings(est.settings),
+            );
           totalOrders += deletedOrders;
           totalPings += deletedPings;
         }
+        // eslint-disable-next-line no-constant-condition
       } while (true);
 
       this.logger.log(
@@ -386,7 +416,7 @@ export class RetentionService {
         )
         AND created_at < ${cutoff}
       `;
-      deletedPings = deletedPingsResult as number;
+      deletedPings = deletedPingsResult;
 
       if (deletedOrders > 0 || deletedPings > 0) {
         await this.prisma.retentionLog.create({
@@ -403,7 +433,10 @@ export class RetentionService {
         );
       }
     } catch (err) {
-      this.logger.error(`Retention failed for establishment ${establishmentId}`, err);
+      this.logger.error(
+        `Retention failed for establishment ${establishmentId}`,
+        err,
+      );
     }
 
     return { deletedOrders, deletedPings };
@@ -480,10 +513,11 @@ export class RetentionService {
         }),
       );
 
-      this.logger.log(`Weekly backup completed: ${totalCount} delivery_proofs → delivery-proofs/${dateStr}.json.gz`);
+      this.logger.log(
+        `Weekly backup completed: ${totalCount} delivery_proofs → delivery-proofs/${dateStr}.json.gz`,
+      );
     } catch (err) {
       this.logger.error('Weekly delivery_proofs backup FAILED', err);
     }
   }
-
 }

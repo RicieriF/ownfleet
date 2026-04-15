@@ -22,12 +22,12 @@ const OSRM_PROFILE: Record<TransportMode, string> = {
 // moto_gas: urban scooter speed is comparable to car — no correction needed for MVP.
 //   Tune with real delivery data if ETA accuracy is off.
 // moto_electric: e-scooter max ~35 km/h vs car ~50 km/h → takes longer for same route.
-const MOTO_GAS_DURATION_FACTOR = 1.0;       // same as car; revisit after real-world data
+const MOTO_GAS_DURATION_FACTOR = 1.0; // same as car; revisit after real-world data
 const MOTO_ELECTRIC_DURATION_FACTOR = 50 / 35; // ≈ 1.43
 
 // Peak hour coefficients (applied in establishment's local timezone)
 const PEAK_HOURS = [
-  { start: 7, end: 9 },   // morning rush
+  { start: 7, end: 9 }, // morning rush
   { start: 17, end: 19 }, // evening rush
 ] as const;
 const PEAK_COEFFICIENT = 1.3;
@@ -60,11 +60,12 @@ export class EtaService {
     private readonly telegram: TelegramService,
     private readonly config: ConfigService,
   ) {
-    const base = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
+    const base =
+      config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
     this.osrmUrls = {
       driving: config.get<string>('OSRM_URL_DRIVING') ?? base,
       cycling: config.get<string>('OSRM_URL_CYCLING') ?? base,
-      foot:    config.get<string>('OSRM_URL_FOOT')    ?? base,
+      foot: config.get<string>('OSRM_URL_FOOT') ?? base,
     };
   }
 
@@ -73,11 +74,17 @@ export class EtaService {
    * Returns null if OSRM is unreachable or coordinates are invalid.
    */
   async calculateEta(params: EtaParams): Promise<number | null> {
-    const { establishmentLat, establishmentLng, orderLat, orderLng, transportMode, timezone } =
-      params;
+    const {
+      establishmentLat,
+      establishmentLng,
+      orderLat,
+      orderLng,
+      transportMode,
+      timezone,
+    } = params;
 
     const profile = OSRM_PROFILE[transportMode];
-    const baseUrl = this.osrmUrls[profile] ?? this.osrmUrls['driving']!;
+    const baseUrl = this.osrmUrls[profile] ?? this.osrmUrls['driving'];
     const url = `${baseUrl}/route/v1/${profile}/${establishmentLng},${establishmentLat};${orderLng},${orderLat}?overview=false`;
 
     let durationSeconds: number;
@@ -96,7 +103,7 @@ export class EtaService {
         this.logger.warn(`OSRM route not found: ${data.code}`);
         return null;
       }
-      durationSeconds = data.routes[0]!.duration;
+      durationSeconds = data.routes[0].duration;
     } catch (err) {
       this.logger.warn('OSRM request failed', err);
       return null;
@@ -152,12 +159,16 @@ export class EtaService {
     const now = new Date();
 
     for (const delivery of deliveries) {
-      const settings = parseEstablishmentSettings(delivery.order.establishment.settings);
+      const settings = parseEstablishmentSettings(
+        delivery.order.establishment.settings,
+      );
       if (!settings.eta_alert_enabled) continue;
 
       const delayMs = settings.eta_alert_delay_minutes * 60_000;
       const etaMs = delivery.eta_seconds! * 1_000;
-      const overdueAt = new Date(delivery.eta_started_at!.getTime() + etaMs + delayMs);
+      const overdueAt = new Date(
+        delivery.eta_started_at!.getTime() + etaMs + delayMs,
+      );
 
       if (now < overdueAt) continue;
 
@@ -171,7 +182,9 @@ export class EtaService {
           `⏰ Доставка запізнюється на ${overdueMinutes} хв\nКурʼєр: ${delivery.courier.name}\nАдреса: ${delivery.order.address}`,
           MANAGER_EVENT.DELIVERY_ASSIGNED,
         )
-        .catch((err: unknown) => this.logger.warn('Telegram notification failed (eta_overdue)', err));
+        .catch((err: unknown) =>
+          this.logger.warn('Telegram notification failed (eta_overdue)', err),
+        );
 
       alertedIds.push(delivery.id);
     }
@@ -192,7 +205,11 @@ export class EtaService {
    * and the courier is now > 100m from the establishment — set eta_started_at.
    * Fire-and-forget: caller must not await.
    */
-  async checkAndMarkDeparture(courierId: string, lat: number, lng: number): Promise<void> {
+  async checkAndMarkDeparture(
+    courierId: string,
+    lat: number,
+    lng: number,
+  ): Promise<void> {
     const delivery = await this.prisma.delivery.findFirst({
       where: {
         courier_id: courierId,
@@ -231,10 +248,15 @@ export class EtaService {
   private getPeakCoefficient(timezone: string): number {
     const now = new Date();
     const localHour = Number(
-      now.toLocaleString('en-US', { timeZone: timezone, hour: 'numeric', hour12: false }),
+      now.toLocaleString('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        hour12: false,
+      }),
     );
-    const isPeak = PEAK_HOURS.some(({ start, end }) => localHour >= start && localHour < end);
+    const isPeak = PEAK_HOURS.some(
+      ({ start, end }) => localHour >= start && localHour < end,
+    );
     return isPeak ? PEAK_COEFFICIENT : 1.0;
   }
-
 }

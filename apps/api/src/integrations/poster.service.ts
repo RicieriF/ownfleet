@@ -5,11 +5,12 @@ import { GeocodingService } from '../geocoding/geocoding.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
 import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
+import { parsePosterConfig } from './integration-configs.js';
 
 interface PosterOrderPayload {
-  object: string;            // 'incoming_order'
-  object_id: string;         // external order id
-  action: string;            // 'added' | 'changed'
+  object: string; // 'incoming_order'
+  object_id: string; // external order id
+  action: string; // 'added' | 'changed'
   data: {
     phone?: string;
     address?: string;
@@ -50,12 +51,13 @@ export class PosterService {
       throw new UnauthorizedException('Poster integration not configured');
     }
 
-    const config = integration.config as Record<string, unknown>;
-    const secret = config['application_secret'] as string | undefined;
-
-    if (!secret) {
-      throw new UnauthorizedException('Poster integration secret not configured');
+    const cfg = parsePosterConfig(integration.config);
+    if (!cfg) {
+      throw new UnauthorizedException(
+        'Poster integration secret not configured',
+      );
     }
+    const { application_secret: secret } = cfg;
 
     // ── HMAC verification ─────────────────────────────────────────────────
     const expected = crypto
@@ -70,7 +72,9 @@ export class PosterService {
       signatureBuffer.length !== expectedBuffer.length ||
       !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
     ) {
-      this.logger.warn(`Invalid Poster HMAC for establishment ${establishmentId}`);
+      this.logger.warn(
+        `Invalid Poster HMAC for establishment ${establishmentId}`,
+      );
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
@@ -79,7 +83,9 @@ export class PosterService {
     try {
       payload = JSON.parse(rawBody.toString('utf8')) as PosterOrderPayload;
     } catch {
-      this.logger.warn(`Poster webhook: invalid JSON for establishment ${establishmentId}`);
+      this.logger.warn(
+        `Poster webhook: invalid JSON for establishment ${establishmentId}`,
+      );
       return { received: true }; // accept but ignore malformed payloads
     }
 
@@ -121,9 +127,18 @@ export class PosterService {
           `⚠️ Замовлення #${externalId} від Poster надійшло без адреси.\nВстановіть координати вручну через кнопку «Карта» у дашборді.`,
           MANAGER_EVENT.GEOCODE_FAILED,
         )
-        .catch((err) => this.logger.warn(`Telegram alert failed for no-address Poster order ${order.id}`, err));
+        .catch((err) =>
+          this.logger.warn(
+            `Telegram alert failed for no-address Poster order ${order.id}`,
+            err,
+          ),
+        );
     } else {
-      void this.geocodingService.enqueueGeocode(order.id, address, establishmentId);
+      void this.geocodingService.enqueueGeocode(
+        order.id,
+        address,
+        establishmentId,
+      );
     }
 
     return { received: true, order_id: order.id };

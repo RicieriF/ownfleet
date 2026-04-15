@@ -8,7 +8,12 @@ import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 const EST_A = 'est-a';
 const EST_B = 'est-b';
 
-const managerUser: any = { id: 'u1', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+const managerUser: any = {
+  id: 'u1',
+  establishment_id: EST_A,
+  role: 'manager',
+  is_platform_admin: false,
+};
 
 const mockEstablishment = {
   name: 'Піцерія Везувій',
@@ -92,12 +97,17 @@ describe('PublicTrackingService', () => {
     });
 
     it('returns existing token on P2002 (race condition idempotency)', async () => {
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint', {
-        code: 'P2002',
-        clientVersion: '5.0',
-      });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint',
+        {
+          code: 'P2002',
+          clientVersion: '5.0',
+        },
+      );
       mockTrackingToken.create.mockRejectedValue(p2002);
-      mockTrackingToken.findUniqueOrThrow.mockResolvedValue({ token: 'tok-existing' });
+      mockTrackingToken.findUniqueOrThrow.mockResolvedValue({
+        token: 'tok-existing',
+      });
 
       const result = await service.getOrCreateToken('order-1');
       expect(result).toBe('tok-existing');
@@ -108,8 +118,12 @@ describe('PublicTrackingService', () => {
     });
 
     it('re-throws non-P2002 errors', async () => {
-      mockTrackingToken.create.mockRejectedValue(new Error('DB connection lost'));
-      await expect(service.getOrCreateToken('order-1')).rejects.toThrow('DB connection lost');
+      mockTrackingToken.create.mockRejectedValue(
+        new Error('DB connection lost'),
+      );
+      await expect(service.getOrCreateToken('order-1')).rejects.toThrow(
+        'DB connection lost',
+      );
     });
   });
 
@@ -118,7 +132,9 @@ describe('PublicTrackingService', () => {
   describe('getTokenByExternalId', () => {
     it('throws NotFoundException when order not found for establishment', async () => {
       mockOrder.findFirst.mockResolvedValue(null);
-      await expect(service.getTokenByExternalId('ext-1', EST_A)).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getTokenByExternalId('ext-1', EST_A),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('returns token scoped to establishment (multi-tenant)', async () => {
@@ -129,7 +145,10 @@ describe('PublicTrackingService', () => {
       expect(result.token).toBe('tok-xyz');
       expect(mockOrder.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ external_id: 'ext-1', establishment_id: EST_A }),
+          where: expect.objectContaining({
+            external_id: 'ext-1',
+            establishment_id: EST_A,
+          }),
         }),
       );
     });
@@ -140,16 +159,26 @@ describe('PublicTrackingService', () => {
   describe('getTokenForManager', () => {
     it('throws NotFoundException when order not found', async () => {
       mockOrder.findUnique.mockResolvedValue(null);
-      await expect(service.getTokenForManager('order-x', managerUser)).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getTokenForManager('order-x', managerUser),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when order belongs to different establishment (multi-tenant)', async () => {
-      mockOrder.findUnique.mockResolvedValue({ id: 'order-1', establishment_id: EST_B });
-      await expect(service.getTokenForManager('order-1', managerUser)).rejects.toThrow(NotFoundException);
+      mockOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        establishment_id: EST_B,
+      });
+      await expect(
+        service.getTokenForManager('order-1', managerUser),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('returns token for own establishment order', async () => {
-      mockOrder.findUnique.mockResolvedValue({ id: 'order-1', establishment_id: EST_A });
+      mockOrder.findUnique.mockResolvedValue({
+        id: 'order-1',
+        establishment_id: EST_A,
+      });
       mockTrackingToken.create.mockResolvedValue({ token: 'tok-mgr' });
 
       const result = await service.getTokenForManager('order-1', managerUser);
@@ -199,7 +228,11 @@ describe('PublicTrackingService', () => {
       mockTrackingToken.findUnique.mockResolvedValue(validToken);
       mockOrder.findUnique.mockResolvedValue({
         ...pendingOrder,
-        establishment: { name: 'Піцерія Везувій', delivery_sla_minutes: null, settings: { locale: 'en' } },
+        establishment: {
+          name: 'Піцерія Везувій',
+          delivery_sla_minutes: null,
+          settings: { locale: 'en' },
+        },
       });
       mockDelivery.findFirst.mockResolvedValue(null);
 
@@ -277,7 +310,7 @@ describe('PublicTrackingService', () => {
         status: 'assigned',
         eta_seconds: 720,
         eta_started_at: null,
-        courier: { name: 'Новий Кур\'єр', transport_mode: 'car' },
+        courier: { name: "Новий Кур'єр", transport_mode: 'car' },
       });
 
       const result = await service.getSnapshot('valid-token');
@@ -288,7 +321,7 @@ describe('PublicTrackingService', () => {
           orderBy: { assigned_at: 'desc' },
         }),
       );
-      expect(result!.courierName).toBe('Новий Кур\'єр');
+      expect(result!.courierName).toBe("Новий Кур'єр");
     });
 
     it('returns routeGeometry from Redis cache when delivery in_progress', async () => {
@@ -358,7 +391,9 @@ describe('PublicTrackingService', () => {
       });
 
       const result = await service.getSnapshot('valid-token');
-      const expectedDeadline = new Date(readyAt.getTime() + 30 * 60 * 1000).toISOString();
+      const expectedDeadline = new Date(
+        readyAt.getTime() + 30 * 60 * 1000,
+      ).toISOString();
       expect(result!.slaDeadline).toBe(expectedDeadline);
     });
 
@@ -376,7 +411,10 @@ describe('PublicTrackingService', () => {
 
     it('State 3 — delivery completed: deliveryStatus=completed, routeGeometry=null', async () => {
       mockTrackingToken.findUnique.mockResolvedValue(validToken);
-      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'completed' });
+      mockOrder.findUnique.mockResolvedValue({
+        ...pendingOrder,
+        status: 'completed',
+      });
       mockDelivery.findFirst.mockResolvedValue({
         id: 'del-1',
         status: 'completed',
@@ -396,7 +434,10 @@ describe('PublicTrackingService', () => {
 
     it('State 4 — order cancelled: orderStatus=cancelled, deliveryStatus=null', async () => {
       mockTrackingToken.findUnique.mockResolvedValue(validToken);
-      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'cancelled' });
+      mockOrder.findUnique.mockResolvedValue({
+        ...pendingOrder,
+        status: 'cancelled',
+      });
       mockDelivery.findFirst.mockResolvedValue(null);
 
       const result = await service.getSnapshot('valid-token');
@@ -409,7 +450,10 @@ describe('PublicTrackingService', () => {
     it('State 5 — all deliveries failed: deliveryStatus=null (non-failed query returns null)', async () => {
       // Order is still in_progress (waiting for reassignment), but no non-failed delivery exists
       mockTrackingToken.findUnique.mockResolvedValue(validToken);
-      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, status: 'in_progress' });
+      mockOrder.findUnique.mockResolvedValue({
+        ...pendingOrder,
+        status: 'in_progress',
+      });
       // findFirst(status: { not: 'failed' }) returns null — all deliveries are failed
       mockDelivery.findFirst.mockResolvedValue(null);
 
@@ -430,7 +474,11 @@ describe('PublicTrackingService', () => {
     it('State 2 without coords — orderLat/orderLng null, routeGeometry null', async () => {
       mockTrackingToken.findUnique.mockResolvedValue(validToken);
       // Order geocoding failed — no coordinates
-      mockOrder.findUnique.mockResolvedValue({ ...pendingOrder, lat: null, lng: null });
+      mockOrder.findUnique.mockResolvedValue({
+        ...pendingOrder,
+        lat: null,
+        lng: null,
+      });
       mockDelivery.findFirst.mockResolvedValue({
         id: 'del-1',
         status: 'in_progress',

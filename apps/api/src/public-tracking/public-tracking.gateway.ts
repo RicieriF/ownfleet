@@ -8,10 +8,10 @@ import {
 import { Server, Socket } from 'socket.io';
 import {
   Injectable,
+  Inject,
   Logger,
   OnModuleInit,
   OnModuleDestroy,
-  Inject,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Cron } from '@nestjs/schedule';
@@ -28,7 +28,10 @@ import {
   TRACKING_TOKEN_POST_DELIVERY_MINUTES,
   TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES,
 } from './public-tracking.constants.js';
-import { GEOCODING_DONE_CHANNEL, GeocodingDonePayload } from '../geocoding/processors/geocoding.processor.js';
+import {
+  GEOCODING_DONE_CHANNEL,
+  GeocodingDonePayload,
+} from '../geocoding/processors/geocoding.processor.js';
 import { Processor, Process } from '@nestjs/bull';
 
 export interface DisconnectJob {
@@ -64,7 +67,12 @@ const WS_CONNECT_RATE_LIMIT = 30;
 @Processor(TRACKING_DISCONNECT_QUEUE)
 @WebSocketGateway({ namespace: '/public', cors: { origin: '*' } })
 export class PublicTrackingGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit, OnModuleDestroy
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleInit,
+    OnModuleDestroy
 {
   @WebSocketServer()
   private server!: Server;
@@ -76,7 +84,8 @@ export class PublicTrackingGateway
     private readonly prisma: PrismaService,
     private readonly redisSubscriberFactory: RedisSubscriberFactory,
     @Inject(REDIS_CLIENT) private readonly redis: IORedis,
-    @InjectQueue(TRACKING_DISCONNECT_QUEUE) private readonly disconnectQueue: Queue<DisconnectJob>,
+    @InjectQueue(TRACKING_DISCONNECT_QUEUE)
+    private readonly disconnectQueue: Queue<DisconnectJob>,
     private readonly lock: DistributedLockService,
   ) {}
 
@@ -106,24 +115,35 @@ export class PublicTrackingGateway
     // server.local: all instances subscribe to the same Redis pattern, so each
     // handles only its own connected clients. Without .local the Redis adapter
     // would re-broadcast the event and each client receives N duplicate messages.
-    this.redisSub.on('pmessage', (_pattern: string, channel: string, message: string) => {
-      try {
-        const payload = JSON.parse(message) as { type: string; [key: string]: unknown };
-        // channel = 'order:{orderId}:public'
-        const parts = channel.split(':');
-        const orderId = parts[1];
-        if (!orderId) return;
+    this.redisSub.on(
+      'pmessage',
+      (_pattern: string, channel: string, message: string) => {
+        try {
+          const payload = JSON.parse(message) as {
+            type: string;
+            [key: string]: unknown;
+          };
+          // channel = 'order:{orderId}:public'
+          const parts = channel.split(':');
+          const orderId = parts[1];
+          if (!orderId) return;
 
-        const room = `order:${orderId}:public`;
-        if (payload.type === 'location') {
-          this.server.local.to(room).emit('courier:location', { lat: payload['lat'], lng: payload['lng'] });
-        } else if (payload.type === 'route') {
-          this.server.local.to(room).emit('delivery:route', { routeGeometry: payload['routeGeometry'] });
+          const room = `order:${orderId}:public`;
+          if (payload.type === 'location') {
+            this.server.local.to(room).emit('courier:location', {
+              lat: payload['lat'],
+              lng: payload['lng'],
+            });
+          } else if (payload.type === 'route') {
+            this.server.local.to(room).emit('delivery:route', {
+              routeGeometry: payload['routeGeometry'],
+            });
+          }
+        } catch (err) {
+          this.logger.error('Failed to handle pmessage', err);
         }
-      } catch (err) {
-        this.logger.error('Failed to handle pmessage', err);
-      }
-    });
+      },
+    );
 
     // Regular messages (delivery lifecycle, geocoding)
     // server.local for same reason: every instance subscribes and handles its own clients.
@@ -148,10 +168,17 @@ export class PublicTrackingGateway
 
           // Schedule delayed disconnect for terminal order states so the client
           // has time to render the final UI state before the WS room is closed.
-          if (payload.orderStatus === 'cancelled' || payload.orderStatus === 'failed') {
+          if (
+            payload.orderStatus === 'cancelled' ||
+            payload.orderStatus === 'failed'
+          ) {
             this.disconnectQueue
               .add(
-                { orderId: payload.orderId, deliveryId: '', reason: 'terminal' },
+                {
+                  orderId: payload.orderId,
+                  deliveryId: '',
+                  reason: 'terminal',
+                },
                 {
                   delay: TRACKING_TOKEN_TERMINAL_DISCONNECT_MINUTES * 60 * 1000,
                   jobId: `disconnect:${payload.orderId}`,
@@ -159,7 +186,10 @@ export class PublicTrackingGateway
                 },
               )
               .catch((err) =>
-                this.logger.warn('Failed to schedule WS disconnect (terminal state)', err),
+                this.logger.warn(
+                  'Failed to schedule WS disconnect (terminal state)',
+                  err,
+                ),
               );
           }
           return;
@@ -241,7 +271,9 @@ export class PublicTrackingGateway
 
   // ── Delivery completed lifecycle ────────────────────────────────────────
 
-  private async handleDeliveryCompleted(payload: DeliveryCompletedPayload): Promise<void> {
+  private async handleDeliveryCompleted(
+    payload: DeliveryCompletedPayload,
+  ): Promise<void> {
     const { orderId, deliveryId, courierId } = payload;
 
     // Async update: shorten token TTL to 15 min post-completion.
@@ -254,7 +286,9 @@ export class PublicTrackingGateway
         where: { order_id: orderId },
         data: { expires_at: shortExpiry },
       })
-      .catch((err: unknown) => this.logger.warn('Failed to shorten tracking token TTL', err));
+      .catch((err: unknown) =>
+        this.logger.warn('Failed to shorten tracking token TTL', err),
+      );
 
     // Schedule Bull delayed disconnect after 15 min (survives server restarts)
     await this.disconnectQueue
@@ -266,7 +300,9 @@ export class PublicTrackingGateway
           removeOnComplete: true,
         },
       )
-      .catch((err) => this.logger.warn('Failed to schedule WS disconnect job', err));
+      .catch((err) =>
+        this.logger.warn('Failed to schedule WS disconnect job', err),
+      );
   }
 
   // ── Bull processor: delayed disconnect ─────────────────────────────────
@@ -297,12 +333,16 @@ export class PublicTrackingGateway
         this.redis.del(`route:${deliveryId}`).catch(() => {}),
       ];
       if (courierId) {
-        delOps.push(this.redis.del(`courier:active_order:${courierId}`).catch(() => {}));
+        delOps.push(
+          this.redis.del(`courier:active_order:${courierId}`).catch(() => {}),
+        );
       }
       await Promise.all(delOps);
     }
 
-    this.logger.log(`Disconnected public WS room for order ${orderId} (reason=${reason})`);
+    this.logger.log(
+      `Disconnected public WS room for order ${orderId} (reason=${reason})`,
+    );
   }
 
   // ── ETA push cron (every 60s) ────────────────────────────────────────────
@@ -325,7 +365,9 @@ export class PublicTrackingGateway
 
         let remainingSeconds = d.eta_seconds;
         if (d.eta_started_at) {
-          const elapsedSeconds = Math.floor((Date.now() - d.eta_started_at.getTime()) / 1000);
+          const elapsedSeconds = Math.floor(
+            (Date.now() - d.eta_started_at.getTime()) / 1000,
+          );
           remainingSeconds = Math.max(0, d.eta_seconds - elapsedSeconds);
         }
 

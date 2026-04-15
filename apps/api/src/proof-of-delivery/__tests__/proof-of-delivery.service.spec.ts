@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ProofOfDeliveryService } from '../proof-of-delivery.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { WebhooksService } from '../../webhooks/webhooks.service.js';
@@ -8,7 +12,13 @@ import { ConfigService } from '@nestjs/config';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 
 const EST_A = 'est-a';
-const userA: any = { id: 'u1', establishment_id: EST_A, role: 'manager', courier_id: 'c1', is_platform_admin: false };
+const userA: any = {
+  id: 'u1',
+  establishment_id: EST_A,
+  role: 'manager',
+  courier_id: 'c1',
+  is_platform_admin: false,
+};
 
 const baseDelivery = {
   id: 'd1',
@@ -35,7 +45,9 @@ const mockPrisma = {
   $transaction: jest.fn((cb: any) => cb(mockTx)),
 };
 
-const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
+const mockWebhooksService = {
+  dispatch: jest.fn().mockResolvedValue(undefined),
+};
 
 const mockTelegramService = {
   notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
@@ -58,7 +70,13 @@ describe('ProofOfDeliveryService', () => {
         { provide: WebhooksService, useValue: mockWebhooksService },
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: REDIS_CLIENT, useValue: { publish: jest.fn().mockResolvedValue(1), del: jest.fn().mockResolvedValue(1) } },
+        {
+          provide: REDIS_CLIENT,
+          useValue: {
+            publish: jest.fn().mockResolvedValue(1),
+            del: jest.fn().mockResolvedValue(1),
+          },
+        },
       ],
     }).compile();
     service = module.get<ProofOfDeliveryService>(ProofOfDeliveryService);
@@ -75,7 +93,10 @@ describe('ProofOfDeliveryService', () => {
 
     it('sets geo_match=true when courier within 300m', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.451, lng: 30.521 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 50.451,
+        lng: 30.521,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
 
       const result = await service.completeDelivery('d1', dto, userA);
@@ -85,7 +106,10 @@ describe('ProofOfDeliveryService', () => {
 
     it('sets geo_match=false when courier outside 300m', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 51.0, lng: 31.0 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 51.0,
+        lng: 31.0,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: false }]);
 
       const result = await service.completeDelivery('d1', dto, userA);
@@ -95,7 +119,10 @@ describe('ProofOfDeliveryService', () => {
 
     it('delivery completes successfully even when geo_match=false', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 51.0, lng: 31.0 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 51.0,
+        lng: 31.0,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: false }]);
 
       const result = await service.completeDelivery('d1', dto, userA);
@@ -107,7 +134,10 @@ describe('ProofOfDeliveryService', () => {
 
     it('sets no_destination_coords flag when order has no coordinates', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: null, lng: null });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: null,
+        lng: null,
+      });
 
       const result = await service.completeDelivery('d1', dto, userA);
 
@@ -125,10 +155,17 @@ describe('ProofOfDeliveryService', () => {
         ...baseDelivery,
         order_closed_at: orderClosedAt,
       });
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.45, lng: 30.52 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 50.45,
+        lng: 30.52,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
 
-      const result = await service.completeDelivery('d1', { lat: 50.45, lng: 30.52 }, userA);
+      const result = await service.completeDelivery(
+        'd1',
+        { lat: 50.45, lng: 30.52 },
+        userA,
+      );
 
       expect(result.geo_flags).toMatchObject({ proof_after_close: true });
     });
@@ -141,10 +178,17 @@ describe('ProofOfDeliveryService', () => {
         ...baseDelivery,
         order_closed_at: orderClosedAt,
       });
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.45, lng: 30.52 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 50.45,
+        lng: 30.52,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
 
-      const result = await service.completeDelivery('d1', { lat: 50.45, lng: 30.52 }, userA);
+      const result = await service.completeDelivery(
+        'd1',
+        { lat: 50.45, lng: 30.52 },
+        userA,
+      );
 
       expect(result.geo_flags).not.toMatchObject({ proof_after_close: true });
     });
@@ -152,7 +196,12 @@ describe('ProofOfDeliveryService', () => {
 
   describe('completeDelivery — courier-only guard', () => {
     it('throws ForbiddenException when called by a manager (no courier_id)', async () => {
-      const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+      const managerUser: any = {
+        id: 'u2',
+        establishment_id: EST_A,
+        role: 'manager',
+        is_platform_admin: false,
+      };
       await expect(
         service.completeDelivery('d1', { lat: 50, lng: 30 }, managerUser),
       ).rejects.toThrow(ForbiddenException);
@@ -160,8 +209,19 @@ describe('ProofOfDeliveryService', () => {
   });
 
   describe('forceCloseDelivery', () => {
-    const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
-    const courierUser: any = { id: 'u1', establishment_id: EST_A, role: 'courier', courier_id: 'c1', is_platform_admin: false };
+    const managerUser: any = {
+      id: 'u2',
+      establishment_id: EST_A,
+      role: 'manager',
+      is_platform_admin: false,
+    };
+    const courierUser: any = {
+      id: 'u1',
+      establishment_id: EST_A,
+      role: 'courier',
+      courier_id: 'c1',
+      is_platform_admin: false,
+    };
 
     it('manager can force-close an in_progress delivery', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
@@ -172,14 +232,20 @@ describe('ProofOfDeliveryService', () => {
       expect(mockTx.deliveryProof.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            geo_flags: expect.objectContaining({ force_closed: true, closed_by: managerUser.id }),
+            geo_flags: expect.objectContaining({
+              force_closed: true,
+              closed_by: managerUser.id,
+            }),
           }),
         }),
       );
     });
 
     it('manager can force-close an assigned delivery (courier never started)', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue({ ...baseDelivery, status: 'assigned' });
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        ...baseDelivery,
+        status: 'assigned',
+      });
 
       const result = await service.forceCloseDelivery('d1', managerUser);
 
@@ -187,18 +253,27 @@ describe('ProofOfDeliveryService', () => {
     });
 
     it('throws ForbiddenException for courier role', async () => {
-      await expect(service.forceCloseDelivery('d1', courierUser)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.forceCloseDelivery('d1', courierUser),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('throws BadRequestException for already completed delivery', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue({ ...baseDelivery, status: 'completed' });
-      await expect(service.forceCloseDelivery('d1', managerUser)).rejects.toThrow(BadRequestException);
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        ...baseDelivery,
+        status: 'completed',
+      });
+      await expect(
+        service.forceCloseDelivery('d1', managerUser),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws ConflictException on race condition (count=0)', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
       mockTx.delivery.updateMany.mockResolvedValue({ count: 0 });
-      await expect(service.forceCloseDelivery('d1', managerUser)).rejects.toThrow();
+      await expect(
+        service.forceCloseDelivery('d1', managerUser),
+      ).rejects.toThrow();
     });
   });
 
@@ -223,14 +298,20 @@ describe('ProofOfDeliveryService', () => {
 
   describe('state machine enforcement', () => {
     it('cannot complete an assigned (not started) delivery', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue({ ...baseDelivery, status: 'assigned' });
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        ...baseDelivery,
+        status: 'assigned',
+      });
       await expect(
         service.completeDelivery('d1', { lat: 50, lng: 30 }, userA),
       ).rejects.toThrow(); // BadRequestException from assertDeliveryTransition
     });
 
     it('cannot fail a completed delivery', async () => {
-      mockPrisma.delivery.findUnique.mockResolvedValue({ ...baseDelivery, status: 'completed' });
+      mockPrisma.delivery.findUnique.mockResolvedValue({
+        ...baseDelivery,
+        status: 'completed',
+      });
       await expect(service.failDelivery('d1', userA)).rejects.toThrow();
     });
   });
@@ -238,7 +319,10 @@ describe('ProofOfDeliveryService', () => {
   describe('delivery_proofs retention — never deleted', () => {
     it('creates delivery proof record on every complete', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.45, lng: 30.52 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 50.45,
+        lng: 30.52,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
 
       await service.completeDelivery('d1', { lat: 50.45, lng: 30.52 }, userA);
@@ -252,25 +336,33 @@ describe('ProofOfDeliveryService', () => {
   describe('Telegram notifications', () => {
     it('completeDelivery() fires delivery_completed to establishment managers', async () => {
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
-      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({ lat: 50.45, lng: 30.52 });
+      mockPrisma.order.findUniqueOrThrow.mockResolvedValue({
+        lat: 50.45,
+        lng: 30.52,
+      });
       mockPrisma.$queryRaw.mockResolvedValue([{ within: true }]);
 
       await service.completeDelivery('d1', { lat: 50.45, lng: 30.52 }, userA);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-        EST_A,
-        expect.any(String),
-        'delivery_completed',
-      );
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(EST_A, expect.any(String), 'delivery_completed');
     });
 
     it('forceCloseDelivery() fires delivery_force_closed to establishment managers', async () => {
-      const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+      const managerUser: any = {
+        id: 'u2',
+        establishment_id: EST_A,
+        role: 'manager',
+        is_platform_admin: false,
+      };
       mockPrisma.delivery.findUnique.mockResolvedValue(baseDelivery);
 
       await service.forceCloseDelivery('d1', managerUser);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         EST_A,
         expect.any(String),
         'delivery_force_closed',
@@ -282,11 +374,9 @@ describe('ProofOfDeliveryService', () => {
 
       await service.failDelivery('d1', userA);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-        EST_A,
-        expect.any(String),
-        'delivery_failed',
-      );
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(EST_A, expect.any(String), 'delivery_failed');
     });
   });
 });

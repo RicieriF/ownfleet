@@ -39,7 +39,9 @@ export class TeamService {
   async create(dto: CreateTeamMemberDto, user: AuthenticatedUser) {
     this.assertOwner(user);
 
-    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const exists = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (exists) {
       throw new ConflictException('Користувач з таким email вже існує');
     }

@@ -31,7 +31,9 @@ const mockOrder = {
   create: jest.fn(),
 };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
-const mockGeocodingService = { enqueueGeocode: jest.fn().mockResolvedValue(undefined) };
+const mockGeocodingService = {
+  enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('PosterService', () => {
   let service: PosterService;
@@ -52,7 +54,10 @@ describe('PosterService', () => {
       config: { application_secret: APP_SECRET },
     });
     mockOrder.findFirst.mockResolvedValue(null);
-    mockOrder.create.mockResolvedValue({ id: 'order-uuid', external_id: 'ext-order-42' });
+    mockOrder.create.mockResolvedValue({
+      id: 'order-uuid',
+      external_id: 'ext-order-42',
+    });
   });
 
   // ── HMAC validation ────────────────────────────────────────────────────
@@ -92,19 +97,22 @@ describe('PosterService', () => {
       const rawBody = makeRawBody(basePayload);
       const sig = makeSignature(APP_SECRET, rawBody);
 
-      await expect(
-        service.handleWebhook(EST_ID, rawBody, sig),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.handleWebhook(EST_ID, rawBody, sig)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('rejects when integration is inactive', async () => {
-      mockIntegration.findUnique.mockResolvedValue({ active: false, config: {} });
+      mockIntegration.findUnique.mockResolvedValue({
+        active: false,
+        config: {},
+      });
       const rawBody = makeRawBody(basePayload);
       const sig = makeSignature(APP_SECRET, rawBody);
 
-      await expect(
-        service.handleWebhook(EST_ID, rawBody, sig),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.handleWebhook(EST_ID, rawBody, sig)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -190,7 +198,10 @@ describe('PosterService', () => {
         ...basePayload,
         data: { address: 'вул. Хрещатик 1', comment: null },
       };
-      mockOrder.create.mockResolvedValue({ id: 'order-uuid', external_id: 'ext-order-42' });
+      mockOrder.create.mockResolvedValue({
+        id: 'order-uuid',
+        external_id: 'ext-order-42',
+      });
 
       const rawBody = makeRawBody(payloadNoCoords);
       const sig = makeSignature(APP_SECRET, rawBody);
@@ -224,7 +235,10 @@ describe('PosterService', () => {
         ...basePayload,
         data: { address: 'вул. Хрещатик 1', delivery: { lat: 0, lng: 0 } },
       };
-      mockOrder.create.mockResolvedValue({ id: 'order-uuid', external_id: 'ext-order-42' });
+      mockOrder.create.mockResolvedValue({
+        id: 'order-uuid',
+        external_id: 'ext-order-42',
+      });
 
       const rawBody = makeRawBody(payloadZeroCoords);
       const sig = makeSignature(APP_SECRET, rawBody);

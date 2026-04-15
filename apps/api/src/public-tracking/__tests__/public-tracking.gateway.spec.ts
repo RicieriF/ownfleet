@@ -1,4 +1,7 @@
-import { PublicTrackingGateway, DisconnectJob } from '../public-tracking.gateway.js';
+import {
+  PublicTrackingGateway,
+  DisconnectJob,
+} from '../public-tracking.gateway.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { RedisSubscriberFactory } from '../../shared/redis/redis-subscriber.factory.js';
 import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
@@ -49,7 +52,9 @@ function makeJob(data: DisconnectJob): Job<DisconnectJob> {
 
 // Call-through lock mock: lock is always acquired and fn executes immediately
 const mockLock = {
-  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) => fn()),
+  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) =>
+    fn(),
+  ),
 } as unknown as DistributedLockService;
 
 function makeGateway(): PublicTrackingGateway {
@@ -82,18 +87,29 @@ describe('PublicTrackingGateway.processDisconnect', () => {
   // ── completed reason ──────────────────────────────────────────────────────
 
   it('emits TOKEN_EXPIRED and disconnects sockets for reason=completed', async () => {
-    const job = makeJob({ orderId: 'order-1', deliveryId: 'del-1', reason: 'completed' });
+    const job = makeJob({
+      orderId: 'order-1',
+      deliveryId: 'del-1',
+      reason: 'completed',
+    });
     await gw.processDisconnect(job);
 
     expect(mockServer.to).toHaveBeenCalledWith('order:order-1:public');
-    expect(toChain.emit).toHaveBeenCalledWith('error', { type: 'TOKEN_EXPIRED' });
+    expect(toChain.emit).toHaveBeenCalledWith('error', {
+      type: 'TOKEN_EXPIRED',
+    });
 
     expect(mockServer.in).toHaveBeenCalledWith('order:order-1:public');
     expect(inChain.disconnectSockets).toHaveBeenCalledWith(true);
   });
 
   it('deletes Redis route and active_order keys for reason=completed', async () => {
-    const job = makeJob({ orderId: 'order-1', deliveryId: 'del-abc', reason: 'completed', courierId: 'c-1' });
+    const job = makeJob({
+      orderId: 'order-1',
+      deliveryId: 'del-abc',
+      reason: 'completed',
+      courierId: 'c-1',
+    });
     await gw.processDisconnect(job);
 
     expect(mockRedis.del).toHaveBeenCalledWith('route:origin:del-abc');
@@ -104,7 +120,11 @@ describe('PublicTrackingGateway.processDisconnect', () => {
   // ── terminal reason ───────────────────────────────────────────────────────
 
   it('does NOT emit TOKEN_EXPIRED for reason=terminal (cancelled/failed)', async () => {
-    const job = makeJob({ orderId: 'order-2', deliveryId: '', reason: 'terminal' });
+    const job = makeJob({
+      orderId: 'order-2',
+      deliveryId: '',
+      reason: 'terminal',
+    });
     await gw.processDisconnect(job);
 
     // server.to should never be called for TOKEN_EXPIRED emission
@@ -112,7 +132,11 @@ describe('PublicTrackingGateway.processDisconnect', () => {
   });
 
   it('still disconnects sockets for reason=terminal', async () => {
-    const job = makeJob({ orderId: 'order-2', deliveryId: '', reason: 'terminal' });
+    const job = makeJob({
+      orderId: 'order-2',
+      deliveryId: '',
+      reason: 'terminal',
+    });
     await gw.processDisconnect(job);
 
     expect(mockServer.in).toHaveBeenCalledWith('order:order-2:public');
@@ -120,7 +144,11 @@ describe('PublicTrackingGateway.processDisconnect', () => {
   });
 
   it('does NOT call Redis DEL for reason=terminal (no deliveryId)', async () => {
-    const job = makeJob({ orderId: 'order-2', deliveryId: '', reason: 'terminal' });
+    const job = makeJob({
+      orderId: 'order-2',
+      deliveryId: '',
+      reason: 'terminal',
+    });
     await gw.processDisconnect(job);
 
     expect(mockRedis.del).not.toHaveBeenCalled();
@@ -142,10 +170,19 @@ describe('PublicTrackingGateway — handleDeliveryCompleted side effects', () =>
 
   it('shortens tracking token TTL and schedules completed disconnect job', async () => {
     // Call private method directly — acceptable for lifecycle-critical logic
-    const handleDeliveryCompleted = (gw as any)['handleDeliveryCompleted'].bind(gw) as
-      (payload: { orderId: string; deliveryId: string; courierId: string }) => Promise<void>;
+    const handleDeliveryCompleted = (gw as any)['handleDeliveryCompleted'].bind(
+      gw,
+    ) as (payload: {
+      orderId: string;
+      deliveryId: string;
+      courierId: string;
+    }) => Promise<void>;
 
-    await handleDeliveryCompleted({ orderId: 'order-3', deliveryId: 'del-3', courierId: 'courier-1' });
+    await handleDeliveryCompleted({
+      orderId: 'order-3',
+      deliveryId: 'del-3',
+      courierId: 'courier-1',
+    });
 
     // TTL was shortened
     expect(mockPrisma.trackingToken.updateMany).toHaveBeenCalledWith(
@@ -154,7 +191,12 @@ describe('PublicTrackingGateway — handleDeliveryCompleted side effects', () =>
 
     // Disconnect job was scheduled with reason='completed' and courierId for fallback cleanup
     expect(mockQueue.add).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: 'order-3', deliveryId: 'del-3', reason: 'completed', courierId: 'courier-1' }),
+      expect.objectContaining({
+        orderId: 'order-3',
+        deliveryId: 'del-3',
+        reason: 'completed',
+        courierId: 'courier-1',
+      }),
       expect.objectContaining({ jobId: 'disconnect:order-3' }),
     );
   });

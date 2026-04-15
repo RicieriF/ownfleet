@@ -1,5 +1,11 @@
 import {
-  IsString, IsOptional, IsNumber, Min, Max, IsEnum, MinLength,
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+  IsEnum,
+  MinLength,
 } from 'class-validator';
 import { OrderSource } from '@prisma/client';
 
@@ -14,12 +20,14 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsNumber()
-  @Min(-90) @Max(90)
+  @Min(-90)
+  @Max(90)
   lat?: number;
 
   @IsOptional()
   @IsNumber()
-  @Min(-180) @Max(180)
+  @Min(-180)
+  @Max(180)
   lng?: number;
 
   @IsOptional()

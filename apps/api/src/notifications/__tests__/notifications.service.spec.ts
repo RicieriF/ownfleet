@@ -64,7 +64,9 @@ describe('NotificationsService', () => {
 
   describe('sendPush', () => {
     it('sends push when courier has a valid device_token', async () => {
-      mockCourier.findUnique.mockResolvedValue({ device_token: 'valid-token-123' });
+      mockCourier.findUnique.mockResolvedValue({
+        device_token: 'valid-token-123',
+      });
 
       await service.sendPush('c1', pushPayload);
 
@@ -160,10 +162,12 @@ describe('NotificationsService', () => {
       mockFetch.mockResolvedValue({
         ok: false,
         status: 400,
-        text: async () => '{"ok":false,"description":"Bad Request"}',
+        text: () => Promise.resolve('{"ok":false,"description":"Bad Request"}'),
       });
 
-      await expect(service.sendTelegram('bad-chat', 'msg')).resolves.not.toThrow();
+      await expect(
+        service.sendTelegram('bad-chat', 'msg'),
+      ).resolves.not.toThrow();
     });
 
     it('does not throw on network error', async () => {

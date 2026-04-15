@@ -26,7 +26,11 @@ export class DistributedLockService {
    * @param fn         The async work to execute under the lock.
    * @returns true if fn was executed, false if lock was busy.
    */
-  async withLock(key: string, ttlSeconds: number, fn: () => Promise<void>): Promise<boolean> {
+  async withLock(
+    key: string,
+    ttlSeconds: number,
+    fn: () => Promise<void>,
+  ): Promise<boolean> {
     const lockKey = `cron:lock:${key}`;
     let acquired: string | null;
 
@@ -35,7 +39,10 @@ export class DistributedLockService {
       acquired = await this.redis.set(lockKey, '1', 'EX', ttlSeconds, 'NX');
     } catch (err) {
       // Redis unavailable — fail open: run fn so critical cron work is not silently lost.
-      this.logger.warn(`Failed to acquire lock for "${key}" (Redis error) — running anyway`, err);
+      this.logger.warn(
+        `Failed to acquire lock for "${key}" (Redis error) — running anyway`,
+        err,
+      );
       await fn();
       return true;
     }
@@ -48,9 +55,11 @@ export class DistributedLockService {
     // Heartbeat: renew lock TTL every ttl/2 seconds so a slow-but-alive fn never loses the lock.
     const heartbeatMs = Math.floor(ttlSeconds / 2) * 1000;
     const heartbeat = setInterval(() => {
-      this.redis.expire(lockKey, ttlSeconds).catch((err: unknown) =>
-        this.logger.warn(`Failed to renew lock "${key}"`, err),
-      );
+      this.redis
+        .expire(lockKey, ttlSeconds)
+        .catch((err: unknown) =>
+          this.logger.warn(`Failed to renew lock "${key}"`, err),
+        );
     }, heartbeatMs);
 
     try {
@@ -60,9 +69,11 @@ export class DistributedLockService {
       clearInterval(heartbeat);
       // Release the lock. Fire-and-forget: a DEL failure is non-critical
       // (lock expires via TTL), but log it for observability.
-      this.redis.del(lockKey).catch((err: unknown) =>
-        this.logger.warn(`Failed to release lock "${key}"`, err),
-      );
+      this.redis
+        .del(lockKey)
+        .catch((err: unknown) =>
+          this.logger.warn(`Failed to release lock "${key}"`, err),
+        );
     }
   }
 }

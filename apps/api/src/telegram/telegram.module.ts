@@ -1,7 +1,10 @@
 import { Module, OnApplicationShutdown, Inject } from '@nestjs/common';
 import { TelegramController } from './telegram.controller.js';
 import { TelegramService } from './telegram.service.js';
-import { telegramRedisProvider, TELEGRAM_REDIS } from './telegram-redis.provider.js';
+import {
+  telegramRedisProvider,
+  TELEGRAM_REDIS,
+} from './telegram-redis.provider.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import type Redis from 'ioredis';
 

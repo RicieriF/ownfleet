@@ -7,7 +7,11 @@ import {
   Logger,
   Inject,
 } from '@nestjs/common';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import type IORedis from 'ioredis';
@@ -19,7 +23,11 @@ import { AuthenticatedUser } from '../auth/auth.types.js';
 import { CompleteDeliveryDto } from './dto/complete-delivery.dto.js';
 import { assertDeliveryTransition } from '../orders/order-state-machine.js';
 import { OrderStatus, DeliveryStatus, Prisma } from '@prisma/client';
-import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL, PUBLIC_DELIVERY_COMPLETED_CHANNEL } from '../shared/redis/redis.constants.js';
+import {
+  REDIS_CLIENT,
+  PUBLIC_DELIVERY_STATUS_CHANNEL,
+  PUBLIC_DELIVERY_COMPLETED_CHANNEL,
+} from '../shared/redis/redis.constants.js';
 
 const GEO_RADIUS_METERS = 300;
 const PRESIGNED_URL_TTL_SEC = 300; // 5 min
@@ -68,7 +76,9 @@ export class ProofOfDeliveryService {
 
   async getMyDeliveryHistory(user: AuthenticatedUser, limit = 50) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only courier accounts can access delivery history');
+      throw new ForbiddenException(
+        'Only courier accounts can access delivery history',
+      );
     }
 
     return this.prisma.delivery.findMany({
@@ -97,7 +107,9 @@ export class ProofOfDeliveryService {
 
   async getActiveDelivery(user: AuthenticatedUser) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only courier accounts can access active deliveries');
+      throw new ForbiddenException(
+        'Only courier accounts can access active deliveries',
+      );
     }
 
     const delivery = await this.prisma.delivery.findFirst({
@@ -123,12 +135,23 @@ export class ProofOfDeliveryService {
     return delivery ?? null;
   }
 
-  async getUploadUrl(deliveryId: string, user: AuthenticatedUser): Promise<{ upload_url: string; photo_key: string }> {
-    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+  async getUploadUrl(
+    deliveryId: string,
+    user: AuthenticatedUser,
+  ): Promise<{ upload_url: string; photo_key: string }> {
+    const delivery = await this.assertDeliveryBelongs(
+      deliveryId,
+      user.establishment_id,
+    );
 
     // Only active deliveries may receive uploads
-    if (delivery.status !== DeliveryStatus.assigned && delivery.status !== DeliveryStatus.in_progress) {
-      throw new BadRequestException('Upload URL can only be issued for active deliveries');
+    if (
+      delivery.status !== DeliveryStatus.assigned &&
+      delivery.status !== DeliveryStatus.in_progress
+    ) {
+      throw new BadRequestException(
+        'Upload URL can only be issued for active deliveries',
+      );
     }
 
     // Couriers may only get upload URLs for their own active delivery
@@ -143,12 +166,17 @@ export class ProofOfDeliveryService {
       ContentType: 'image/jpeg',
     });
 
-    const upload_url = await getSignedUrl(this.s3, cmd, { expiresIn: PRESIGNED_URL_TTL_SEC });
+    const upload_url = await getSignedUrl(this.s3, cmd, {
+      expiresIn: PRESIGNED_URL_TTL_SEC,
+    });
     return { upload_url, photo_key: photoKey };
   }
 
   async startDelivery(deliveryId: string, user: AuthenticatedUser) {
-    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+    const delivery = await this.assertDeliveryBelongs(
+      deliveryId,
+      user.establishment_id,
+    );
 
     // Courier may only start their own delivery
     if (user.courier_id && delivery.courier_id !== user.courier_id) {
@@ -167,7 +195,9 @@ export class ProofOfDeliveryService {
         data: { status: DeliveryStatus.in_progress, started_at: now },
       });
       if (updated.count === 0) {
-        throw new ConflictException('Delivery was already started by another request');
+        throw new ConflictException(
+          'Delivery was already started by another request',
+        );
       }
       await tx.order.update({
         where: { id: delivery.order_id },
@@ -176,10 +206,18 @@ export class ProofOfDeliveryService {
     });
 
     // Publish delivery:status for public WS
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'in_progress', deliveryStatus: 'in_progress' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (delivery_in_progress)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          orderStatus: 'in_progress',
+          deliveryStatus: 'in_progress',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (delivery_in_progress)', err),
+      );
 
     // Return full delivery object so mobile can render InProgressState immediately
     return this.prisma.delivery.findUniqueOrThrow({
@@ -206,10 +244,15 @@ export class ProofOfDeliveryService {
   ) {
     // Only couriers may submit proof of delivery — managers use forceCloseDelivery
     if (!user.courier_id) {
-      throw new ForbiddenException('Only couriers can complete deliveries with proof');
+      throw new ForbiddenException(
+        'Only couriers can complete deliveries with proof',
+      );
     }
 
-    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+    const delivery = await this.assertDeliveryBelongs(
+      deliveryId,
+      user.establishment_id,
+    );
 
     // Courier may only complete their own delivery
     if (delivery.courier_id !== user.courier_id) {
@@ -219,7 +262,12 @@ export class ProofOfDeliveryService {
     assertDeliveryTransition(delivery.status, DeliveryStatus.completed);
 
     // Validate photo_key belongs to this delivery (prevents cross-delivery photo substitution)
-    if (dto.photo_key && !dto.photo_key.startsWith(`proofs/${user.establishment_id}/${deliveryId}/`)) {
+    if (
+      dto.photo_key &&
+      !dto.photo_key.startsWith(
+        `proofs/${user.establishment_id}/${deliveryId}/`,
+      )
+    ) {
       throw new ForbiddenException('photo_key does not match this delivery');
     }
 
@@ -274,7 +322,9 @@ export class ProofOfDeliveryService {
         data: { status: DeliveryStatus.completed, completed_at: now },
       });
       if (updated.count === 0) {
-        throw new ConflictException('Delivery was already completed by another request');
+        throw new ConflictException(
+          'Delivery was already completed by another request',
+        );
       }
 
       await tx.deliveryProof.create({
@@ -304,37 +354,73 @@ export class ProofOfDeliveryService {
         order_id: delivery.order_id,
         geo_match: geoMatch,
       })
-      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed', err));
+      .catch((err) =>
+        this.logger.warn('webhook dispatch failed for delivery.completed', err),
+      );
 
-    this.telegram.notifyEstablishmentManagers(
-      user.establishment_id,
-      `✅ Доставку завершено ${geoMatch ? '(геопозиція OK)' : '(геопозиція не співпала)'}`,
-      MANAGER_EVENT.DELIVERY_COMPLETED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_completed)', err));
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `✅ Доставку завершено ${geoMatch ? '(геопозиція OK)' : '(геопозиція не співпала)'}`,
+        MANAGER_EVENT.DELIVERY_COMPLETED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (delivery_completed)',
+          err,
+        ),
+      );
 
     // Publish delivery:status for public WS (before lifecycle event so client sees completed first)
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'completed', deliveryStatus: 'completed' }),
-    ).catch((err: unknown) => this.logger.warn('Failed to publish delivery:status (completed)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          orderStatus: 'completed',
+          deliveryStatus: 'completed',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Failed to publish delivery:status (completed)', err),
+      );
 
     // Publish delivery:completed lifecycle event → PublicTrackingGateway shortens token TTL + schedules disconnect.
     // Fire-and-forget with fallback: if this publish fails, the token retains its 4h TTL
     // (vs. the intended 15 min post-delivery) and the WS room is not explicitly closed.
     // RetentionModule cleans up the token after the 4h TTL regardless.
-    this.redis.publish(
-      PUBLIC_DELIVERY_COMPLETED_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, deliveryId, courierId: delivery.courier_id }),
-    ).catch((err: unknown) => this.logger.warn('Failed to publish delivery:completed — token TTL shortening skipped', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_COMPLETED_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          deliveryId,
+          courierId: delivery.courier_id,
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Failed to publish delivery:completed — token TTL shortening skipped',
+          err,
+        ),
+      );
 
     // DEL Redis tracking keys — fire-and-forget
-    this.redis.del(
-      `courier:active_order:${delivery.courier_id}`,
-      `route:origin:${deliveryId}`,
-      `route:${deliveryId}`,
-    ).catch((err: unknown) => this.logger.warn('Redis DEL failed for delivery tracking keys', err));
+    this.redis
+      .del(
+        `courier:active_order:${delivery.courier_id}`,
+        `route:origin:${deliveryId}`,
+        `route:${deliveryId}`,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis DEL failed for delivery tracking keys', err),
+      );
 
-    return { status: DeliveryStatus.completed, geo_match: geoMatch, geo_flags: geoFlags };
+    return {
+      status: DeliveryStatus.completed,
+      geo_match: geoMatch,
+      geo_flags: geoFlags,
+    };
   }
 
   /**
@@ -344,10 +430,15 @@ export class ProofOfDeliveryService {
    */
   async forceCloseDelivery(deliveryId: string, user: AuthenticatedUser) {
     if (user.role !== 'owner' && user.role !== 'manager') {
-      throw new ForbiddenException('Only managers and owners can force-close deliveries');
+      throw new ForbiddenException(
+        'Only managers and owners can force-close deliveries',
+      );
     }
 
-    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+    const delivery = await this.assertDeliveryBelongs(
+      deliveryId,
+      user.establishment_id,
+    );
 
     // Allow force-close from assigned or in_progress (courier may not have started)
     if (
@@ -370,7 +461,9 @@ export class ProofOfDeliveryService {
         data: { status: DeliveryStatus.completed, completed_at: now },
       });
       if (updated.count === 0) {
-        throw new ConflictException('Delivery was already closed by another request');
+        throw new ConflictException(
+          'Delivery was already closed by another request',
+        );
       }
 
       // Create proof for audit trail — force_closed marks it as manager-initiated
@@ -402,34 +495,63 @@ export class ProofOfDeliveryService {
         geo_match: false,
         force_closed: true,
       })
-      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.completed (force-close)', err));
+      .catch((err) =>
+        this.logger.warn(
+          'webhook dispatch failed for delivery.completed (force-close)',
+          err,
+        ),
+      );
 
-    this.telegram.notifyEstablishmentManagers(
-      user.establishment_id,
-      `⚠️ Доставку закрито вручну менеджером`,
-      MANAGER_EVENT.DELIVERY_FORCE_CLOSED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_force_closed)', err));
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `⚠️ Доставку закрито вручну менеджером`,
+        MANAGER_EVENT.DELIVERY_FORCE_CLOSED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (delivery_force_closed)',
+          err,
+        ),
+      );
 
     // Publish delivery:status + lifecycle events for public WS
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'completed', deliveryStatus: 'completed' }),
-    ).catch(() => {});
-    this.redis.publish(
-      PUBLIC_DELIVERY_COMPLETED_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, deliveryId, courierId: delivery.courier_id }),
-    ).catch(() => {});
-    this.redis.del(
-      `courier:active_order:${delivery.courier_id}`,
-      `route:origin:${deliveryId}`,
-      `route:${deliveryId}`,
-    ).catch(() => {});
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          orderStatus: 'completed',
+          deliveryStatus: 'completed',
+        }),
+      )
+      .catch(() => {});
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_COMPLETED_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          deliveryId,
+          courierId: delivery.courier_id,
+        }),
+      )
+      .catch(() => {});
+    this.redis
+      .del(
+        `courier:active_order:${delivery.courier_id}`,
+        `route:origin:${deliveryId}`,
+        `route:${deliveryId}`,
+      )
+      .catch(() => {});
 
     return { status: DeliveryStatus.completed, force_closed: true };
   }
 
   async failDelivery(deliveryId: string, user: AuthenticatedUser) {
-    const delivery = await this.assertDeliveryBelongs(deliveryId, user.establishment_id);
+    const delivery = await this.assertDeliveryBelongs(
+      deliveryId,
+      user.establishment_id,
+    );
 
     // Courier may only fail their own delivery
     if (user.courier_id && delivery.courier_id !== user.courier_id) {
@@ -445,7 +567,9 @@ export class ProofOfDeliveryService {
         data: { status: DeliveryStatus.failed },
       });
       if (updated.count === 0) {
-        throw new ConflictException('Delivery was already transitioned by another request');
+        throw new ConflictException(
+          'Delivery was already transitioned by another request',
+        );
       }
       await tx.order.update({
         where: { id: delivery.order_id },
@@ -458,24 +582,40 @@ export class ProofOfDeliveryService {
         delivery_id: deliveryId,
         order_id: delivery.order_id,
       })
-      .catch((err) => this.logger.warn('webhook dispatch failed for delivery.failed', err));
+      .catch((err) =>
+        this.logger.warn('webhook dispatch failed for delivery.failed', err),
+      );
 
-    this.telegram.notifyEstablishmentManagers(
-      user.establishment_id,
-      `❌ Доставку провалено`,
-      MANAGER_EVENT.DELIVERY_FAILED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_failed)', err));
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `❌ Доставку провалено`,
+        MANAGER_EVENT.DELIVERY_FAILED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Telegram notification failed (delivery_failed)', err),
+      );
 
     // Publish delivery:status for public WS + DEL Redis keys
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'failed', deliveryStatus: 'failed' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (delivery_failed)', err));
-    this.redis.del(
-      `courier:active_order:${delivery.courier_id}`,
-      `route:origin:${deliveryId}`,
-      `route:${deliveryId}`,
-    ).catch(() => {});
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          orderStatus: 'failed',
+          deliveryStatus: 'failed',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (delivery_failed)', err),
+      );
+    this.redis
+      .del(
+        `courier:active_order:${delivery.courier_id}`,
+        `route:origin:${deliveryId}`,
+        `route:${deliveryId}`,
+      )
+      .catch(() => {});
 
     return { status: DeliveryStatus.failed };
   }
@@ -518,7 +658,10 @@ export class ProofOfDeliveryService {
     };
   }
 
-  private async assertDeliveryBelongs(deliveryId: string, establishmentId: string) {
+  private async assertDeliveryBelongs(
+    deliveryId: string,
+    establishmentId: string,
+  ) {
     const delivery = await this.prisma.delivery.findUnique({
       where: { id: deliveryId },
       include: { order: { select: { establishment_id: true } } },
@@ -526,7 +669,9 @@ export class ProofOfDeliveryService {
 
     if (!delivery) throw new NotFoundException('Delivery not found');
     if (delivery.order.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Delivery does not belong to your establishment');
+      throw new ForbiddenException(
+        'Delivery does not belong to your establishment',
+      );
     }
 
     return delivery;

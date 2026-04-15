@@ -12,4 +12,5 @@ import { SetMetadata } from '@nestjs/common';
  *   createEstablishment(...) { ... }
  */
 export const SENSITIVE_RESPONSE_KEY = 'sensitiveResponse';
-export const SensitiveResponse = () => SetMetadata(SENSITIVE_RESPONSE_KEY, true);
+export const SensitiveResponse = () =>
+  SetMetadata(SENSITIVE_RESPONSE_KEY, true);

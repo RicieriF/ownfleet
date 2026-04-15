@@ -37,7 +37,8 @@ export class MetricsService implements OnModuleInit {
     @InjectQueue(WEBHOOK_QUEUE) private readonly webhookQueue: Queue,
     @InjectQueue(DISPATCH_QUEUE) private readonly dispatchQueue: Queue,
     @InjectQueue(GEOCODING_QUEUE) private readonly geocodingQueue: Queue,
-    @InjectQueue(TRACKING_DISCONNECT_QUEUE) private readonly trackingDisconnectQueue: Queue,
+    @InjectQueue(TRACKING_DISCONNECT_QUEUE)
+    private readonly trackingDisconnectQueue: Queue,
   ) {}
 
   onModuleInit(): void {
@@ -67,7 +68,12 @@ export class MetricsService implements OnModuleInit {
    * Called by MetricsInterceptor for every HTTP request.
    * durationMs is wall-clock time from first byte received to response flushed.
    */
-  observeRequest(method: string, route: string, statusCode: number, durationMs: number): void {
+  observeRequest(
+    method: string,
+    route: string,
+    statusCode: number,
+    durationMs: number,
+  ): void {
     this.httpDuration.observe(
       { method, route, status_code: String(statusCode) },
       durationMs / 1000,

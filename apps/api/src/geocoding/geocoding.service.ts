@@ -43,7 +43,8 @@ export class GeocodingService {
     config: ConfigService,
   ) {
     this.nominatimUrl =
-      config.get<string>('NOMINATIM_URL') ?? 'https://nominatim.openstreetmap.org';
+      config.get<string>('NOMINATIM_URL') ??
+      'https://nominatim.openstreetmap.org';
   }
 
   /**
@@ -53,10 +54,17 @@ export class GeocodingService {
    * establishmentId is used by the processor to look up the establishment city
    * and append it to the Nominatim query for city-scoped geocoding accuracy.
    */
-  async enqueueGeocode(orderId: string, address: string, establishmentId: string): Promise<void> {
+  async enqueueGeocode(
+    orderId: string,
+    address: string,
+    establishmentId: string,
+  ): Promise<void> {
     if (!address || address.trim() === '' || address === 'Unknown') return;
     try {
-      await this.queue.add({ orderId, address, establishmentId }, { jobId: orderId });
+      await this.queue.add(
+        { orderId, address, establishmentId },
+        { jobId: orderId },
+      );
     } catch (err) {
       this.logger.warn(`Failed to enqueue geocoding for order ${orderId}`, err);
     }
@@ -97,7 +105,12 @@ export class GeocodingService {
 
       const data = (await res.json()) as NominatimResult[];
       if (!data[0]) {
-        await this.redis.set(cacheKey, 'null', 'EX', NEGATIVE_CACHE_TTL_SECONDS);
+        await this.redis.set(
+          cacheKey,
+          'null',
+          'EX',
+          NEGATIVE_CACHE_TTL_SECONDS,
+        );
         return null;
       }
 
@@ -117,7 +130,12 @@ export class GeocodingService {
       }
 
       const result = { lat, lng };
-      await this.redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL_SECONDS);
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify(result),
+        'EX',
+        CACHE_TTL_SECONDS,
+      );
       return result;
     } catch (err: unknown) {
       clearTimeout(timer);

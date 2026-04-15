@@ -33,18 +33,20 @@ function assertNotInternalUrl(rawUrl: string): void {
   const host = hostname.replace(/^\[|\]$/g, '');
 
   const BLOCKED = [
-    /^127\./,                         // loopback
-    /^localhost$/,                    // loopback alias
-    /^10\./,                          // RFC-1918 class A
-    /^172\.(1[6-9]|2\d|3[01])\./,    // RFC-1918 class B
-    /^192\.168\./,                    // RFC-1918 class C
-    /^169\.254\./,                    // link-local / cloud metadata (AWS, GCP, Azure)
-    /^0\./,                           // "this" network
-    /^(::1|::ffff:127\.|fc|fd)/,      // IPv6 loopback + ULA
+    /^127\./, // loopback
+    /^localhost$/, // loopback alias
+    /^10\./, // RFC-1918 class A
+    /^172\.(1[6-9]|2\d|3[01])\./, // RFC-1918 class B
+    /^192\.168\./, // RFC-1918 class C
+    /^169\.254\./, // link-local / cloud metadata (AWS, GCP, Azure)
+    /^0\./, // "this" network
+    /^(::1|::ffff:127\.|fc|fd)/, // IPv6 loopback + ULA
   ];
 
   if (BLOCKED.some((re) => re.test(host))) {
-    throw new BadRequestException('Webhook URL must not point to an internal address');
+    throw new BadRequestException(
+      'Webhook URL must not point to an internal address',
+    );
   }
 }
 
@@ -155,18 +157,25 @@ export class WebhooksService {
         );
         queued++;
       } catch (err) {
-        this.logger.warn(`Failed to enqueue webhook ${webhook.id} for event "${event}" — Redis may be unavailable`, err);
+        this.logger.warn(
+          `Failed to enqueue webhook ${webhook.id} for event "${event}" — Redis may be unavailable`,
+          err,
+        );
       }
     }
 
     if (queued > 0) {
-      this.logger.debug(`Queued ${queued}/${webhooks.length} webhook(s) for event "${event}" [est: ${establishmentId}]`);
+      this.logger.debug(
+        `Queued ${queued}/${webhooks.length} webhook(s) for event "${event}" [est: ${establishmentId}]`,
+      );
     }
   }
 
   private assertManagerOrOwner(user: AuthenticatedUser): void {
     if (user.role !== 'owner' && user.role !== 'manager') {
-      throw new ForbiddenException('Only owners and managers can manage webhooks');
+      throw new ForbiddenException(
+        'Only owners and managers can manage webhooks',
+      );
     }
   }
 
@@ -174,7 +183,9 @@ export class WebhooksService {
     const webhook = await this.prisma.webhook.findUnique({ where: { id } });
     if (!webhook) throw new NotFoundException('Webhook not found');
     if (webhook.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Webhook does not belong to your establishment');
+      throw new ForbiddenException(
+        'Webhook does not belong to your establishment',
+      );
     }
     return webhook;
   }

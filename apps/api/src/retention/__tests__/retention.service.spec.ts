@@ -51,14 +51,19 @@ const mockDispatchQueue = {
 // This keeps existing tests working unchanged while allowing lock-key assertions
 // in the dedicated "distributed lock" suite below.
 const mockLockService = {
-  withLock: jest.fn((key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> => fn().then(() => true)),
+  withLock: jest.fn(
+    (key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> =>
+      fn().then(() => true),
+  ),
 };
 
 describe('RetentionService', () => {
   let service: RetentionService;
 
   beforeEach(async () => {
-    const mockEtaService = { checkOverdueDeliveries: jest.fn().mockResolvedValue(0) };
+    const mockEtaService = {
+      checkOverdueDeliveries: jest.fn().mockResolvedValue(0),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RetentionService,
@@ -67,7 +72,10 @@ describe('RetentionService', () => {
         { provide: EtaService, useValue: mockEtaService },
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: DistributedLockService, useValue: mockLockService },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(undefined) },
+        },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
       ],
     }).compile();
@@ -75,7 +83,10 @@ describe('RetentionService', () => {
     service = module.get<RetentionService>(RetentionService);
     jest.clearAllMocks();
     // Restore call-through behaviour after clearAllMocks resets the implementation
-    mockLockService.withLock.mockImplementation((key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> => fn().then(() => true));
+    mockLockService.withLock.mockImplementation(
+      (key: string, ttl: number, fn: () => Promise<void>): Promise<boolean> =>
+        fn().then(() => true),
+    );
     mockOrder.deleteMany.mockResolvedValue({ count: 0 });
     mockOrder.findMany.mockResolvedValue([]);
     mockDeliveryProof.findMany.mockResolvedValue([]);
@@ -91,7 +102,10 @@ describe('RetentionService', () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 5 });
       mockPrisma.$executeRaw.mockResolvedValue(10);
 
-      const result = await service.cleanupEstablishment('est-1', parseEstablishmentSettings({}));
+      const result = await service.cleanupEstablishment(
+        'est-1',
+        parseEstablishmentSettings({}),
+      );
 
       expect(result.deletedOrders).toBe(5);
       expect(result.deletedPings).toBe(10);
@@ -152,18 +166,27 @@ describe('RetentionService', () => {
       const call = mockOrder.deleteMany.mock.calls[0][0];
       const cutoff: Date = call.where.created_at.lt;
       const diffDays = (Date.now() - cutoff.getTime()) / (1000 * 60 * 60 * 24);
-      expect(diffDays).toBeGreaterThan(ESTABLISHMENT_SETTINGS_DEFAULTS.retention_orders_days - 1);
+      expect(diffDays).toBeGreaterThan(
+        ESTABLISHMENT_SETTINGS_DEFAULTS.retention_orders_days - 1,
+      );
     });
 
     it('creates retention_log only when something was deleted', async () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 2 });
       mockPrisma.$executeRaw.mockResolvedValue(7);
 
-      await service.cleanupEstablishment('est-4', parseEstablishmentSettings({}));
+      await service.cleanupEstablishment(
+        'est-4',
+        parseEstablishmentSettings({}),
+      );
 
       expect(mockRetentionLog.create).toHaveBeenCalledTimes(1);
       expect(mockRetentionLog.create).toHaveBeenCalledWith({
-        data: { establishment_id: 'est-4', deleted_orders: 2, deleted_pings: 7 },
+        data: {
+          establishment_id: 'est-4',
+          deleted_orders: 2,
+          deleted_pings: 7,
+        },
       });
     });
 
@@ -171,7 +194,10 @@ describe('RetentionService', () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 0 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-5', parseEstablishmentSettings({}));
+      await service.cleanupEstablishment(
+        'est-5',
+        parseEstablishmentSettings({}),
+      );
 
       expect(mockRetentionLog.create).not.toHaveBeenCalled();
     });
@@ -180,7 +206,10 @@ describe('RetentionService', () => {
       mockOrder.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await service.cleanupEstablishment('est-6', parseEstablishmentSettings({}));
+      await service.cleanupEstablishment(
+        'est-6',
+        parseEstablishmentSettings({}),
+      );
 
       // RetentionService must never call prisma.deliveryProof.delete/deleteMany.
       // The DB-level ON DELETE SET NULL FK ensures proofs survive with delivery_id = NULL
@@ -191,7 +220,10 @@ describe('RetentionService', () => {
     it('does not throw when DB error occurs — logs and returns zeros', async () => {
       mockOrder.deleteMany.mockRejectedValue(new Error('DB timeout'));
 
-      const result = await service.cleanupEstablishment('est-7', parseEstablishmentSettings({}));
+      const result = await service.cleanupEstablishment(
+        'est-7',
+        parseEstablishmentSettings({}),
+      );
 
       expect(result.deletedOrders).toBe(0);
       expect(result.deletedPings).toBe(0);
@@ -250,7 +282,9 @@ describe('RetentionService', () => {
     it('does not throw when nothing to delete (result=0)', async () => {
       mockPrisma.$executeRaw.mockResolvedValue(0);
 
-      await expect(service.cleanupExpiredTrackingTokens()).resolves.not.toThrow();
+      await expect(
+        service.cleanupExpiredTrackingTokens(),
+      ).resolves.not.toThrow();
     });
 
     it('delivery_proofs are never touched during tracking tokens cleanup', async () => {
@@ -294,7 +328,9 @@ describe('RetentionService', () => {
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
       expect(mockShift.update).not.toHaveBeenCalled();
     });
 
@@ -303,29 +339,47 @@ describe('RetentionService', () => {
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('skips candidate with ≤ 5 deliveries (not enough data)', async () => {
       mockShift.findMany.mockResolvedValue([
         makeShift({ id: 's1', total_deliveries: 5 }),
-        makeShift({ id: 's2', total_deliveries: 2, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's2',
+          total_deliveries: 2,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('skips when anomaly_alerted_at is already set (one alert per shift)', async () => {
       mockShift.findMany.mockResolvedValue([
-        makeShift({ id: 's1', total_deliveries: 20, anomaly_alerted_at: new Date() }),
-        makeShift({ id: 's2', total_deliveries: 3, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's1',
+          total_deliveries: 20,
+          anomaly_alerted_at: new Date(),
+        }),
+        makeShift({
+          id: 's2',
+          total_deliveries: 3,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('sends alert and sets anomaly_alerted_at when rate > 2x team average', async () => {
@@ -333,12 +387,18 @@ describe('RetentionService', () => {
       // avg = 0.75/h; 3 > 2 * 0.75 = 1.5 → ALERT
       mockShift.findMany.mockResolvedValue([
         makeShift({ id: 's1', total_deliveries: 12, anomaly_alerted_at: null }),
-        makeShift({ id: 's2', total_deliveries: 3, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's2',
+          total_deliveries: 3,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.stringContaining('Ivan'),
         'shift_anomaly',
@@ -354,12 +414,18 @@ describe('RetentionService', () => {
       // avg = 2/h; 2.5 < 2 * 2 = 4 → NO ALERT
       mockShift.findMany.mockResolvedValue([
         makeShift({ id: 's1', total_deliveries: 10, anomaly_alerted_at: null }),
-        makeShift({ id: 's2', total_deliveries: 8, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's2',
+          total_deliveries: 8,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
       expect(mockShift.update).not.toHaveBeenCalled();
     });
 
@@ -367,24 +433,41 @@ describe('RetentionService', () => {
       // s2 has 0 deliveries → filtered from otherActiveShifts → otherActiveShifts.length === 0 → skip
       mockShift.findMany.mockResolvedValue([
         makeShift({ id: 's1', total_deliveries: 20, anomaly_alerted_at: null }),
-        makeShift({ id: 's2', total_deliveries: 0, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's2',
+          total_deliveries: 0,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('does not cross-compare shifts from different establishments (multi-tenant)', async () => {
       // s1 at est-1 has high rate but no same-establishment comparisons → no alert
       mockShift.findMany.mockResolvedValue([
-        makeShift({ id: 's1', establishment_id: 'est-1', total_deliveries: 20 }),
-        makeShift({ id: 's2', establishment_id: 'est-2', total_deliveries: 3, courier: { name: 'Petro' } }),
+        makeShift({
+          id: 's1',
+          establishment_id: 'est-1',
+          total_deliveries: 20,
+        }),
+        makeShift({
+          id: 's2',
+          establishment_id: 'est-2',
+          total_deliveries: 3,
+          courier: { name: 'Petro' },
+        }),
       ]);
 
       await service.checkShiftAnomalies();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -392,7 +475,9 @@ describe('RetentionService', () => {
 
   describe('checkRecommendTimeout', () => {
     it('skips establishment when dispatch_recommend_timeout_minutes is not set', async () => {
-      mockEstablishment.findMany.mockResolvedValue([{ id: 'est-1', settings: {} }]);
+      mockEstablishment.findMany.mockResolvedValue([
+        { id: 'est-1', settings: {} },
+      ]);
 
       await service.checkRecommendTimeout();
 
@@ -415,7 +500,9 @@ describe('RetentionService', () => {
       mockEstablishment.findMany.mockResolvedValue([
         { id: 'est-1', settings: { dispatch_recommend_timeout_minutes: 10 } },
       ]);
-      mockOrder.findMany.mockResolvedValue([{ id: 'order-stale', establishment_id: 'est-1' }]);
+      mockOrder.findMany.mockResolvedValue([
+        { id: 'order-stale', establishment_id: 'est-1' },
+      ]);
 
       await service.checkRecommendTimeout();
 
@@ -424,7 +511,10 @@ describe('RetentionService', () => {
           where: expect.objectContaining({
             establishment_id: 'est-1',
             status: 'pending',
-            ready_at: expect.objectContaining({ not: null, lt: expect.any(Date) }),
+            ready_at: expect.objectContaining({
+              not: null,
+              lt: expect.any(Date),
+            }),
           }),
         }),
       );
@@ -454,34 +544,44 @@ describe('RetentionService', () => {
     beforeEach(() => {
       mockShiftsService.autoCloseStaleShifts = jest.fn().mockResolvedValue(0);
       mockShiftsService.checkShiftEndingSoon = jest.fn().mockResolvedValue(0);
-      mockShiftsService.checkCourierNotResponding = jest.fn().mockResolvedValue(0);
+      mockShiftsService.checkCourierNotResponding = jest
+        .fn()
+        .mockResolvedValue(0);
     });
 
     it('autoCloseStaleShifts acquires lock "auto-close-stale-shifts" with 1500s TTL', async () => {
       await service.autoCloseStaleShifts();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'auto-close-stale-shifts', 1500, expect.any(Function),
+        'auto-close-stale-shifts',
+        1500,
+        expect.any(Function),
       );
     });
 
     it('checkShiftEndingSoon acquires lock "shift-ending-soon" with 240s TTL', async () => {
       await service.checkShiftEndingSoon();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'shift-ending-soon', 240, expect.any(Function),
+        'shift-ending-soon',
+        240,
+        expect.any(Function),
       );
     });
 
     it('checkCourierNotResponding acquires lock "courier-not-responding" with 240s TTL', async () => {
       await service.checkCourierNotResponding();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'courier-not-responding', 240, expect.any(Function),
+        'courier-not-responding',
+        240,
+        expect.any(Function),
       );
     });
 
     it('checkEtaOverdue acquires lock "eta-overdue-alert" with 240s TTL', async () => {
       await service.checkEtaOverdue();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'eta-overdue-alert', 240, expect.any(Function),
+        'eta-overdue-alert',
+        240,
+        expect.any(Function),
       );
     });
 
@@ -489,7 +589,9 @@ describe('RetentionService', () => {
       mockShift.findMany.mockResolvedValue([]);
       await service.checkShiftAnomalies();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'shift-anomaly-check', 1500, expect.any(Function),
+        'shift-anomaly-check',
+        1500,
+        expect.any(Function),
       );
     });
 
@@ -497,7 +599,9 @@ describe('RetentionService', () => {
       mockEstablishment.findMany.mockResolvedValue([]);
       await service.runRetention();
       expect(mockLockService.withLock).toHaveBeenCalledWith(
-        'retention-cleanup', 7200, expect.any(Function),
+        'retention-cleanup',
+        7200,
+        expect.any(Function),
       );
     });
 
@@ -554,9 +658,9 @@ describe('RetentionService', () => {
 
     it('fetches proofs in batches using cursor-based pagination (no single findMany for all)', async () => {
       // Inject a real S3 stub so the guard passes
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupS3 = { send: jest.fn().mockResolvedValue({}) };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupBucket = 'test-bucket';
 
       // First batch: 500 records (full page) → pagination continues
@@ -587,9 +691,9 @@ describe('RetentionService', () => {
 
     it('uploads valid gzipped JSON containing all fetched records', async () => {
       const mockSend = jest.fn().mockResolvedValue({});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupS3 = { send: mockSend };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupBucket = 'test-bucket';
 
       const proofs = [makeProof('a'), makeProof('b')];
@@ -602,16 +706,19 @@ describe('RetentionService', () => {
       expect(mockSend).toHaveBeenCalledTimes(1);
       const cmd = mockSend.mock.calls[0][0];
       expect(cmd.input.Bucket).toBe('test-bucket');
-      expect(cmd.input.Key).toMatch(/^delivery-proofs\/\d{4}-\d{2}-\d{2}\.json\.gz$/);
+      expect(cmd.input.Key).toMatch(
+        /^delivery-proofs\/\d{4}-\d{2}-\d{2}\.json\.gz$/,
+      );
       expect(cmd.input.ContentType).toBe('application/gzip');
       // Payload must be a Buffer (gzipped)
       expect(Buffer.isBuffer(cmd.input.Body)).toBe(true);
     });
 
     it('does not throw when S3 upload fails — logs error and swallows', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (service as any).backupS3 = { send: jest.fn().mockRejectedValue(new Error('S3 timeout')) };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (service as any).backupS3 = {
+        send: jest.fn().mockRejectedValue(new Error('S3 timeout')),
+      };
+
       (service as any).backupBucket = 'test-bucket';
 
       mockDeliveryProof.findMany
@@ -623,9 +730,9 @@ describe('RetentionService', () => {
 
     it('makes no DB queries and no S3 calls when there are zero proofs in the window', async () => {
       const mockSend = jest.fn().mockResolvedValue({});
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupS3 = { send: mockSend };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (service as any).backupBucket = 'test-bucket';
 
       mockDeliveryProof.findMany.mockResolvedValue([]);

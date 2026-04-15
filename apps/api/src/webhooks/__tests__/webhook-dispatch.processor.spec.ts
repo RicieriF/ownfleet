@@ -25,18 +25,19 @@ const mockPrisma = { webhook: mockWebhook };
 //
 // Bull increments `attemptsMade` inside moveToFailed() AFTER the handler throws,
 // so in the handler the value is 0-based: attempt #1 → 0, attempt #5 → 4.
-const makeJob = (data = {}, jobMeta: Record<string, unknown> = {}) => ({
-  data: {
-    webhookId: 'wh-1',
-    event: 'order.created',
-    payload: { order_id: 'o1' },
-    ...data,
-  },
-  id: 'job-abc',
-  opts: { attempts: 5 },
-  attemptsMade: 4, // final (5th) attempt: 0-based value that Bull actually provides
-  ...jobMeta,
-}) as any;
+const makeJob = (data = {}, jobMeta: Record<string, unknown> = {}) =>
+  ({
+    data: {
+      webhookId: 'wh-1',
+      event: 'order.created',
+      payload: { order_id: 'o1' },
+      ...data,
+    },
+    id: 'job-abc',
+    opts: { attempts: 5 },
+    attemptsMade: 4, // final (5th) attempt: 0-based value that Bull actually provides
+    ...jobMeta,
+  }) as any;
 
 const makeResponse = (status: number) => ({
   ok: status >= 200 && status < 300,
@@ -78,7 +79,9 @@ describe('WebhookDispatchProcessor', () => {
       await processor.handleDeliver(makeJob());
 
       const [, opts] = mockFetch.mock.calls[0];
-      expect(opts.headers['X-Webhook-Signature']).toMatch(/^sha256=[a-f0-9]{64}$/);
+      expect(opts.headers['X-Webhook-Signature']).toMatch(
+        /^sha256=[a-f0-9]{64}$/,
+      );
     });
 
     it('resets consecutive_failures to 0 on success', async () => {
@@ -86,7 +89,11 @@ describe('WebhookDispatchProcessor', () => {
 
       expect(mockWebhook.update).toHaveBeenCalledWith({
         where: { id: 'wh-1' },
-        data: { consecutive_failures: 0, last_error: null, last_error_at: null },
+        data: {
+          consecutive_failures: 0,
+          last_error: null,
+          last_error_at: null,
+        },
       });
     });
   });
@@ -97,7 +104,9 @@ describe('WebhookDispatchProcessor', () => {
     it('increments consecutive_failures on non-2xx response', async () => {
       mockFetch.mockResolvedValue(makeResponse(500));
 
-      await expect(processor.handleDeliver(makeJob())).rejects.toThrow('HTTP 500');
+      await expect(processor.handleDeliver(makeJob())).rejects.toThrow(
+        'HTTP 500',
+      );
 
       expect(mockWebhook.update).toHaveBeenCalledWith({
         where: { id: 'wh-1' },
@@ -118,7 +127,9 @@ describe('WebhookDispatchProcessor', () => {
       mockFetch.mockResolvedValue(makeResponse(500));
       // 3rd of 5 attempts — Bull provides attemptsMade=2 (0-based), not final (4)
       await expect(
-        processor.handleDeliver(makeJob({}, { attemptsMade: 2, opts: { attempts: 5 } })),
+        processor.handleDeliver(
+          makeJob({}, { attemptsMade: 2, opts: { attempts: 5 } }),
+        ),
       ).rejects.toThrow();
 
       // consecutive_failures must NOT be updated — only success reset is allowed
@@ -130,7 +141,9 @@ describe('WebhookDispatchProcessor', () => {
     it('records failure and rethrows on fetch exception', async () => {
       mockFetch.mockRejectedValue(new Error('Connection refused'));
 
-      await expect(processor.handleDeliver(makeJob())).rejects.toThrow('Connection refused');
+      await expect(processor.handleDeliver(makeJob())).rejects.toThrow(
+        'Connection refused',
+      );
 
       expect(mockWebhook.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'wh-1' } }),
@@ -149,7 +162,10 @@ describe('WebhookDispatchProcessor', () => {
     });
 
     it('skips delivery silently when webhook was disabled after queuing', async () => {
-      mockWebhook.findUnique.mockResolvedValue({ ...baseWebhook, active: false });
+      mockWebhook.findUnique.mockResolvedValue({
+        ...baseWebhook,
+        active: false,
+      });
 
       await expect(processor.handleDeliver(makeJob())).resolves.not.toThrow();
       expect(mockFetch).not.toHaveBeenCalled();

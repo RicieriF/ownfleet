@@ -11,18 +11,22 @@ import {
 import { Type } from 'class-transformer';
 
 class IikoConfigDto {
-  @IsUrl({ protocols: ['https'], require_tld: true }, {
-    message: 'iiko server_url must be a valid HTTPS URL',
-  })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_tld: false },
+    {
+      message: 'iiko server_url must be a valid URL',
+    },
+  )
   server_url: string;
 
-  @IsOptional()
   @IsString()
-  api_login?: string;
+  login: string;
 
-  @IsOptional()
   @IsString()
-  api_password?: string;
+  password: string;
+
+  @IsString()
+  organization_id: string;
 }
 
 export class UpsertIntegrationDto {

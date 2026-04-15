@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateEstablishmentDto } from './dto/create-establishment.dto.js';
@@ -66,8 +70,17 @@ export class PlatformService {
         couriers_count: est._count.couriers,
         orders_total: est._count.orders,
         orders_last_30d: recentMap.get(est.id) ?? 0,
-        access_status: this.computeAccessStatus(est.trial_ends_at, est.paid_until, now, est.plan),
-        overdue_days: this.computeOverdueDays(est.trial_ends_at, est.paid_until, now),
+        access_status: this.computeAccessStatus(
+          est.trial_ends_at,
+          est.paid_until,
+          now,
+          est.plan,
+        ),
+        overdue_days: this.computeOverdueDays(
+          est.trial_ends_at,
+          est.paid_until,
+          now,
+        ),
       })),
       total,
       limit: query.limit,
@@ -78,10 +91,10 @@ export class PlatformService {
   // ── Create new tenant ─────────────────────────────────────────────────────
 
   async createEstablishment(dto: CreateEstablishmentDto) {
-    const ownerEmail   = `owner-${dto.slug}@weego.app`;
+    const ownerEmail = `owner-${dto.slug}@weego.app`;
     const managerEmail = `manager-${dto.slug}@weego.app`;
 
-    const ownerPassword   = crypto.randomBytes(PASSWORD_BYTES).toString('hex');
+    const ownerPassword = crypto.randomBytes(PASSWORD_BYTES).toString('hex');
     const managerPassword = crypto.randomBytes(PASSWORD_BYTES).toString('hex');
 
     const [ownerHash, managerHash] = await Promise.all([
@@ -92,7 +105,13 @@ export class PlatformService {
     const trialDays = dto.trial_days ?? DEFAULT_TRIAL_DAYS;
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
-    let establishment: { id: string; name: string; slug: string; plan: string; trial_ends_at: Date | null };
+    let establishment: {
+      id: string;
+      name: string;
+      slug: string;
+      plan: string;
+      trial_ends_at: Date | null;
+    };
     try {
       establishment = await this.prisma.$transaction(async (tx) => {
         const est = await tx.establishment.create({
@@ -124,7 +143,10 @@ export class PlatformService {
       });
     } catch (err) {
       // Handle concurrent creates with same slug — P2002 = unique constraint violation
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new ConflictException(`Slug "${dto.slug}" is already taken`);
       }
       throw err;
@@ -140,7 +162,7 @@ export class PlatformService {
         trial_ends_at: establishment.trial_ends_at,
       },
       credentials: {
-        owner:   { email: ownerEmail,   password: ownerPassword },
+        owner: { email: ownerEmail, password: ownerPassword },
         manager: { email: managerEmail, password: managerPassword },
       },
     };
@@ -148,7 +170,10 @@ export class PlatformService {
 
   // ── Extend subscription ───────────────────────────────────────────────────
 
-  async extendSubscription(establishmentId: string, dto: ExtendSubscriptionDto) {
+  async extendSubscription(
+    establishmentId: string,
+    dto: ExtendSubscriptionDto,
+  ) {
     // Existence check before the atomic update
     const exists = await this.prisma.establishment.findUnique({
       where: { id: establishmentId },
@@ -160,7 +185,12 @@ export class PlatformService {
     // between concurrent extension calls losing days.
     const intervalMs = dto.days * 24 * 60 * 60 * 1000;
     const results = await this.prisma.$queryRaw<
-      { id: string; name: string; paid_until: Date | null; trial_ends_at: Date | null }[]
+      {
+        id: string;
+        name: string;
+        paid_until: Date | null;
+        trial_ends_at: Date | null;
+      }[]
     >`
       UPDATE establishments
       SET paid_until = GREATEST(COALESCE(paid_until, NOW()), NOW()) + (${intervalMs} * INTERVAL '1 millisecond')
@@ -176,7 +206,11 @@ export class PlatformService {
       name: updated.name,
       paid_until: updated.paid_until,
       trial_ends_at: updated.trial_ends_at,
-      access_status: this.computeAccessStatus(updated.trial_ends_at, updated.paid_until, now),
+      access_status: this.computeAccessStatus(
+        updated.trial_ends_at,
+        updated.paid_until,
+        now,
+      ),
     };
   }
 
@@ -194,7 +228,9 @@ export class PlatformService {
     if (trialEndsAt && trialEndsAt > now) return 'trial';
     // 7-day grace period after trial (mirrors PlanAccessGuard logic)
     if (trialEndsAt) {
-      const graceEnd = new Date(trialEndsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const graceEnd = new Date(
+        trialEndsAt.getTime() + 7 * 24 * 60 * 60 * 1000,
+      );
       if (graceEnd > now) return 'grace';
     }
     return 'expired';
@@ -211,11 +247,14 @@ export class PlatformService {
     if (trialEndsAt && trialEndsAt > now) return null;
 
     // Use the later of the two expiry dates as the baseline
-    const expiredAt = paidUntil && trialEndsAt
-      ? new Date(Math.max(paidUntil.getTime(), trialEndsAt.getTime()))
-      : (paidUntil ?? trialEndsAt);
+    const expiredAt =
+      paidUntil && trialEndsAt
+        ? new Date(Math.max(paidUntil.getTime(), trialEndsAt.getTime()))
+        : (paidUntil ?? trialEndsAt);
 
     if (!expiredAt) return null;
-    return Math.floor((now.getTime() - expiredAt.getTime()) / (24 * 60 * 60 * 1000));
+    return Math.floor(
+      (now.getTime() - expiredAt.getTime()) / (24 * 60 * 60 * 1000),
+    );
   }
 }

@@ -1,4 +1,11 @@
-import { IsString, MinLength, MaxLength, IsOptional, Matches, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  Matches,
+  IsBoolean,
+} from 'class-validator';
 
 export class UpdateCourierDto {
   @IsOptional()

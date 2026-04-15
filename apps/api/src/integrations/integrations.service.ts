@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { IntegrationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
@@ -14,7 +18,14 @@ export class IntegrationsService {
     return this.prisma.integration.findMany({
       where: { establishment_id: user.establishment_id },
       orderBy: { created_at: 'asc' },
-      select: { id: true, type: true, active: true, config: true, created_at: true, updated_at: true },
+      select: {
+        id: true,
+        type: true,
+        active: true,
+        config: true,
+        created_at: true,
+        updated_at: true,
+      },
     });
   }
 
@@ -39,7 +50,14 @@ export class IntegrationsService {
         config: dto.config as Prisma.InputJsonValue,
         active: dto.active ?? true,
       },
-      select: { id: true, type: true, active: true, config: true, created_at: true, updated_at: true },
+      select: {
+        id: true,
+        type: true,
+        active: true,
+        config: true,
+        created_at: true,
+        updated_at: true,
+      },
     });
   }
 
@@ -50,10 +68,19 @@ export class IntegrationsService {
     return this.prisma.integration.update({
       where: { id },
       data: {
-        ...(dto.config !== undefined && { config: dto.config as Prisma.InputJsonValue }),
+        ...(dto.config !== undefined && {
+          config: dto.config as Prisma.InputJsonValue,
+        }),
         ...(dto.active !== undefined && { active: dto.active }),
       },
-      select: { id: true, type: true, active: true, config: true, created_at: true, updated_at: true },
+      select: {
+        id: true,
+        type: true,
+        active: true,
+        config: true,
+        created_at: true,
+        updated_at: true,
+      },
     });
   }
 

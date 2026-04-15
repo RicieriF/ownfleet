@@ -1,4 +1,9 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import type { Request, Response } from 'express';
@@ -21,7 +26,9 @@ export class MetricsInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
 
-    const req = context.switchToHttp().getRequest<Request & { route?: { path?: string } }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<Request & { route?: { path?: string } }>();
 
     // Skip the /metrics endpoint itself
     if (req.url === '/metrics') return next.handle();
@@ -34,11 +41,21 @@ export class MetricsInterceptor implements NestInterceptor {
         next: () => {
           const res = context.switchToHttp().getResponse<Response>();
           const route = req.route?.path ?? req.url;
-          this.metricsService.observeRequest(method, route, res.statusCode, Date.now() - start);
+          this.metricsService.observeRequest(
+            method,
+            route,
+            res.statusCode,
+            Date.now() - start,
+          );
         },
         error: (err: { status?: number }) => {
           const route = req.route?.path ?? req.url;
-          this.metricsService.observeRequest(method, route, err?.status ?? 500, Date.now() - start);
+          this.metricsService.observeRequest(
+            method,
+            route,
+            err?.status ?? 500,
+            Date.now() - start,
+          );
         },
       }),
     );

@@ -29,6 +29,10 @@ export class PosterController {
   ) {
     // rawBody is available because NestFactory.create was called with { rawBody: true }
     const rawBody: Buffer = req.rawBody as Buffer;
-    return this.posterService.handleWebhook(establishmentId, rawBody, signature);
+    return this.posterService.handleWebhook(
+      establishmentId,
+      rawBody,
+      signature,
+    );
   }
 }

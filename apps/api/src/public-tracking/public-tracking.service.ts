@@ -1,17 +1,10 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type IORedis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
-import {
-  TRACKING_TOKEN_TTL_HOURS,
-} from './public-tracking.constants.js';
+import { TRACKING_TOKEN_TTL_HOURS } from './public-tracking.constants.js';
 
 export interface TrackSnapshot {
   orderStatus: string;
@@ -24,7 +17,7 @@ export interface TrackSnapshot {
   orderLng: number | null;
   etaSeconds: number | null;
   etaStartedAt: string | null;
-  routeGeometry: unknown | null;
+  routeGeometry: unknown;
   address: string;
   slaDeadline: string | null;
   establishmentName: string;
@@ -46,7 +39,9 @@ export class PublicTrackingService {
    * Uses the catch-P2002-then-findUnique idempotency pattern.
    */
   async getOrCreateToken(orderId: string): Promise<string> {
-    const expiresAt = new Date(Date.now() + TRACKING_TOKEN_TTL_HOURS * 3600 * 1000);
+    const expiresAt = new Date(
+      Date.now() + TRACKING_TOKEN_TTL_HOURS * 3600 * 1000,
+    );
 
     try {
       const created = await this.prisma.trackingToken.create({
@@ -94,7 +89,10 @@ export class PublicTrackingService {
    * Manager endpoint: generate tracking token for an order by order ID.
    * Scoped to the manager's establishment for multi-tenant isolation.
    */
-  async getTokenForManager(orderId: string, user: AuthenticatedUser): Promise<{ token: string }> {
+  async getTokenForManager(
+    orderId: string,
+    user: AuthenticatedUser,
+  ): Promise<{ token: string }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       select: { id: true, establishment_id: true },
@@ -189,7 +187,9 @@ export class PublicTrackingService {
     let courierLng: number | null = null;
     if (delivery?.courier_id && delivery.status === 'in_progress') {
       try {
-        const cached = await this.redis.get(`courier:location:${delivery.courier_id}`);
+        const cached = await this.redis.get(
+          `courier:location:${delivery.courier_id}`,
+        );
         if (cached) {
           const pos = JSON.parse(cached) as { lat: number; lng: number };
           courierLat = pos.lat;
@@ -201,7 +201,7 @@ export class PublicTrackingService {
     }
 
     // Route geometry from Redis cache (best-effort, null on miss/error)
-    let routeGeometry: unknown | null = null;
+    let routeGeometry: unknown = null;
     if (delivery?.id && delivery.status === 'in_progress') {
       try {
         const cached = await this.redis.get(`route:${delivery.id}`);
@@ -216,13 +216,17 @@ export class PublicTrackingService {
     if (order.establishment.delivery_sla_minutes && delivery) {
       const baseTime = order.ready_at ?? order.created_at;
       const deadline = new Date(
-        baseTime.getTime() + order.establishment.delivery_sla_minutes * 60 * 1000,
+        baseTime.getTime() +
+          order.establishment.delivery_sla_minutes * 60 * 1000,
       );
       slaDeadline = deadline.toISOString();
     }
 
     // Locale from establishment settings JSONB (default 'uk')
-    const settings = order.establishment.settings as Record<string, unknown> | null;
+    const settings = order.establishment.settings as Record<
+      string,
+      unknown
+    > | null;
     const locale = (settings?.['locale'] as string | undefined) ?? 'uk';
 
     return {

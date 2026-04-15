@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/auth.types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -9,7 +15,9 @@ export class PlatformAdminGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req = context.switchToHttp().getRequest<{ user: AuthenticatedUser }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<{ user: AuthenticatedUser }>();
 
     // Fast-reject: JWT flag not set (avoids unnecessary DB hit)
     if (!req.user?.is_platform_admin) {

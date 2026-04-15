@@ -1,12 +1,21 @@
-import { IsNumber, IsOptional, IsString, Matches, Min, Max } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CompleteDeliveryDto {
   @IsNumber()
-  @Min(-90) @Max(90)
+  @Min(-90)
+  @Max(90)
   lat: number;
 
   @IsNumber()
-  @Min(-180) @Max(180)
+  @Min(-180)
+  @Max(180)
   lng: number;
 
   @IsOptional()

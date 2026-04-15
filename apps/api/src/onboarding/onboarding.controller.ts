@@ -5,7 +5,6 @@ import {
   Delete,
   Param,
   Body,
-  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -14,7 +13,8 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { OnboardingService } from './onboarding.service.js';
-import { AuthenticatedUser } from '../auth/auth.types.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
 import { AcceptInviteDto } from './dto/accept-invite.dto.js';
 
@@ -26,21 +26,27 @@ export class OnboardingController {
 
   @Post('invites')
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  createInvite(@Body() dto: CreateInviteDto, @Req() req: any) {
-    return this.service.createInvite(dto.courier_id, req.user as AuthenticatedUser);
+  createInvite(
+    @Body() dto: CreateInviteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.createInvite(dto.courier_id, user);
   }
 
   @Get('invites')
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  listInvites(@Req() req: any) {
-    return this.service.listInvites(req.user as AuthenticatedUser);
+  listInvites(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.listInvites(user);
   }
 
   @Delete('invites/:id')
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
   @HttpCode(HttpStatus.OK)
-  revokeInvite(@Param('id') id: string, @Req() req: any) {
-    return this.service.revokeInvite(id, req.user as AuthenticatedUser);
+  revokeInvite(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.revokeInvite(id, user);
   }
 
   // ── Public endpoint — NO JWT, NO PlanAccessGuard ────────────────────────

@@ -10,7 +10,6 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 import { IsNotEmpty, IsString } from 'class-validator';
@@ -22,7 +21,8 @@ import { CreateOrderDto } from './dto/create-order.dto.js';
 import { AssignOrderDto } from './dto/assign-order.dto.js';
 import { AssignRecommendedDto } from './dto/assign-recommended.dto.js';
 import { UpdateCoordinatesDto } from './dto/update-coordinates.dto.js';
-import { AuthenticatedUser } from '../auth/auth.types.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
 
 class ReassignOrderDto {
   @IsString()
@@ -36,12 +36,15 @@ export class OrdersController {
   constructor(private readonly service: OrdersService) {}
 
   @Get()
-  findAll(@Query('status') status: string | undefined, @Req() req: any) {
+  findAll(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     // Accept both single status ("pending") and comma-separated ("pending,assigned,in_progress")
     const statuses = status
       ? (status.split(',').filter((s) => s in OrderStatus) as OrderStatus[])
       : undefined;
-    return this.service.findAll(req.user as AuthenticatedUser, statuses);
+    return this.service.findAll(user, statuses);
   }
 
   // Static routes must come before parameterized :id routes
@@ -49,19 +52,23 @@ export class OrdersController {
   @Get('available')
   getAvailable() {
     throw new HttpException(
-      { code: 'ENDPOINT_REMOVED', message: 'Self-assignment removed. Orders are auto-assigned by the system.' },
+      {
+        code: 'ENDPOINT_REMOVED',
+        message:
+          'Self-assignment removed. Orders are auto-assigned by the system.',
+      },
       HttpStatus.GONE,
     );
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: any) {
-    return this.service.findOne(id, req.user as AuthenticatedUser);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.findOne(id, user);
   }
 
   @Post()
-  create(@Body() dto: CreateOrderDto, @Req() req: any) {
-    return this.service.create(dto, req.user as AuthenticatedUser);
+  create(@Body() dto: CreateOrderDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.create(dto, user);
   }
 
   @Post(':id/assign')
@@ -69,15 +76,15 @@ export class OrdersController {
   assign(
     @Param('id') id: string,
     @Body() dto: AssignOrderDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.assign(id, dto, req.user as AuthenticatedUser);
+    return this.service.assign(id, dto, user);
   }
 
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  cancel(@Param('id') id: string, @Req() req: any) {
-    return this.service.cancel(id, req.user as AuthenticatedUser);
+  cancel(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.cancel(id, user);
   }
 
   @Patch(':id/coordinates')
@@ -85,9 +92,9 @@ export class OrdersController {
   updateCoordinates(
     @Param('id') id: string,
     @Body() dto: UpdateCoordinatesDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.updateCoordinates(id, dto.lat, dto.lng, req.user as AuthenticatedUser);
+    return this.service.updateCoordinates(id, dto.lat, dto.lng, user);
   }
 
   /** @deprecated Removed in auto-dispatch v2 — self-assignment is no longer supported */
@@ -95,7 +102,11 @@ export class OrdersController {
   @HttpCode(HttpStatus.GONE)
   claim() {
     throw new HttpException(
-      { code: 'ENDPOINT_REMOVED', message: 'Self-assignment removed. Orders are auto-assigned by the system.' },
+      {
+        code: 'ENDPOINT_REMOVED',
+        message:
+          'Self-assignment removed. Orders are auto-assigned by the system.',
+      },
       HttpStatus.GONE,
     );
   }
@@ -109,17 +120,25 @@ export class OrdersController {
   async reassign(
     @Param('id') id: string,
     @Body() dto: ReassignOrderDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const user = req.user as AuthenticatedUser;
-
     // Find the delivery in 'assigned' state for this order
-    const delivery = await this.service.findAssignedDelivery(id, user.establishment_id);
+    const delivery = await this.service.findAssignedDelivery(
+      id,
+      user.establishment_id,
+    );
     if (!delivery) {
-      throw new NotFoundException({ code: 'no_assignable_delivery', message: 'Активну доставку для перепризначення не знайдено' });
+      throw new NotFoundException({
+        code: 'no_assignable_delivery',
+        message: 'Активну доставку для перепризначення не знайдено',
+      });
     }
 
-    await this.service.reassignDelivery(delivery.id, dto.courierId, user.establishment_id);
+    await this.service.reassignDelivery(
+      delivery.id,
+      dto.courierId,
+      user.establishment_id,
+    );
     return { reassigned: true };
   }
 
@@ -129,8 +148,8 @@ export class OrdersController {
    */
   @Post(':id/ready')
   @HttpCode(HttpStatus.OK)
-  markReady(@Param('id') id: string, @Req() req: any) {
-    return this.service.markReady(id, req.user as AuthenticatedUser);
+  markReady(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.markReady(id, user);
   }
 
   /**
@@ -143,8 +162,8 @@ export class OrdersController {
   assignRecommended(
     @Param('id') id: string,
     @Body() dto: AssignRecommendedDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.assignRecommended(id, dto.courier_id, req.user as AuthenticatedUser);
+    return this.service.assignRecommended(id, dto.courier_id, user);
   }
 }

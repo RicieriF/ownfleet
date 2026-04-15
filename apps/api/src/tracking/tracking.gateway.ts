@@ -13,15 +13,25 @@ import { RedisSubscriberFactory } from '../shared/redis/redis-subscriber.factory
 import type IORedis from 'ioredis';
 import type { JwtPayload } from '../auth/auth.types.js';
 import type { CourierMovedEvent } from './tracking.service.js';
-import { GEOCODING_DONE_CHANNEL, GEOCODING_FAILED_CHANNEL } from '../geocoding/geocoding.constants.js';
-import type { GeocodingDonePayload, GeocodingFailedPayload } from '../geocoding/processors/geocoding.processor.js';
+import {
+  GEOCODING_DONE_CHANNEL,
+  GEOCODING_FAILED_CHANNEL,
+} from '../geocoding/geocoding.constants.js';
+import type {
+  GeocodingDonePayload,
+  GeocodingFailedPayload,
+} from '../geocoding/processors/geocoding.processor.js';
 
 const PUBSUB_CHANNEL = 'courier_moved';
 
 @Injectable()
 @WebSocketGateway({ namespace: '/' })
 export class TrackingGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleInit
 {
   @WebSocketServer()
   private server!: Server;
@@ -42,7 +52,9 @@ export class TrackingGateway
       .map((o) => o.trim())
       .filter(Boolean);
 
-    const engine = (server as unknown as { engine?: { opts?: Record<string, unknown> } }).engine;
+    const engine = (
+      server as unknown as { engine?: { opts?: Record<string, unknown> } }
+    ).engine;
     if (engine?.opts) {
       engine.opts['cors'] = {
         origin: origins.length > 0 ? origins : false,
@@ -50,15 +62,22 @@ export class TrackingGateway
       };
     }
 
-    this.logger.log(`WebSocket gateway initialized — CORS origins: [${origins.join(', ') || '*'}]`);
+    this.logger.log(
+      `WebSocket gateway initialized — CORS origins: [${origins.join(', ') || '*'}]`,
+    );
   }
 
   onModuleInit(): void {
     this.redisSub = this.redisSubscriberFactory.create();
 
-    this.redisSub.subscribe(PUBSUB_CHANNEL, GEOCODING_DONE_CHANNEL, GEOCODING_FAILED_CHANNEL, (err) => {
-      if (err) this.logger.error('Redis subscribe failed', err);
-    });
+    this.redisSub.subscribe(
+      PUBSUB_CHANNEL,
+      GEOCODING_DONE_CHANNEL,
+      GEOCODING_FAILED_CHANNEL,
+      (err) => {
+        if (err) this.logger.error('Redis subscribe failed', err);
+      },
+    );
 
     this.redisSub.on('message', (channel: string, message: string) => {
       try {
@@ -105,7 +124,10 @@ export class TrackingGateway
     try {
       const token =
         (socket.handshake.auth as Record<string, string>)['token'] ??
-        (socket.handshake.headers['authorization'] ?? '').replace('Bearer ', '');
+        (socket.handshake.headers['authorization'] ?? '').replace(
+          'Bearer ',
+          '',
+        );
 
       if (!token) {
         this.logger.warn(`WS rejected — no token (${socket.id})`);
@@ -132,7 +154,11 @@ export class TrackingGateway
 
   // ── Public API for other services to broadcast establishment-scoped events ─
 
-  broadcastToEstablishment(establishmentId: string, event: string, data: unknown): void {
+  broadcastToEstablishment(
+    establishmentId: string,
+    event: string,
+    data: unknown,
+  ): void {
     const room = `est:${establishmentId}`;
     this.server.to(room).emit(event, data);
   }

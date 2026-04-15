@@ -15,10 +15,24 @@ const EST_A = 'est-a';
 const EST_B = 'est-b';
 
 const managerA: any = { id: 'u1', establishment_id: EST_A, role: 'manager' };
-const dispatcherA: any = { id: 'u2', establishment_id: EST_A, role: 'dispatcher' };
+const dispatcherA: any = {
+  id: 'u2',
+  establishment_id: EST_A,
+  role: 'dispatcher',
+};
 
-const courierA = { id: 'c1', establishment_id: EST_A, name: 'Ivan', phone: null };
-const courierB = { id: 'c2', establishment_id: EST_B, name: 'Petro', phone: null };
+const courierA = {
+  id: 'c1',
+  establishment_id: EST_A,
+  name: 'Ivan',
+  phone: null,
+};
+const courierB = {
+  id: 'c2',
+  establishment_id: EST_B,
+  name: 'Petro',
+  phone: null,
+};
 
 const mockPrisma = {
   courier: {
@@ -45,9 +59,15 @@ describe('CouriersService', () => {
       providers: [
         CouriersService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: NotificationsService, useValue: { sendPush: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: NotificationsService,
+          useValue: { sendPush: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: TelegramService, useValue: mockTelegramService },
-        { provide: COURIERS_REDIS_CLIENT, useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() } },
+        {
+          provide: COURIERS_REDIS_CLIENT,
+          useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() },
+        },
       ],
     }).compile();
     service = module.get<CouriersService>(CouriersService);
@@ -60,7 +80,9 @@ describe('CouriersService', () => {
   describe('multi-tenant isolation', () => {
     it('findOne throws ForbiddenException for courier from another establishment', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(courierB);
-      await expect(service.findOne('c2', managerA)).rejects.toThrow(ForbiddenException);
+      await expect(service.findOne('c2', managerA)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('update throws ForbiddenException for courier from another establishment', async () => {
@@ -72,7 +94,9 @@ describe('CouriersService', () => {
 
     it('remove throws ForbiddenException for courier from another establishment', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(courierB);
-      await expect(service.remove('c2', managerA)).rejects.toThrow(ForbiddenException);
+      await expect(service.remove('c2', managerA)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -92,7 +116,9 @@ describe('CouriersService', () => {
 
     it('dispatcher cannot remove courier', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(courierA);
-      await expect(service.remove('c1', dispatcherA)).rejects.toThrow(ForbiddenException);
+      await expect(service.remove('c1', dispatcherA)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -107,7 +133,9 @@ describe('CouriersService', () => {
 
     it('throws NotFoundException when courier not found', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(null);
-      await expect(service.findOne('nonexistent', managerA)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('nonexistent', managerA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('create passes establishment_id from JWT', async () => {

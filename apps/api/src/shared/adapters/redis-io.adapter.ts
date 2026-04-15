@@ -45,8 +45,12 @@ export class RedisIoAdapter extends IoAdapter {
     const pubClient = new IORedis(redisUrl, { lazyConnect: false });
     const subClient = pubClient.duplicate();
 
-    pubClient.on('error', (err) => this.logger.error('Redis adapter pub client error', err));
-    subClient.on('error', (err) => this.logger.error('Redis adapter sub client error', err));
+    pubClient.on('error', (err) =>
+      this.logger.error('Redis adapter pub client error', err),
+    );
+    subClient.on('error', (err) =>
+      this.logger.error('Redis adapter sub client error', err),
+    );
 
     await Promise.all([
       new Promise<void>((resolve, reject) => {

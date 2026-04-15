@@ -29,7 +29,8 @@ async function connectAndResolve(adapter: RedisIoAdapter) {
   const pubClient = mockIORedisConstructor.mock.results[
     mockIORedisConstructor.mock.results.length - 1
   ].value as MockRedisClient;
-  const subClient = (pubClient.duplicate as jest.Mock).mock.results[0].value as MockRedisClient;
+  const subClient = (pubClient.duplicate as jest.Mock).mock.results[0]
+    .value as MockRedisClient;
 
   setImmediate(() => {
     pubClient.emit('ready');
@@ -56,26 +57,38 @@ describe('RedisIoAdapter', () => {
       await connectAndResolve(adapter);
 
       expect(mockIORedisConstructor).toHaveBeenCalledTimes(1);
-      const pubClient = mockIORedisConstructor.mock.results[0].value as MockRedisClient;
+      const pubClient = mockIORedisConstructor.mock.results[0]
+        .value as MockRedisClient;
       expect(pubClient.duplicate).toHaveBeenCalledTimes(1);
     });
 
     it('passes the Redis URL to IORedis constructor', async () => {
       const adapter = new RedisIoAdapter(makeApp());
       const connectPromise = adapter.connectToRedis('redis://custom-host:6380');
-      const pubClient = mockIORedisConstructor.mock.results[0].value as MockRedisClient;
-      const subClient = (pubClient.duplicate as jest.Mock).mock.results[0].value as MockRedisClient;
-      setImmediate(() => { pubClient.emit('ready'); subClient.emit('ready'); });
+      const pubClient = mockIORedisConstructor.mock.results[0]
+        .value as MockRedisClient;
+      const subClient = (pubClient.duplicate as jest.Mock).mock.results[0]
+        .value as MockRedisClient;
+      setImmediate(() => {
+        pubClient.emit('ready');
+        subClient.emit('ready');
+      });
       await connectPromise;
 
-      expect(mockIORedisConstructor).toHaveBeenCalledWith('redis://custom-host:6380', expect.any(Object));
+      expect(mockIORedisConstructor).toHaveBeenCalledWith(
+        'redis://custom-host:6380',
+        expect.any(Object),
+      );
     });
 
     it('rejects when pub client emits error before ready', async () => {
       const adapter = new RedisIoAdapter(makeApp());
       const connectPromise = adapter.connectToRedis('redis://localhost:6379');
-      const pubClient = mockIORedisConstructor.mock.results[0].value as MockRedisClient;
-      setImmediate(() => pubClient.emit('error', new Error('Connection refused')));
+      const pubClient = mockIORedisConstructor.mock.results[0]
+        .value as MockRedisClient;
+      setImmediate(() =>
+        pubClient.emit('error', new Error('Connection refused')),
+      );
 
       await expect(connectPromise).rejects.toThrow('Connection refused');
     });
@@ -83,8 +96,10 @@ describe('RedisIoAdapter', () => {
     it('rejects when sub client emits error before ready', async () => {
       const adapter = new RedisIoAdapter(makeApp());
       const connectPromise = adapter.connectToRedis('redis://localhost:6379');
-      const pubClient = mockIORedisConstructor.mock.results[0].value as MockRedisClient;
-      const subClient = (pubClient.duplicate as jest.Mock).mock.results[0].value as MockRedisClient;
+      const pubClient = mockIORedisConstructor.mock.results[0]
+        .value as MockRedisClient;
+      const subClient = (pubClient.duplicate as jest.Mock).mock.results[0]
+        .value as MockRedisClient;
       setImmediate(() => {
         pubClient.emit('ready');
         subClient.emit('error', new Error('Sub connection refused'));
@@ -103,7 +118,10 @@ describe('RedisIoAdapter', () => {
 
       const mockServer = { adapter: jest.fn() };
       const superSpy = jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(adapter)), 'createIOServer')
+        .spyOn(
+          Object.getPrototypeOf(Object.getPrototypeOf(adapter)),
+          'createIOServer',
+        )
         .mockReturnValue(mockServer as any);
 
       adapter.createIOServer(3000, {} as any);
@@ -121,7 +139,10 @@ describe('RedisIoAdapter', () => {
 
       const mockServer = { adapter: jest.fn() };
       const superSpy = jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(adapter)), 'createIOServer')
+        .spyOn(
+          Object.getPrototypeOf(Object.getPrototypeOf(adapter)),
+          'createIOServer',
+        )
         .mockReturnValue(mockServer as any);
 
       const opts = { transports: ['websocket'] } as any;
@@ -135,7 +156,10 @@ describe('RedisIoAdapter', () => {
       const adapter = new RedisIoAdapter(makeApp());
       const mockServer = { adapter: jest.fn() };
       const superSpy = jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(adapter)), 'createIOServer')
+        .spyOn(
+          Object.getPrototypeOf(Object.getPrototypeOf(adapter)),
+          'createIOServer',
+        )
         .mockReturnValue(mockServer as any);
 
       // adapterConstructor is undefined — just verify it doesn't throw in JS land

@@ -10,11 +10,14 @@ import { DeliveryStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrackingGateway } from '../tracking/tracking.gateway';
 import { TelegramService } from '../telegram/telegram.service.js';
-import { CourierTelegramPrefs, MANAGER_EVENT, COURIER_EVENT } from '../telegram/telegram.types.js';
+import {
+  CourierTelegramPrefs,
+  MANAGER_EVENT,
+} from '../telegram/telegram.types.js';
 import { parseEstablishmentSettings } from '../establishments/establishment-settings.js';
 import { StartShiftDto } from './dto/start-shift.dto';
 import { UpdatePlannedEndDto } from './dto/update-planned-end.dto';
-import { JwtPayload } from '../auth/auth.types';
+import { AuthenticatedUser } from '../auth/auth.types';
 
 @Injectable()
 export class ShiftsService {
@@ -28,9 +31,11 @@ export class ShiftsService {
 
   // ── Courier: start shift ──────────────────────────────────────────────────
 
-  async startShift(user: JwtPayload, dto: StartShiftDto) {
+  async startShift(user: AuthenticatedUser, dto: StartShiftDto) {
     if (!user.courier_id) {
-      throw new UnprocessableEntityException('User is not linked to a courier profile');
+      throw new UnprocessableEntityException(
+        'User is not linked to a courier profile',
+      );
     }
 
     const existing = await this.prisma.shift.findFirst({
@@ -44,31 +49,45 @@ export class ShiftsService {
       data: {
         courier_id: user.courier_id,
         establishment_id: user.establishment_id,
-        planned_end_at: dto.planned_end_at ? new Date(dto.planned_end_at) : null,
+        planned_end_at: dto.planned_end_at
+          ? new Date(dto.planned_end_at)
+          : null,
       },
       include: { courier: { select: { name: true } } },
     });
 
-    this.logger.log(`Shift started: courier=${user.courier_id} shift=${shift.id}`);
-    this.gateway.broadcastToEstablishment(user.establishment_id, 'shift:started', {
-      shift_id: shift.id,
-      courier_id: shift.courier_id,
-      started_at: shift.started_at,
-      planned_end_at: shift.planned_end_at,
-    });
-    this.telegram.notifyEstablishmentManagers(
+    this.logger.log(
+      `Shift started: courier=${user.courier_id} shift=${shift.id}`,
+    );
+    this.gateway.broadcastToEstablishment(
       user.establishment_id,
-      `🟢 ${shift.courier.name} вийшов на зміну`,
-      MANAGER_EVENT.COURIER_SHIFT_STARTED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_started)', err));
+      'shift:started',
+      {
+        shift_id: shift.id,
+        courier_id: shift.courier_id,
+        started_at: shift.started_at,
+        planned_end_at: shift.planned_end_at,
+      },
+    );
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `🟢 ${shift.courier.name} вийшов на зміну`,
+        MANAGER_EVENT.COURIER_SHIFT_STARTED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Telegram notification failed (shift_started)', err),
+      );
     return shift;
   }
 
   // ── Courier: end own shift ────────────────────────────────────────────────
 
-  async endShift(user: JwtPayload) {
+  async endShift(user: AuthenticatedUser) {
     if (!user.courier_id) {
-      throw new UnprocessableEntityException('User is not linked to a courier profile');
+      throw new UnprocessableEntityException(
+        'User is not linked to a courier profile',
+      );
     }
 
     const shift = await this.prisma.shift.findFirst({
@@ -85,23 +104,34 @@ export class ShiftsService {
     });
 
     this.logger.log(`Shift ended by courier: shift=${shift.id}`);
-    this.gateway.broadcastToEstablishment(updated.establishment_id, 'shift:ended', {
-      shift_id: updated.id,
-      courier_id: updated.courier_id,
-      ended_by: 'courier',
-      ended_at: updated.ended_at,
-    });
-    this.telegram.notifyEstablishmentManagers(
+    this.gateway.broadcastToEstablishment(
       updated.establishment_id,
-      `⚫ ${shift.courier.name} завершив зміну`,
-      MANAGER_EVENT.COURIER_SHIFT_ENDED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_courier)', err));
+      'shift:ended',
+      {
+        shift_id: updated.id,
+        courier_id: updated.courier_id,
+        ended_by: 'courier',
+        ended_at: updated.ended_at,
+      },
+    );
+    this.telegram
+      .notifyEstablishmentManagers(
+        updated.establishment_id,
+        `⚫ ${shift.courier.name} завершив зміну`,
+        MANAGER_EVENT.COURIER_SHIFT_ENDED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (shift_ended_by_courier)',
+          err,
+        ),
+      );
     return updated;
   }
 
   // ── Courier: get own active shift ─────────────────────────────────────────
 
-  async getMyActiveShift(user: JwtPayload) {
+  async getMyActiveShift(user: AuthenticatedUser) {
     if (!user.courier_id) return null;
 
     const shift = await this.prisma.shift.findFirst({
@@ -112,9 +142,15 @@ export class ShiftsService {
 
   // ── Manager: end any courier shift ───────────────────────────────────────
 
-  async endShiftByManager(shiftId: string, user: JwtPayload) {
-    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
-      throw new ForbiddenException('Only managers and owners can end other couriers\' shifts');
+  async endShiftByManager(shiftId: string, user: AuthenticatedUser) {
+    if (
+      user.role !== 'manager' &&
+      user.role !== 'owner' &&
+      !user.is_platform_admin
+    ) {
+      throw new ForbiddenException(
+        "Only managers and owners can end other couriers' shifts",
+      );
     }
 
     const shift = await this.prisma.shift.findFirst({
@@ -130,45 +166,78 @@ export class ShiftsService {
     });
 
     this.logger.log(`Shift ended by manager: shift=${shiftId}`);
-    this.gateway.broadcastToEstablishment(updated.establishment_id, 'shift:ended', {
-      shift_id: updated.id,
-      courier_id: updated.courier_id,
-      ended_by: 'manager',
-      ended_at: updated.ended_at,
-    });
-    this.telegram.notifyEstablishmentManagers(
+    this.gateway.broadcastToEstablishment(
       updated.establishment_id,
-      `⚫ ${shift.courier.name} — зміну завершено менеджером`,
-      MANAGER_EVENT.COURIER_SHIFT_ENDED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_ended_by_manager)', err));
+      'shift:ended',
+      {
+        shift_id: updated.id,
+        courier_id: updated.courier_id,
+        ended_by: 'manager',
+        ended_at: updated.ended_at,
+      },
+    );
+    this.telegram
+      .notifyEstablishmentManagers(
+        updated.establishment_id,
+        `⚫ ${shift.courier.name} — зміну завершено менеджером`,
+        MANAGER_EVENT.COURIER_SHIFT_ENDED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (shift_ended_by_manager)',
+          err,
+        ),
+      );
     return updated;
   }
 
   // ── Manager: update planned_end_at ────────────────────────────────────────
 
-  async updatePlannedEnd(shiftId: string, user: JwtPayload, dto: UpdatePlannedEndDto) {
-    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
-      throw new ForbiddenException('Only managers and owners can update planned end time');
+  async updatePlannedEnd(
+    shiftId: string,
+    user: AuthenticatedUser,
+    dto: UpdatePlannedEndDto,
+  ) {
+    if (
+      user.role !== 'manager' &&
+      user.role !== 'owner' &&
+      !user.is_platform_admin
+    ) {
+      throw new ForbiddenException(
+        'Only managers and owners can update planned end time',
+      );
     }
 
     const shift = await this.prisma.shift.findFirst({
-      where: { id: shiftId, establishment_id: user.establishment_id, ended_at: null },
+      where: {
+        id: shiftId,
+        establishment_id: user.establishment_id,
+        ended_at: null,
+      },
     });
     if (!shift) throw new NotFoundException('Active shift not found');
 
     return this.prisma.shift.update({
       where: { id: shiftId },
       data: {
-        planned_end_at: dto.planned_end_at ? new Date(dto.planned_end_at) : null,
+        planned_end_at: dto.planned_end_at
+          ? new Date(dto.planned_end_at)
+          : null,
       },
     });
   }
 
   // ── Manager: get all active shifts for establishment ─────────────────────
 
-  async getActiveShiftsForEstablishment(user: JwtPayload) {
-    if (user.role !== 'manager' && user.role !== 'owner' && !user.is_platform_admin) {
-      throw new ForbiddenException('Only managers and owners can view all active shifts');
+  async getActiveShiftsForEstablishment(user: AuthenticatedUser) {
+    if (
+      user.role !== 'manager' &&
+      user.role !== 'owner' &&
+      !user.is_platform_admin
+    ) {
+      throw new ForbiddenException(
+        'Only managers and owners can view all active shifts',
+      );
     }
 
     return this.prisma.shift.findMany({
@@ -182,7 +251,7 @@ export class ShiftsService {
 
   // ── Courier: get own shift history ───────────────────────────────────────
 
-  async getMyShiftHistory(user: JwtPayload) {
+  async getMyShiftHistory(user: AuthenticatedUser) {
     if (!user.courier_id) return [];
 
     return this.prisma.shift.findMany({
@@ -253,11 +322,18 @@ export class ShiftsService {
         ended_at: endedAt,
       });
       const courierName = courierNameMap.get(s.courier_id) ?? s.courier_id;
-      this.telegram.notifyEstablishmentManagers(
-        s.establishment_id,
-        `🕐 Зміну ${courierName} закрито автоматично (> 16 год без GPS-пінгу)`,
-        MANAGER_EVENT.COURIER_SHIFT_AUTO_CLOSED,
-      ).catch((err: unknown) => this.logger.warn('Telegram notification failed (shift_auto_closed)', err));
+      this.telegram
+        .notifyEstablishmentManagers(
+          s.establishment_id,
+          `🕐 Зміну ${courierName} закрито автоматично (> 16 год без GPS-пінгу)`,
+          MANAGER_EVENT.COURIER_SHIFT_AUTO_CLOSED,
+        )
+        .catch((err: unknown) =>
+          this.logger.warn(
+            'Telegram notification failed (shift_auto_closed)',
+            err,
+          ),
+        );
     }
 
     this.logger.log(`Auto-closed ${staleShifts.length} stale shift(s)`);
@@ -291,7 +367,8 @@ export class ShiftsService {
       let sent = 0;
 
       for (const shift of shifts) {
-        const prefs = (shift.courier.telegram_prefs as CourierTelegramPrefs) ?? {};
+        const prefs =
+          (shift.courier.telegram_prefs as CourierTelegramPrefs) ?? {};
 
         if (!shift.courier.telegram_chat_id) continue;
         if (!shift.planned_end_at) continue; // defensive guard — Prisma filter should prevent this
@@ -300,7 +377,7 @@ export class ShiftsService {
         const thresholdMs = (prefs.shift_ending_soon_min ?? 30) * 60 * 1000;
         const msUntilEnd = shift.planned_end_at.getTime() - Date.now();
 
-        if (msUntilEnd <= 0) continue;          // shift already past planned end
+        if (msUntilEnd <= 0) continue; // shift already past planned end
         if (msUntilEnd > thresholdMs) continue; // not yet within warning window
 
         // Format message before consuming Redis key — if formatting throws (e.g. bad timezone),
@@ -314,7 +391,10 @@ export class ShiftsService {
             timeZone: shift.establishment.timezone,
           });
         } catch (err) {
-          this.logger.warn(`Invalid timezone for shift ${shift.id}: ${shift.establishment.timezone}`, err);
+          this.logger.warn(
+            `Invalid timezone for shift ${shift.id}: ${shift.establishment.timezone}`,
+            err,
+          );
           continue;
         }
         const text = `⏰ Зміна завершується через ${minutesLeft} хв (о ${endTime})`;
@@ -328,8 +408,10 @@ export class ShiftsService {
         if (!isNew) continue; // already notified for this shift
 
         this.telegram
-          .sendMessage(shift.courier.telegram_chat_id!, text)
-          .catch((err) => this.logger.warn('Shift ending soon notify failed', err));
+          .sendMessage(shift.courier.telegram_chat_id, text)
+          .catch((err) =>
+            this.logger.warn('Shift ending soon notify failed', err),
+          );
 
         sent++;
       }
@@ -351,13 +433,17 @@ export class ShiftsService {
           id: true,
           courier_id: true,
           courier: { select: { name: true, telegram_chat_id: true } },
-          order: { select: { establishment_id: true, external_id: true, id: true } },
+          order: {
+            select: { establishment_id: true, external_id: true, id: true },
+          },
         },
       });
 
       if (deliveries.length === 0) return 0;
 
-      const estIds = [...new Set(deliveries.map((d) => d.order.establishment_id))];
+      const estIds = [
+        ...new Set(deliveries.map((d) => d.order.establishment_id)),
+      ];
       const establishments = await this.prisma.establishment.findMany({
         where: { id: { in: estIds } },
         select: { id: true, settings: true },
@@ -366,7 +452,9 @@ export class ShiftsService {
 
       // Batch GPS ping query — one GROUP BY instead of N per-delivery queries
       const courierIds = [...new Set(deliveries.map((d) => d.courier_id))];
-      const pingRows = await this.prisma.$queryRaw<{ courier_id: string; last_ping: Date | null }[]>`
+      const pingRows = await this.prisma.$queryRaw<
+        { courier_id: string; last_ping: Date | null }[]
+      >`
         SELECT courier_id, MAX(created_at) AS last_ping
         FROM location_pings
         WHERE courier_id = ANY(ARRAY[${Prisma.join(courierIds)}]::uuid[])
@@ -379,13 +467,16 @@ export class ShiftsService {
       for (const d of deliveries) {
         if (!d.courier.telegram_chat_id) continue;
 
-        const settings = parseEstablishmentSettings(estMap.get(d.order.establishment_id));
+        const settings = parseEstablishmentSettings(
+          estMap.get(d.order.establishment_id),
+        );
         const thresholdMin = settings.courier_not_responding_min;
         const thresholdMs = thresholdMin * 60 * 1000;
 
         const lastPing = pingMap.get(d.courier_id) ?? null;
 
-        const isNotResponding = lastPing === null || (Date.now() - lastPing.getTime()) > thresholdMs;
+        const isNotResponding =
+          lastPing === null || Date.now() - lastPing.getTime() > thresholdMs;
         if (!isNotResponding) continue;
 
         const isNew = await this.telegram.setNxWithTtl(
@@ -401,8 +492,14 @@ export class ShiftsService {
         const text = `⚠️ ${d.courier.name} не відповідає вже ${minutesAgo} хв (доставка #${orderId})`;
 
         this.telegram
-          .notifyEstablishmentManagers(d.order.establishment_id, text, MANAGER_EVENT.COURIER_NOT_RESPONDING)
-          .catch((err) => this.logger.warn('Courier not responding notify failed', err));
+          .notifyEstablishmentManagers(
+            d.order.establishment_id,
+            text,
+            MANAGER_EVENT.COURIER_NOT_RESPONDING,
+          )
+          .catch((err) =>
+            this.logger.warn('Courier not responding notify failed', err),
+          );
 
         sent++;
       }

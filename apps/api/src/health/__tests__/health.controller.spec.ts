@@ -15,7 +15,13 @@ const mockRedis = {
   ping: jest.fn(),
 };
 
-const defaultCounts = { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+const defaultCounts = {
+  waiting: 0,
+  active: 0,
+  completed: 0,
+  failed: 0,
+  delayed: 0,
+};
 
 const mockPingQueue = {
   isPaused: jest.fn(),
@@ -73,7 +79,13 @@ describe('HealthController', () => {
     mockRedis.ping.mockResolvedValue('PONG');
     mockPingQueue.isPaused.mockResolvedValue(false);
     mockWebhookQueue.isPaused.mockResolvedValue(false);
-    mockPingQueue.getJobCounts.mockResolvedValue({ waiting: 42, active: 3, completed: 100, failed: 1, delayed: 0 });
+    mockPingQueue.getJobCounts.mockResolvedValue({
+      waiting: 42,
+      active: 3,
+      completed: 100,
+      failed: 1,
+      delayed: 0,
+    });
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
     const result = await controller.check();
@@ -92,7 +104,9 @@ describe('HealthController', () => {
     mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
-    await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
+    await expect(controller.check()).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('throws 503 when Redis is down', async () => {
@@ -103,7 +117,9 @@ describe('HealthController', () => {
     mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
-    await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
+    await expect(controller.check()).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('throws 503 when both DB and Redis are down', async () => {
@@ -114,7 +130,9 @@ describe('HealthController', () => {
     mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
-    await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
+    await expect(controller.check()).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('throws 503 with per-service status in response body', async () => {
@@ -148,7 +166,9 @@ describe('HealthController', () => {
     mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
-    await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
+    await expect(controller.check()).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('throws 503 when ping-persist queue is paused', async () => {
@@ -181,7 +201,9 @@ describe('HealthController', () => {
     mockPingQueue.getJobCounts.mockResolvedValue(defaultCounts);
     mockWebhookQueue.getJobCounts.mockResolvedValue(defaultCounts);
 
-    await expect(controller.check()).rejects.toThrow(ServiceUnavailableException);
+    await expect(controller.check()).rejects.toThrow(
+      ServiceUnavailableException,
+    );
   });
 
   it('reports queue as error when isPaused() throws', async () => {

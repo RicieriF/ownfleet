@@ -16,7 +16,9 @@ import type { GeocodeJob } from '../geocoding.service.js';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockGeocodingService = { geocode: jest.fn() };
-const mockTelegramService = { notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined) };
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
+};
 const mockDispatchQueue = { add: jest.fn() };
 
 const mockOrder = { update: jest.fn(), findUnique: jest.fn() };
@@ -30,7 +32,8 @@ const mockRedis = {
   publish: jest.fn().mockResolvedValue(1),
 };
 
-const makeJob = (data: GeocodeJob): Job<GeocodeJob> => ({ data } as Job<GeocodeJob>);
+const makeJob = (data: GeocodeJob): Job<GeocodeJob> =>
+  ({ data }) as Job<GeocodeJob>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +67,9 @@ describe('GeocodingProcessor', () => {
     mockEstablishment.findUnique.mockResolvedValue(EST_WITH_COORDS);
     mockOrder.update.mockResolvedValue({});
     mockOrder.findUnique.mockResolvedValue({ status: 'pending' });
-    mockTelegramService.notifyEstablishmentManagers.mockResolvedValue(undefined);
+    mockTelegramService.notifyEstablishmentManagers.mockResolvedValue(
+      undefined,
+    );
   });
 
   // ── Success path ──────────────────────────────────────────────────────────
@@ -76,7 +81,13 @@ describe('GeocodingProcessor', () => {
       .mockResolvedValueOnce(EST_WITH_COORDS) // handle() call
       .mockResolvedValueOnce({ dispatch_mode: 'auto' }); // triggerAutoDispatch call
 
-    await processor.handle(makeJob({ orderId: 'order-1', address: 'вул. Тестова 5', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-1',
+        address: 'вул. Тестова 5',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockOrder.update).toHaveBeenCalledWith({
       where: { id: 'order-1' },
@@ -84,13 +95,20 @@ describe('GeocodingProcessor', () => {
     });
     expect(mockRedis.publish).toHaveBeenCalledWith(
       GEOCODING_DONE_CHANNEL,
-      JSON.stringify({ orderId: 'order-1', lat: 50.44, lng: 30.51, establishmentId: 'est-1' }),
+      JSON.stringify({
+        orderId: 'order-1',
+        lat: 50.44,
+        lng: 30.51,
+        establishmentId: 'est-1',
+      }),
     );
     expect(mockDispatchQueue.add).toHaveBeenCalledWith(
       { orderId: 'order-1', establishmentId: 'est-1', attempt: 1 },
       { jobId: 'dispatch:order-1' },
     );
-    expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).not.toHaveBeenCalled();
   });
 
   it('does not trigger auto-dispatch when order is not pending', async () => {
@@ -100,7 +118,13 @@ describe('GeocodingProcessor', () => {
       .mockResolvedValueOnce({ dispatch_mode: 'auto' });
     mockOrder.findUnique.mockResolvedValue({ status: 'assigned' }); // already assigned
 
-    await processor.handle(makeJob({ orderId: 'order-1', address: 'вул. Тестова 5', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-1',
+        address: 'вул. Тестова 5',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockDispatchQueue.add).not.toHaveBeenCalled();
   });
@@ -111,7 +135,13 @@ describe('GeocodingProcessor', () => {
       .mockResolvedValueOnce(EST_WITH_COORDS)
       .mockResolvedValueOnce({ dispatch_mode: 'manual' });
 
-    await processor.handle(makeJob({ orderId: 'order-1', address: 'вул. Тестова 5', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-1',
+        address: 'вул. Тестова 5',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockDispatchQueue.add).not.toHaveBeenCalled();
   });
@@ -122,16 +152,26 @@ describe('GeocodingProcessor', () => {
     // Coords in Kharkiv (~480 km from Kyiv)
     mockGeocodingService.geocode.mockResolvedValue({ lat: 49.99, lng: 36.23 });
 
-    await processor.handle(makeJob({ orderId: 'order-2', address: 'вул. Шевченка 1', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-2',
+        address: 'вул. Шевченка 1',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockOrder.update).not.toHaveBeenCalled();
     expect(mockRedis.publish).toHaveBeenCalledWith(
       GEOCODING_FAILED_CHANNEL,
       expect.stringContaining('"reason":"proximity_failed"'),
     );
-    expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).toHaveBeenCalledWith(
       'est-1',
-      expect.stringContaining('proximity_failed'.length > 0 ? 'занадто далеко' : ''),
+      expect.stringContaining(
+        'proximity_failed'.length > 0 ? 'занадто далеко' : '',
+      ),
       'geocode_failed',
     );
   });
@@ -143,10 +183,18 @@ describe('GeocodingProcessor', () => {
       .mockResolvedValueOnce(EST_WITH_COORDS)
       .mockResolvedValueOnce({ dispatch_mode: 'manual' });
 
-    await processor.handle(makeJob({ orderId: 'order-3', address: 'вул. Лісова 5', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-3',
+        address: 'вул. Лісова 5',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockOrder.update).toHaveBeenCalled();
-    expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).not.toHaveBeenCalled();
   });
 
   it('skips proximity check when establishment has no coordinates', async () => {
@@ -156,7 +204,13 @@ describe('GeocodingProcessor', () => {
       .mockResolvedValueOnce({ dispatch_mode: 'manual' });
 
     // Should NOT reject — we cannot validate without establishment coords
-    await processor.handle(makeJob({ orderId: 'order-4', address: 'вул. Тестова 1', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-4',
+        address: 'вул. Тестова 1',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockOrder.update).toHaveBeenCalled();
   });
@@ -166,44 +220,67 @@ describe('GeocodingProcessor', () => {
   it('sends alert and does not update order when geocode returns null (address not found)', async () => {
     mockGeocodingService.geocode.mockResolvedValue(null);
 
-    await processor.handle(makeJob({ orderId: 'order-5', address: 'повна нісенітниця xyz123', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-5',
+        address: 'повна нісенітниця xyz123',
+        establishmentId: 'est-1',
+      }),
+    );
 
     expect(mockOrder.update).not.toHaveBeenCalled();
     expect(mockRedis.publish).toHaveBeenCalledWith(
       GEOCODING_FAILED_CHANNEL,
       expect.stringContaining('"reason":"not_found"'),
     );
-    expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-      'est-1',
-      expect.any(String),
-      'geocode_failed',
-    );
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).toHaveBeenCalledWith('est-1', expect.any(String), 'geocode_failed');
   });
 
   it('does not send duplicate alert within 24h (Redis dedup)', async () => {
     mockGeocodingService.geocode.mockResolvedValue(null);
     mockRedis.get.mockResolvedValue('not_found'); // dedup key already set
 
-    await processor.handle(makeJob({ orderId: 'order-5', address: 'xyz', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({ orderId: 'order-5', address: 'xyz', establishmentId: 'est-1' }),
+    );
 
-    expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
-    expect(mockRedis.publish).not.toHaveBeenCalledWith(GEOCODING_FAILED_CHANNEL, expect.anything());
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).not.toHaveBeenCalled();
+    expect(mockRedis.publish).not.toHaveBeenCalledWith(
+      GEOCODING_FAILED_CHANNEL,
+      expect.anything(),
+    );
   });
 
   // ── Transient failure path ────────────────────────────────────────────────
 
   it('propagates geocode error so Bull retries the job', async () => {
-    mockGeocodingService.geocode.mockRejectedValue(new Error('Nominatim HTTP 503'));
+    mockGeocodingService.geocode.mockRejectedValue(
+      new Error('Nominatim HTTP 503'),
+    );
 
     await expect(
-      processor.handle(makeJob({ orderId: 'order-6', address: 'вул. Тестова 1', establishmentId: 'est-1' })),
+      processor.handle(
+        makeJob({
+          orderId: 'order-6',
+          address: 'вул. Тестова 1',
+          establishmentId: 'est-1',
+        }),
+      ),
     ).rejects.toThrow('Nominatim HTTP 503');
 
     expect(mockOrder.update).not.toHaveBeenCalled();
   });
 
   it('sends alert via onFailed after all Bull retries are exhausted', async () => {
-    const job = makeJob({ orderId: 'order-7', address: 'вул. Тестова 1', establishmentId: 'est-1' });
+    const job = makeJob({
+      orderId: 'order-7',
+      address: 'вул. Тестова 1',
+      establishmentId: 'est-1',
+    });
     const err = new Error('Nominatim timeout');
 
     await processor.onFailed(job, err);
@@ -212,11 +289,9 @@ describe('GeocodingProcessor', () => {
       GEOCODING_FAILED_CHANNEL,
       expect.stringContaining('"reason":"transient_failure"'),
     );
-    expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-      'est-1',
-      expect.any(String),
-      'geocode_failed',
-    );
+    expect(
+      mockTelegramService.notifyEstablishmentManagers,
+    ).toHaveBeenCalledWith('est-1', expect.any(String), 'geocode_failed');
   });
 
   // ── DB errors ─────────────────────────────────────────────────────────────
@@ -227,10 +302,19 @@ describe('GeocodingProcessor', () => {
     mockOrder.update.mockRejectedValue(new Error('DB error'));
 
     await expect(
-      processor.handle(makeJob({ orderId: 'order-8', address: 'вул. Тестова 5', establishmentId: 'est-1' })),
+      processor.handle(
+        makeJob({
+          orderId: 'order-8',
+          address: 'вул. Тестова 5',
+          establishmentId: 'est-1',
+        }),
+      ),
     ).rejects.toThrow('DB error');
 
-    expect(mockRedis.publish).not.toHaveBeenCalledWith(GEOCODING_DONE_CHANNEL, expect.anything());
+    expect(mockRedis.publish).not.toHaveBeenCalledWith(
+      GEOCODING_DONE_CHANNEL,
+      expect.anything(),
+    );
   });
 
   it('silently skips when order was deleted before geocoding completed (P2025)', async () => {
@@ -243,8 +327,17 @@ describe('GeocodingProcessor', () => {
     mockOrder.update.mockRejectedValue(p2025);
 
     // Should not throw
-    await processor.handle(makeJob({ orderId: 'order-9', address: 'вул. Тестова 5', establishmentId: 'est-1' }));
+    await processor.handle(
+      makeJob({
+        orderId: 'order-9',
+        address: 'вул. Тестова 5',
+        establishmentId: 'est-1',
+      }),
+    );
 
-    expect(mockRedis.publish).not.toHaveBeenCalledWith(GEOCODING_DONE_CHANNEL, expect.anything());
+    expect(mockRedis.publish).not.toHaveBeenCalledWith(
+      GEOCODING_DONE_CHANNEL,
+      expect.anything(),
+    );
   });
 });

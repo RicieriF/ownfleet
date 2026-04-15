@@ -1,15 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { OnboardingService } from '../onboarding.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 const EST_ID = 'est-1';
-const userA: any = { id: 'u1', establishment_id: EST_ID, role: 'manager', is_platform_admin: false };
+const userA: any = {
+  id: 'u1',
+  establishment_id: EST_ID,
+  role: 'manager',
+  is_platform_admin: false,
+};
 
 const baseCourier = { id: 'c1', establishment_id: EST_ID, name: 'Іван' };
 
@@ -54,7 +56,10 @@ const mockPrisma = {
 };
 
 const mockJwt = { sign: jest.fn().mockReturnValue('mock-access-token') };
-const mockConfig = { getOrThrow: jest.fn().mockReturnValue('test-secret'), get: jest.fn() };
+const mockConfig = {
+  getOrThrow: jest.fn().mockReturnValue('test-secret'),
+  get: jest.fn(),
+};
 
 describe('OnboardingService', () => {
   let service: OnboardingService;
@@ -76,7 +81,9 @@ describe('OnboardingService', () => {
     mockInviteToken.create.mockImplementation(({ data }: any) =>
       Promise.resolve({ id: 'inv-1', ...data }),
     );
-    mockEstablishment.findUnique.mockResolvedValue({ onboarding_status: 'pending' });
+    mockEstablishment.findUnique.mockResolvedValue({
+      onboarding_status: 'pending',
+    });
     mockEstablishment.update.mockResolvedValue({});
     mockInviteToken.update.mockResolvedValue({});
     mockInviteToken.updateMany.mockResolvedValue({ count: 1 });
@@ -108,19 +115,28 @@ describe('OnboardingService', () => {
     });
 
     it('throws NotFoundException for courier from another establishment', async () => {
-      mockCourier.findUnique.mockResolvedValue({ id: 'c1', establishment_id: 'est-other' });
+      mockCourier.findUnique.mockResolvedValue({
+        id: 'c1',
+        establishment_id: 'est-other',
+      });
 
-      await expect(service.createInvite('c1', userA)).rejects.toThrow(NotFoundException);
+      await expect(service.createInvite('c1', userA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when courier does not exist', async () => {
       mockCourier.findUnique.mockResolvedValue(null);
 
-      await expect(service.createInvite('c-missing', userA)).rejects.toThrow(NotFoundException);
+      await expect(service.createInvite('c-missing', userA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('advances onboarding_status from pending to couriers_added', async () => {
-      mockEstablishment.findUnique.mockResolvedValue({ onboarding_status: 'pending' });
+      mockEstablishment.findUnique.mockResolvedValue({
+        onboarding_status: 'pending',
+      });
 
       await service.createInvite('c1', userA);
 
@@ -131,7 +147,9 @@ describe('OnboardingService', () => {
     });
 
     it('does NOT downgrade onboarding_status if already past couriers_added', async () => {
-      mockEstablishment.findUnique.mockResolvedValue({ onboarding_status: 'first_order' });
+      mockEstablishment.findUnique.mockResolvedValue({
+        onboarding_status: 'first_order',
+      });
 
       await service.createInvite('c1', userA);
 
@@ -147,7 +165,11 @@ describe('OnboardingService', () => {
       mockInviteToken.findUnique.mockResolvedValue(baseInvite);
       mockUser.findUnique.mockResolvedValue(null);
 
-      const result = await service.acceptInvite(baseInvite.token, 'password123', 'car');
+      const result = await service.acceptInvite(
+        baseInvite.token,
+        'password123',
+        'car',
+      );
 
       expect(result.access_token).toBe('mock-access-token');
       expect(result.refresh_token).toBeDefined();
@@ -169,7 +191,11 @@ describe('OnboardingService', () => {
       mockInviteToken.findUnique.mockResolvedValue(baseInvite);
       mockUser.findUnique.mockResolvedValue(null);
 
-      await service.acceptInvite(baseInvite.token, 'password123', 'moto_electric');
+      await service.acceptInvite(
+        baseInvite.token,
+        'password123',
+        'moto_electric',
+      );
 
       expect(mockCourier.update).toHaveBeenCalledWith({
         where: { id: 'c1' },
@@ -183,7 +209,9 @@ describe('OnboardingService', () => {
       mockInviteToken.updateMany.mockResolvedValue({ count: 0 });
       mockInviteToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.acceptInvite('bad-token', 'password123', 'car')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.acceptInvite('bad-token', 'password123', 'car'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when token already used', async () => {
@@ -193,7 +221,9 @@ describe('OnboardingService', () => {
         used_at: new Date(Date.now() - 3600_000),
       });
 
-      await expect(service.acceptInvite(baseInvite.token, 'password123', 'car')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.acceptInvite(baseInvite.token, 'password123', 'car'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when token is expired', async () => {
@@ -204,7 +234,9 @@ describe('OnboardingService', () => {
         used_at: null,
       });
 
-      await expect(service.acceptInvite(baseInvite.token, 'password123', 'car')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.acceptInvite(baseInvite.token, 'password123', 'car'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -217,7 +249,9 @@ describe('OnboardingService', () => {
       const result = await service.revokeInvite('inv-1', userA);
 
       expect(result.revoked).toBe(true);
-      expect(mockInviteToken.delete).toHaveBeenCalledWith({ where: { id: 'inv-1' } });
+      expect(mockInviteToken.delete).toHaveBeenCalledWith({
+        where: { id: 'inv-1' },
+      });
     });
 
     it('throws NotFoundException for invite from another establishment', async () => {
@@ -226,7 +260,9 @@ describe('OnboardingService', () => {
         establishment_id: 'est-other',
       });
 
-      await expect(service.revokeInvite('inv-1', userA)).rejects.toThrow(NotFoundException);
+      await expect(service.revokeInvite('inv-1', userA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws BadRequestException when trying to revoke already-used invite', async () => {
@@ -235,13 +271,17 @@ describe('OnboardingService', () => {
         used_at: new Date(),
       });
 
-      await expect(service.revokeInvite('inv-1', userA)).rejects.toThrow(BadRequestException);
+      await expect(service.revokeInvite('inv-1', userA)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws NotFoundException for non-existent invite', async () => {
       mockInviteToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.revokeInvite('missing', userA)).rejects.toThrow(NotFoundException);
+      await expect(service.revokeInvite('missing', userA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

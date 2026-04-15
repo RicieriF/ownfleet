@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ShiftsService } from '../shifts.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TrackingGateway } from '../../tracking/tracking.gateway';
 import { TelegramService } from '../../telegram/telegram.service.js';
-import { JwtPayload } from '../../auth/auth.types';
+import { AuthenticatedUser } from '../../auth/auth.types';
 
 const mockGateway = {
   broadcastToEstablishment: jest.fn(),
@@ -31,16 +35,16 @@ const mockPrisma = {
   $queryRaw: jest.fn(),
 };
 
-const courierUser: JwtPayload = {
-  sub: 'user-1',
+const courierUser: AuthenticatedUser = {
+  id: 'user-1',
   establishment_id: 'est-1',
   role: 'dispatcher' as any,
   is_platform_admin: false,
   courier_id: 'courier-1',
 };
 
-const managerUser: JwtPayload = {
-  sub: 'manager-1',
+const managerUser: AuthenticatedUser = {
+  id: 'manager-1',
   establishment_id: 'est-1',
   role: 'manager' as any,
   is_platform_admin: false,
@@ -77,17 +81,29 @@ describe('ShiftsService', () => {
     });
 
     it('throws ConflictException when active shift already exists', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: null });
-      await expect(service.startShift(courierUser, {})).rejects.toThrow(ConflictException);
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: null,
+      });
+      await expect(service.startShift(courierUser, {})).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('creates shift with planned_end_at when provided', async () => {
       mockPrisma.shift.findFirst.mockResolvedValue(null);
       const planned = '2026-03-23T18:00:00.000Z';
-      const created = { id: 'shift-new', courier_id: 'courier-1', planned_end_at: new Date(planned), courier: { name: 'Ivan' } };
+      const created = {
+        id: 'shift-new',
+        courier_id: 'courier-1',
+        planned_end_at: new Date(planned),
+        courier: { name: 'Ivan' },
+      };
       mockPrisma.shift.create.mockResolvedValue(created);
 
-      const result = await service.startShift(courierUser, { planned_end_at: planned });
+      const result = await service.startShift(courierUser, {
+        planned_end_at: planned,
+      });
 
       expect(mockPrisma.shift.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -103,7 +119,10 @@ describe('ShiftsService', () => {
 
     it('creates shift without planned_end_at when not provided', async () => {
       mockPrisma.shift.findFirst.mockResolvedValue(null);
-      mockPrisma.shift.create.mockResolvedValue({ id: 'shift-new', courier: { name: 'Ivan' } });
+      mockPrisma.shift.create.mockResolvedValue({
+        id: 'shift-new',
+        courier: { name: 'Ivan' },
+      });
 
       await service.startShift(courierUser, {});
 
@@ -119,17 +138,29 @@ describe('ShiftsService', () => {
 
   describe('endShift', () => {
     it('throws UnprocessableEntityException when user has no courier_id', async () => {
-      await expect(service.endShift(managerUser)).rejects.toThrow(UnprocessableEntityException);
+      await expect(service.endShift(managerUser)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
     });
 
     it('throws NotFoundException when no active shift', async () => {
       mockPrisma.shift.findFirst.mockResolvedValue(null);
-      await expect(service.endShift(courierUser)).rejects.toThrow(NotFoundException);
+      await expect(service.endShift(courierUser)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('ends active shift with ended_by=courier', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: null, courier: { name: 'Ivan' } });
-      mockPrisma.shift.update.mockResolvedValue({ id: 'shift-1', ended_by: 'courier', establishment_id: 'est-1' });
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: null,
+        courier: { name: 'Ivan' },
+      });
+      mockPrisma.shift.update.mockResolvedValue({
+        id: 'shift-1',
+        ended_by: 'courier',
+        establishment_id: 'est-1',
+      });
 
       await service.endShift(courierUser);
 
@@ -145,21 +176,33 @@ describe('ShiftsService', () => {
   describe('endShiftByManager', () => {
     it('throws NotFoundException for unknown shift', async () => {
       mockPrisma.shift.findFirst.mockResolvedValue(null);
-      await expect(service.endShiftByManager('shift-x', managerUser)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.endShiftByManager('shift-x', managerUser),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws ConflictException for already-ended shift', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: new Date(), courier: { name: 'Ivan' } });
-      await expect(service.endShiftByManager('shift-1', managerUser)).rejects.toThrow(
-        ConflictException,
-      );
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: new Date(),
+        courier: { name: 'Ivan' },
+      });
+      await expect(
+        service.endShiftByManager('shift-1', managerUser),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('ends shift with ended_by=manager', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: null, courier: { name: 'Ivan' } });
-      mockPrisma.shift.update.mockResolvedValue({ id: 'shift-1', ended_by: 'manager', establishment_id: 'est-1' });
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: null,
+        courier: { name: 'Ivan' },
+      });
+      mockPrisma.shift.update.mockResolvedValue({
+        id: 'shift-1',
+        ended_by: 'manager',
+        establishment_id: 'est-1',
+      });
 
       await service.endShiftByManager('shift-1', managerUser);
 
@@ -228,7 +271,9 @@ describe('ShiftsService', () => {
 
       await service.startShift(courierUser, {});
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.any(String),
         'courier_shift_started',
@@ -236,12 +281,22 @@ describe('ShiftsService', () => {
     });
 
     it('endShift() fires courier_shift_ended to establishment managers', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: null, courier: { name: 'Ivan' } });
-      mockPrisma.shift.update.mockResolvedValue({ id: 'shift-1', ended_by: 'courier', establishment_id: 'est-1' });
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: null,
+        courier: { name: 'Ivan' },
+      });
+      mockPrisma.shift.update.mockResolvedValue({
+        id: 'shift-1',
+        ended_by: 'courier',
+        establishment_id: 'est-1',
+      });
 
       await service.endShift(courierUser);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.any(String),
         'courier_shift_ended',
@@ -249,12 +304,22 @@ describe('ShiftsService', () => {
     });
 
     it('endShiftByManager() fires courier_shift_ended to establishment managers', async () => {
-      mockPrisma.shift.findFirst.mockResolvedValue({ id: 'shift-1', ended_at: null, courier: { name: 'Ivan' } });
-      mockPrisma.shift.update.mockResolvedValue({ id: 'shift-1', ended_by: 'manager', establishment_id: 'est-1' });
+      mockPrisma.shift.findFirst.mockResolvedValue({
+        id: 'shift-1',
+        ended_at: null,
+        courier: { name: 'Ivan' },
+      });
+      mockPrisma.shift.update.mockResolvedValue({
+        id: 'shift-1',
+        ended_by: 'manager',
+        establishment_id: 'est-1',
+      });
 
       await service.endShiftByManager('shift-1', managerUser);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.any(String),
         'courier_shift_ended',
@@ -274,8 +339,12 @@ describe('ShiftsService', () => {
 
       await service.autoCloseStaleShifts();
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledTimes(2);
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledTimes(2);
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.any(String),
         'courier_shift_auto_closed',
@@ -298,7 +367,10 @@ describe('ShiftsService', () => {
         id: 'shift-s1',
         planned_end_at: overrides.planned_end_at,
         courier: {
-          telegram_chat_id: 'telegram_chat_id' in overrides ? overrides.telegram_chat_id : chatId,
+          telegram_chat_id:
+            'telegram_chat_id' in overrides
+              ? overrides.telegram_chat_id
+              : chatId,
           telegram_prefs: overrides.prefs ?? { shift_ending_soon: true },
         },
         establishment: {
@@ -315,7 +387,10 @@ describe('ShiftsService', () => {
 
     it('returns 0 when courier has no telegram_chat_id', async () => {
       mockPrisma.shift.findMany.mockResolvedValue([
-        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), telegram_chat_id: null }),
+        makeShift({
+          planned_end_at: new Date(Date.now() + 20 * 60 * 1000),
+          telegram_chat_id: null,
+        }),
       ]);
       // Prisma filter already excludes these, but the method should not crash if chatId is null
       expect(await service.checkShiftEndingSoon()).toBe(0);
@@ -324,7 +399,10 @@ describe('ShiftsService', () => {
 
     it('returns 0 when shift_ending_soon pref is false', async () => {
       mockPrisma.shift.findMany.mockResolvedValue([
-        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), prefs: { shift_ending_soon: false } }),
+        makeShift({
+          planned_end_at: new Date(Date.now() + 20 * 60 * 1000),
+          prefs: { shift_ending_soon: false },
+        }),
       ]);
       expect(await service.checkShiftEndingSoon()).toBe(0);
       expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
@@ -332,7 +410,10 @@ describe('ShiftsService', () => {
 
     it('returns 0 when shift_ending_soon pref is absent', async () => {
       mockPrisma.shift.findMany.mockResolvedValue([
-        makeShift({ planned_end_at: new Date(Date.now() + 20 * 60 * 1000), prefs: {} }),
+        makeShift({
+          planned_end_at: new Date(Date.now() + 20 * 60 * 1000),
+          prefs: {},
+        }),
       ]);
       expect(await service.checkShiftEndingSoon()).toBe(0);
       expect(mockTelegramService.sendMessage).not.toHaveBeenCalled();
@@ -407,7 +488,10 @@ describe('ShiftsService', () => {
       const result = await service.checkShiftEndingSoon();
 
       expect(result).toBe(1);
-      expect(mockTelegramService.sendMessage).toHaveBeenCalledWith(chatId, expect.stringContaining('⏰'));
+      expect(mockTelegramService.sendMessage).toHaveBeenCalledWith(
+        chatId,
+        expect.stringContaining('⏰'),
+      );
     });
 
     it('does NOT send when 15 min away but threshold is 10 min', async () => {
@@ -460,7 +544,10 @@ describe('ShiftsService', () => {
         courier_id: overrides.courier_id ?? 'c-1',
         courier: {
           name: overrides.courier_name ?? 'Ivan',
-          telegram_chat_id: 'telegram_chat_id' in overrides ? overrides.telegram_chat_id : 'tg-1',
+          telegram_chat_id:
+            'telegram_chat_id' in overrides
+              ? overrides.telegram_chat_id
+              : 'tg-1',
         },
         order: {
           establishment_id: overrides.est_id ?? 'est-1',
@@ -477,36 +564,52 @@ describe('ShiftsService', () => {
     it('returns 0 when no in_progress deliveries', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([]);
       expect(await service.checkCourierNotResponding()).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('returns 0 when courier has no telegram_chat_id', async () => {
-      mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({ telegram_chat_id: null })]);
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        makeDelivery({ telegram_chat_id: null }),
+      ]);
       mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) }]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) },
+      ]);
 
       expect(await service.checkCourierNotResponding()).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('returns 0 when last ping is within default threshold (5 min ago, threshold 15 min)', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
       mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) }]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 5 * 60 * 1000) },
+      ]);
 
       expect(await service.checkCourierNotResponding()).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('sends notification and returns 1 when last ping exceeds default threshold (20 min ago)', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
       mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) },
+      ]);
 
       const result = await service.checkCourierNotResponding();
 
       expect(result).toBe(1);
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.stringContaining('⚠️'),
         'courier_not_responding',
@@ -517,10 +620,14 @@ describe('ShiftsService', () => {
       mockTelegramService.setNxWithTtl.mockResolvedValueOnce(false);
       mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
       mockPrisma.establishment.findMany.mockResolvedValue([makeEst()]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) },
+      ]);
 
       expect(await service.checkCourierNotResponding()).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('sends notification when courier has never pinged (no entry in location_pings)', async () => {
@@ -532,7 +639,9 @@ describe('ShiftsService', () => {
       const result = await service.checkCourierNotResponding();
 
       expect(result).toBe(1);
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.stringContaining('⚠️'),
         'courier_not_responding',
@@ -541,22 +650,34 @@ describe('ShiftsService', () => {
 
     it('respects custom courier_not_responding_min: 20 min ago does NOT send when threshold is 30', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
-      mockPrisma.establishment.findMany.mockResolvedValue([makeEst('est-1', { courier_not_responding_min: 30 })]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) }]);
+      mockPrisma.establishment.findMany.mockResolvedValue([
+        makeEst('est-1', { courier_not_responding_min: 30 }),
+      ]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 20 * 60 * 1000) },
+      ]);
 
       expect(await service.checkCourierNotResponding()).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('respects custom courier_not_responding_min: 31 min ago DOES send when threshold is 30', async () => {
       mockPrisma.delivery.findMany.mockResolvedValue([makeDelivery({})]);
-      mockPrisma.establishment.findMany.mockResolvedValue([makeEst('est-1', { courier_not_responding_min: 30 })]);
-      mockPrisma.$queryRaw.mockResolvedValue([{ courier_id: 'c-1', last_ping: new Date(Date.now() - 31 * 60 * 1000) }]);
+      mockPrisma.establishment.findMany.mockResolvedValue([
+        makeEst('est-1', { courier_not_responding_min: 30 }),
+      ]);
+      mockPrisma.$queryRaw.mockResolvedValue([
+        { courier_id: 'c-1', last_ping: new Date(Date.now() - 31 * 60 * 1000) },
+      ]);
 
       const result = await service.checkCourierNotResponding();
 
       expect(result).toBe(1);
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.stringContaining('⚠️'),
         'courier_not_responding',

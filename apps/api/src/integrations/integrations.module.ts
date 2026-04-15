@@ -10,7 +10,12 @@ import { GeocodingModule } from '../geocoding/geocoding.module.js';
 import { TelegramModule } from '../telegram/telegram.module.js';
 
 @Module({
-  imports: [PrismaModule, EstablishmentsModule, GeocodingModule, TelegramModule],
+  imports: [
+    PrismaModule,
+    EstablishmentsModule,
+    GeocodingModule,
+    TelegramModule,
+  ],
   controllers: [PosterController, IntegrationsController],
   providers: [PosterService, IikoService, IntegrationsService],
 })

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -27,12 +23,25 @@ export class AuthService {
   async login(dto: LoginDto): Promise<{
     accessToken: string;
     refreshToken: string;
-    user: { id: string; establishment_id: string; role: string; name: string | null; email: string };
+    user: {
+      id: string;
+      establishment_id: string;
+      role: string;
+      name: string | null;
+      email: string;
+    };
   }> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: {
-        establishment: { select: { id: true, plan: true, trial_ends_at: true, paid_until: true } },
+        establishment: {
+          select: {
+            id: true,
+            plan: true,
+            trial_ends_at: true,
+            paid_until: true,
+          },
+        },
         courier: { select: { name: true, phone: true } },
       },
     });
@@ -41,7 +50,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const passwordMatch = await bcrypt.compare(dto.password, user.password_hash);
+    const passwordMatch = await bcrypt.compare(
+      dto.password,
+      user.password_hash,
+    );
     if (!passwordMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -75,7 +87,9 @@ export class AuthService {
     };
   }
 
-  async refresh(rawToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+  async refresh(
+    rawToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const tokenHash = this.hashToken(rawToken);
 
     // Atomic: delete-and-return in one operation prevents concurrent reuse

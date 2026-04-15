@@ -35,7 +35,13 @@ describe('DistributedLockService', () => {
     expect(result).toBe(true);
     expect(fn).toHaveBeenCalledTimes(1);
     // Acquire: SET cron:lock:test-key 1 EX 60 NX
-    expect(redis.set).toHaveBeenCalledWith('cron:lock:test-key', '1', 'EX', 60, 'NX');
+    expect(redis.set).toHaveBeenCalledWith(
+      'cron:lock:test-key',
+      '1',
+      'EX',
+      60,
+      'NX',
+    );
     // Release
     expect(redis.del).toHaveBeenCalledWith('cron:lock:test-key');
   });
@@ -55,14 +61,20 @@ describe('DistributedLockService', () => {
     redis.set.mockResolvedValue('OK');
     const fn = jest.fn().mockRejectedValue(new Error('fn error'));
 
-    await expect(service.withLock('test-key', 60, fn)).rejects.toThrow('fn error');
+    await expect(service.withLock('test-key', 60, fn)).rejects.toThrow(
+      'fn error',
+    );
 
     expect(redis.del).toHaveBeenCalledWith('cron:lock:test-key');
   });
 
   it('uses correct lock key prefix "cron:lock:"', async () => {
     redis.set.mockResolvedValue('OK');
-    await service.withLock('my-cron', 30, jest.fn().mockResolvedValue(undefined));
+    await service.withLock(
+      'my-cron',
+      30,
+      jest.fn().mockResolvedValue(undefined),
+    );
 
     const [lockKey] = redis.set.mock.calls[0] as [string, ...unknown[]];
     expect(lockKey).toBe('cron:lock:my-cron');
@@ -70,7 +82,11 @@ describe('DistributedLockService', () => {
 
   it('passes ttlSeconds as EX argument', async () => {
     redis.set.mockResolvedValue('OK');
-    await service.withLock('ttl-test', 123, jest.fn().mockResolvedValue(undefined));
+    await service.withLock(
+      'ttl-test',
+      123,
+      jest.fn().mockResolvedValue(undefined),
+    );
 
     const args = redis.set.mock.calls[0] as unknown[];
     // SET key value EX ttl NX
@@ -97,7 +113,9 @@ describe('DistributedLockService', () => {
     redis.set.mockRejectedValue(new Error('Redis down'));
     const fn = jest.fn().mockRejectedValue(new Error('fn also failed'));
 
-    await expect(service.withLock('test-key', 60, fn)).rejects.toThrow('fn also failed');
+    await expect(service.withLock('test-key', 60, fn)).rejects.toThrow(
+      'fn also failed',
+    );
   });
 
   // ── DEL failure is non-critical ─────────────────────────────────────────
@@ -121,7 +139,11 @@ describe('DistributedLockService', () => {
       redis.set.mockResolvedValue('OK');
 
       let resolveF!: () => void;
-      const fn = jest.fn().mockReturnValue(new Promise<void>(r => { resolveF = r; }));
+      const fn = jest.fn().mockReturnValue(
+        new Promise<void>((r) => {
+          resolveF = r;
+        }),
+      );
 
       const lockPromise = service.withLock('test-key', 60, fn);
 
@@ -148,7 +170,11 @@ describe('DistributedLockService', () => {
       redis.set.mockResolvedValue('OK');
 
       let rejectF!: (e: Error) => void;
-      const fn = jest.fn().mockReturnValue(new Promise<void>((_, r) => { rejectF = r; }));
+      const fn = jest.fn().mockReturnValue(
+        new Promise<void>((_, r) => {
+          rejectF = r;
+        }),
+      );
 
       const lockPromise = service.withLock('test-key', 60, fn);
 
@@ -179,7 +205,7 @@ describe('DistributedLockService', () => {
 
   it('different lock keys are independent', async () => {
     redis.set
-      .mockResolvedValueOnce('OK')  // key-a acquired
+      .mockResolvedValueOnce('OK') // key-a acquired
       .mockResolvedValueOnce(null); // key-b busy
     const fnA = jest.fn().mockResolvedValue(undefined);
     const fnB = jest.fn().mockResolvedValue(undefined);

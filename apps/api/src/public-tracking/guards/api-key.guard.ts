@@ -74,22 +74,27 @@ export class ApiKeyGuard implements CanActivate {
     // visible in HTML and domain restriction guards against casual cross-site misuse,
     // not against a determined attacker who has already extracted the key.
     // Missing Origin (same-origin browser request) → treated as empty domain → denied.
-    const origin = req.headers['origin'] as string | undefined;
+    const origin = req.headers['origin'];
     const requestDomain = this.extractDomain(origin ?? '');
 
     // localhost is always allowed for development/testing (spec: "крім localhost для тестування")
-    const isLocalhost = requestDomain === 'localhost' || requestDomain === '127.0.0.1';
+    const isLocalhost =
+      requestDomain === 'localhost' || requestDomain === '127.0.0.1';
 
     if (keyRecord.allowed_domains.length === 0 && !isLocalhost) {
-      throw new ForbiddenException('No allowed domains configured for this API key');
+      throw new ForbiddenException(
+        'No allowed domains configured for this API key',
+      );
     }
 
-    const domainAllowed = isLocalhost || keyRecord.allowed_domains.some((d) => {
-      // Exact match only. www is handled by expandDomains() which stores both
-      // "pizza.com" and "www.pizza.com". Wildcard subdomains are NOT allowed —
-      // any subdomain takeover (*.pizza.com) would otherwise grant full key access.
-      return requestDomain === d;
-    });
+    const domainAllowed =
+      isLocalhost ||
+      keyRecord.allowed_domains.some((d) => {
+        // Exact match only. www is handled by expandDomains() which stores both
+        // "pizza.com" and "www.pizza.com". Wildcard subdomains are NOT allowed —
+        // any subdomain takeover (*.pizza.com) would otherwise grant full key access.
+        return requestDomain === d;
+      });
 
     if (!domainAllowed) {
       this.logger.warn(
@@ -132,15 +137,27 @@ export class ApiKeyGuard implements CanActivate {
         .exec();
 
       const keyUniqueCount = results?.[1]?.[1] as number | undefined;
-      const ipUniqueCount  = results?.[4]?.[1] as number | undefined;
+      const ipUniqueCount = results?.[4]?.[1] as number | undefined;
 
-      if (keyUniqueCount !== undefined && keyUniqueCount > KEY_THROTTLE_UNIQUE_LIMIT) {
-        throw new HttpException('Too many unique orders per minute for this API key', HttpStatus.TOO_MANY_REQUESTS);
+      if (
+        keyUniqueCount !== undefined &&
+        keyUniqueCount > KEY_THROTTLE_UNIQUE_LIMIT
+      ) {
+        throw new HttpException(
+          'Too many unique orders per minute for this API key',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       }
 
-      if (ipUniqueCount !== undefined && ipUniqueCount > IP_THROTTLE_UNIQUE_LIMIT) {
+      if (
+        ipUniqueCount !== undefined &&
+        ipUniqueCount > IP_THROTTLE_UNIQUE_LIMIT
+      ) {
         // Generic message — don't reveal that IP-based limiting is active
-        throw new HttpException('Too many requests', HttpStatus.TOO_MANY_REQUESTS);
+        throw new HttpException(
+          'Too many requests',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       }
     }
 

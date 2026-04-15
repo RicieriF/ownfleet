@@ -10,14 +10,18 @@ import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.i
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   const logger = new Logger('Bootstrap');
 
   // Redis-backed Socket.IO adapter — must be set before app.listen() so that
   // all WebSocket room emissions are broadcast to clients on every API instance.
   const configService = app.get(ConfigService);
   const redisIoAdapter = new RedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis(configService.getOrThrow<string>('REDIS_URL'));
+  await redisIoAdapter.connectToRedis(
+    configService.getOrThrow<string>('REDIS_URL'),
+  );
   app.useWebSocketAdapter(redisIoAdapter);
 
   // Trust the first proxy hop so req.ip is populated from X-Forwarded-For.
@@ -37,7 +41,10 @@ async function bootstrap() {
 
   // Order matters: CorrelationId must run first so req.correlationId is set
   // before RequestLoggingInterceptor reads it in the response tap.
-  app.useGlobalInterceptors(new CorrelationIdInterceptor(), new RequestLoggingInterceptor());
+  app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
+    new RequestLoggingInterceptor(),
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({

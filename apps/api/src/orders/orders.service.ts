@@ -9,7 +9,12 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
-import { DispatchMode, OrderStatus, TransportMode, Prisma } from '@prisma/client';
+import {
+  DispatchMode,
+  OrderStatus,
+  TransportMode,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WebhooksService } from '../webhooks/webhooks.service.js';
 import { TelegramService } from '../telegram/telegram.service.js';
@@ -23,11 +28,13 @@ import { EtaService } from '../eta/eta.service.js';
 import { TrackingGateway } from '../tracking/tracking.gateway.js';
 import { TrackingService } from '../tracking/tracking.service.js';
 import { GeocodingService } from '../geocoding/geocoding.service.js';
-import { REDIS_CLIENT, PUBLIC_DELIVERY_STATUS_CHANNEL } from '../shared/redis/redis.constants.js';
+import {
+  REDIS_CLIENT,
+  PUBLIC_DELIVERY_STATUS_CHANNEL,
+} from '../shared/redis/redis.constants.js';
 import { haversineMeters } from '../shared/geo.js';
 import { MANAGER_EVENT, COURIER_EVENT } from '../telegram/telegram.types.js';
 import type IORedis from 'ioredis';
-
 
 // Distance tiers for dispatch algorithm (in meters)
 const ZONE_1_METERS = 150;
@@ -134,29 +141,52 @@ export class OrdersService {
         },
       });
       // Geocode if coordinates are missing or the 0,0 sentinel (same logic as POS integrations)
-      if (order.lat == null || order.lng == null || (order.lat === 0 && order.lng === 0)) {
-        void this.geocodingService.enqueueGeocode(order.id, order.address, user.establishment_id);
+      if (
+        order.lat == null ||
+        order.lng == null ||
+        (order.lat === 0 && order.lng === 0)
+      ) {
+        void this.geocodingService.enqueueGeocode(
+          order.id,
+          order.address,
+          user.establishment_id,
+        );
       }
-      this.webhooks.dispatch(user.establishment_id, 'order.created', { order_id: order.id }).catch(
-        (err) => this.logger.warn('webhook dispatch failed for order.created', err),
-      );
-      this.telegram.notifyEstablishmentManagers(
-        user.establishment_id,
-        `📦 Нове замовлення: ${order.address}`,
-        MANAGER_EVENT.ORDER_CREATED,
-      ).catch((err: unknown) => this.logger.warn('Telegram notification failed (order_created)', err));
+      this.webhooks
+        .dispatch(user.establishment_id, 'order.created', {
+          order_id: order.id,
+        })
+        .catch((err) =>
+          this.logger.warn('webhook dispatch failed for order.created', err),
+        );
+      this.telegram
+        .notifyEstablishmentManagers(
+          user.establishment_id,
+          `📦 Нове замовлення: ${order.address}`,
+          MANAGER_EVENT.ORDER_CREATED,
+        )
+        .catch((err: unknown) =>
+          this.logger.warn('Telegram notification failed (order_created)', err),
+        );
       // Trigger auto-dispatch if establishment has dispatch_mode='auto'
-      void this.prisma.establishment.findUnique({
-        where: { id: user.establishment_id },
-        select: { dispatch_mode: true },
-      }).then((est) => {
-        if (est?.dispatch_mode === 'auto') {
-          return this.dispatchQueue.add(
-            { orderId: order.id, establishmentId: user.establishment_id, attempt: 1 },
-            { jobId: `dispatch:${order.id}` },
-          );
-        }
-      }).catch((err) => this.logger.warn('Failed to enqueue dispatch', err));
+      void this.prisma.establishment
+        .findUnique({
+          where: { id: user.establishment_id },
+          select: { dispatch_mode: true },
+        })
+        .then((est) => {
+          if (est?.dispatch_mode === 'auto') {
+            return this.dispatchQueue.add(
+              {
+                orderId: order.id,
+                establishmentId: user.establishment_id,
+                attempt: 1,
+              },
+              { jobId: `dispatch:${order.id}` },
+            );
+          }
+        })
+        .catch((err) => this.logger.warn('Failed to enqueue dispatch', err));
       return order;
     } catch (err) {
       // Race condition: two concurrent requests for the same external_id both passed
@@ -227,33 +257,52 @@ export class OrdersService {
         throw new ConflictException('Order status has changed, cannot assign');
       }
 
-      await tx.delivery.create({
-        data: {
-          order_id: id,
-          courier_id: dto.courier_id,
-          status: 'assigned',
-          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
-        },
-      }).catch((err) => {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-          throw new ConflictException('Order is already being assigned');
-        }
-        throw err;
-      });
+      await tx.delivery
+        .create({
+          data: {
+            order_id: id,
+            courier_id: dto.courier_id,
+            status: 'assigned',
+            ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
+          },
+        })
+        .catch((err) => {
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === 'P2002'
+          ) {
+            throw new ConflictException('Order is already being assigned');
+          }
+          throw err;
+        });
 
       return tx.order.findUniqueOrThrow({ where: { id } });
     });
 
-    this.telegram.notifyEstablishmentManagers(
-      user.establishment_id,
-      `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
-      MANAGER_EVENT.DELIVERY_ASSIGNED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_assigned manager)', err));
-    this.telegram.notifyCourier(
-      dto.courier_id,
-      `📦 Вам призначено доставку: ${order.address}`,
-      COURIER_EVENT.DELIVERY_ASSIGNED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (delivery_assigned courier)', err));
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
+        MANAGER_EVENT.DELIVERY_ASSIGNED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (delivery_assigned manager)',
+          err,
+        ),
+      );
+    this.telegram
+      .notifyCourier(
+        dto.courier_id,
+        `📦 Вам призначено доставку: ${order.address}`,
+        COURIER_EVENT.DELIVERY_ASSIGNED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (delivery_assigned courier)',
+          err,
+        ),
+      );
 
     // Set courier:active_order Redis key for public tracking
     const createdDelivery = await this.prisma.delivery.findFirst({
@@ -262,28 +311,45 @@ export class OrdersService {
       orderBy: { assigned_at: 'desc' },
     });
     if (createdDelivery) {
-      this.trackingService.setActiveOrder(
-        dto.courier_id,
-        id,
-        createdDelivery.id,
-        order.lat,
-        order.lng,
-        courier.transport_mode,
-        establishment.lat,
-        establishment.lng,
-      ).catch((err) => this.logger.warn('setActiveOrder failed after assign', err));
+      this.trackingService
+        .setActiveOrder(
+          dto.courier_id,
+          id,
+          createdDelivery.id,
+          order.lat,
+          order.lng,
+          courier.transport_mode,
+          establishment.lat,
+          establishment.lng,
+        )
+        .catch((err) =>
+          this.logger.warn('setActiveOrder failed after assign', err),
+        );
     }
 
     // Publish delivery status for public WS
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (delivery_assigned)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: id,
+          orderStatus: 'assigned',
+          deliveryStatus: 'assigned',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (delivery_assigned)', err),
+      );
 
     // Invalidate workload cache — fire-and-forget
-    this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
-      this.logger.warn('Failed to invalidate workload cache after assign', err),
-    );
+    this.couriersService
+      .invalidateWorkloadCache(user.establishment_id)
+      .catch((err) =>
+        this.logger.warn(
+          'Failed to invalidate workload cache after assign',
+          err,
+        ),
+      );
 
     return result;
   }
@@ -298,7 +364,14 @@ export class OrdersService {
 
     return this.prisma.order.findMany({
       where: { establishment_id: user.establishment_id, status: 'pending' },
-      select: { id: true, address: true, lat: true, lng: true, notes: true, created_at: true },
+      select: {
+        id: true,
+        address: true,
+        lat: true,
+        lng: true,
+        notes: true,
+        created_at: true,
+      },
       orderBy: { created_at: 'asc' },
     });
   }
@@ -314,7 +387,9 @@ export class OrdersService {
     ]);
 
     // Fetch order (pre-check, real guard is inside transaction)
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order || order.establishment_id !== user.establishment_id) {
       throw new NotFoundException('Order not found');
     }
@@ -330,8 +405,10 @@ export class OrdersService {
 
     let etaSeconds: number | null = null;
     if (
-      est.lat !== null && est.lng !== null &&
-      order.lat !== null && order.lng !== null &&
+      est.lat !== null &&
+      est.lng !== null &&
+      order.lat !== null &&
+      order.lng !== null &&
       courier.transport_mode !== null
     ) {
       etaSeconds = await this.eta.calculateEta({
@@ -352,7 +429,9 @@ export class OrdersService {
       });
 
       if (updated.count === 0) {
-        throw new ConflictException('Order has already been claimed by another courier');
+        throw new ConflictException(
+          'Order has already been claimed by another courier',
+        );
       }
 
       await tx.delivery.create({
@@ -367,20 +446,44 @@ export class OrdersService {
       return tx.order.findUniqueOrThrow({ where: { id: orderId } });
     });
 
-    try { this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', { order_id: orderId }); } catch (err) { this.logger.warn('WS broadcast failed for order:assigned', err); }
-    this.telegram.notifyEstablishmentManagers(
-      user.establishment_id,
-      `🚴 Курʼєр ${courier.name} самостійно взяв замовлення: ${order.address}`,
-      MANAGER_EVENT.DELIVERY_ASSIGNED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (self_assign manager)', err));
-    this.telegram.notifyCourier(
-      user.courier_id,
-      `📦 Ви взяли доставку: ${order.address}`,
-      COURIER_EVENT.DELIVERY_ASSIGNED,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (self_assign courier)', err));
-    this.webhooks.dispatch(user.establishment_id, 'order.assigned', { order_id: orderId }).catch(
-      (err) => this.logger.warn('webhook dispatch failed for order.assigned', err),
-    );
+    try {
+      this.gateway.broadcastToEstablishment(
+        user.establishment_id,
+        'order:assigned',
+        { order_id: orderId },
+      );
+    } catch (err) {
+      this.logger.warn('WS broadcast failed for order:assigned', err);
+    }
+    this.telegram
+      .notifyEstablishmentManagers(
+        user.establishment_id,
+        `🚴 Курʼєр ${courier.name} самостійно взяв замовлення: ${order.address}`,
+        MANAGER_EVENT.DELIVERY_ASSIGNED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (self_assign manager)',
+          err,
+        ),
+      );
+    this.telegram
+      .notifyCourier(
+        user.courier_id,
+        `📦 Ви взяли доставку: ${order.address}`,
+        COURIER_EVENT.DELIVERY_ASSIGNED,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (self_assign courier)',
+          err,
+        ),
+      );
+    this.webhooks
+      .dispatch(user.establishment_id, 'order.assigned', { order_id: orderId })
+      .catch((err) =>
+        this.logger.warn('webhook dispatch failed for order.assigned', err),
+      );
 
     // Set courier:active_order Redis key for public tracking
     const claimedDelivery = await this.prisma.delivery.findFirst({
@@ -389,21 +492,33 @@ export class OrdersService {
       orderBy: { assigned_at: 'desc' },
     });
     if (claimedDelivery) {
-      this.trackingService.setActiveOrder(
-        user.courier_id!,
-        orderId,
-        claimedDelivery.id,
-        order.lat,
-        order.lng,
-        courier.transport_mode,
-        est.lat,
-        est.lng,
-      ).catch((err) => this.logger.warn('setActiveOrder failed after claim', err));
+      this.trackingService
+        .setActiveOrder(
+          user.courier_id,
+          orderId,
+          claimedDelivery.id,
+          order.lat,
+          order.lng,
+          courier.transport_mode,
+          est.lat,
+          est.lng,
+        )
+        .catch((err) =>
+          this.logger.warn('setActiveOrder failed after claim', err),
+        );
     }
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (self_assign)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId,
+          orderStatus: 'assigned',
+          deliveryStatus: 'assigned',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (self_assign)', err),
+      );
 
     return result;
   }
@@ -425,7 +540,13 @@ export class OrdersService {
       this.prisma.order.findUnique({ where: { id: orderId } }),
       this.prisma.establishment.findUnique({
         where: { id: establishmentId },
-        select: { id: true, lat: true, lng: true, timezone: true, dispatch_mode: true },
+        select: {
+          id: true,
+          lat: true,
+          lng: true,
+          timezone: true,
+          dispatch_mode: true,
+        },
       }),
     ]);
 
@@ -538,7 +659,10 @@ export class OrdersService {
         continue;
       }
       const distanceMeters = Number(c.distance_meters);
-      const transportWarning = this.buildTransportWarning(c.transport_mode, orderDistanceMeters);
+      const transportWarning = this.buildTransportWarning(
+        c.transport_mode,
+        orderDistanceMeters,
+      );
       pool.push({
         courierId: c.courier_id,
         name: c.name,
@@ -557,12 +681,16 @@ export class OrdersService {
 
     // Sort pool: zone 1 first, then by workload_score (already sorted by SQL, but ETA parallel
     // does not change order so SQL ordering stands)
-    const recommended = pool[0]!;
+    const recommended = pool[0];
 
     // For `auto` mode — assign immediately
     if (establishment.dispatch_mode === 'auto') {
       try {
-        await this.assignCourier(orderId, recommended.courierId, establishmentId);
+        await this.assignCourier(
+          orderId,
+          recommended.courierId,
+          establishmentId,
+        );
       } catch (err) {
         this.logger.warn(`Auto-assign failed for order ${orderId}`, err);
         // Return result anyway — caller handles the error display
@@ -648,7 +776,9 @@ export class OrdersService {
         body: `Вам призначено доставку: ${order.address}`,
         data: { type: 'delivery_assigned', order_id: orderId },
       })
-      .catch((err) => this.logger.warn(`FCM push failed for courier ${courierId}`, err));
+      .catch((err) =>
+        this.logger.warn(`FCM push failed for courier ${courierId}`, err),
+      );
 
     try {
       this.gateway.broadcastToEstablishment(establishmentId, 'order:assigned', {
@@ -665,7 +795,12 @@ export class OrdersService {
         `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
         MANAGER_EVENT.DELIVERY_ASSIGNED,
       )
-      .catch((err: unknown) => this.logger.warn('Telegram notification failed (auto_assign manager)', err));
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (auto_assign manager)',
+          err,
+        ),
+      );
 
     // Set courier:active_order Redis key for public tracking
     const assignedDelivery = await this.prisma.delivery.findFirst({
@@ -674,26 +809,43 @@ export class OrdersService {
       orderBy: { assigned_at: 'desc' },
     });
     if (assignedDelivery) {
-      this.trackingService.setActiveOrder(
-        courierId,
-        orderId,
-        assignedDelivery.id,
-        order.lat,
-        order.lng,
-        courier.transport_mode,
-        establishment.lat,
-        establishment.lng,
-      ).catch((err) => this.logger.warn('setActiveOrder failed after assignCourier', err));
+      this.trackingService
+        .setActiveOrder(
+          courierId,
+          orderId,
+          assignedDelivery.id,
+          order.lat,
+          order.lng,
+          courier.transport_mode,
+          establishment.lat,
+          establishment.lng,
+        )
+        .catch((err) =>
+          this.logger.warn('setActiveOrder failed after assignCourier', err),
+        );
     }
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (auto_assign)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId,
+          orderStatus: 'assigned',
+          deliveryStatus: 'assigned',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (auto_assign)', err),
+      );
 
     // Invalidate workload cache — fire-and-forget
-    this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
-      this.logger.warn('Failed to invalidate workload cache after assignCourier', err),
-    );
+    this.couriersService
+      .invalidateWorkloadCache(establishmentId)
+      .catch((err) =>
+        this.logger.warn(
+          'Failed to invalidate workload cache after assignCourier',
+          err,
+        ),
+      );
   }
 
   /**
@@ -717,7 +869,9 @@ export class OrdersService {
       throw new NotFoundException('Delivery not found');
     }
     if (delivery.order.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Delivery does not belong to your establishment');
+      throw new ForbiddenException(
+        'Delivery does not belong to your establishment',
+      );
     }
     if (delivery.status !== 'assigned') {
       throw new ConflictException(
@@ -732,7 +886,9 @@ export class OrdersService {
     });
 
     if (!newCourier || newCourier.establishment_id !== establishmentId) {
-      throw new NotFoundException('New courier not found in your establishment');
+      throw new NotFoundException(
+        'New courier not found in your establishment',
+      );
     }
 
     const activeDelivery = await this.prisma.delivery.findFirst({
@@ -760,7 +916,10 @@ export class OrdersService {
         data: { type: 'delivery_reassigned', delivery_id: deliveryId },
       })
       .catch((err) =>
-        this.logger.warn(`FCM push (reassigned) failed for old courier ${oldCourierId}`, err),
+        this.logger.warn(
+          `FCM push (reassigned) failed for old courier ${oldCourierId}`,
+          err,
+        ),
       );
 
     // FCM push to new courier — fire-and-forget
@@ -771,56 +930,92 @@ export class OrdersService {
         data: { type: 'delivery_assigned', delivery_id: deliveryId },
       })
       .catch((err) =>
-        this.logger.warn(`FCM push (assign) failed for new courier ${newCourierId}`, err),
+        this.logger.warn(
+          `FCM push (assign) failed for new courier ${newCourierId}`,
+          err,
+        ),
       );
 
     try {
-      this.gateway.broadcastToEstablishment(establishmentId, 'delivery:reassigned', {
-        delivery_id: deliveryId,
-        old_courier_id: oldCourierId,
-        new_courier_id: newCourierId,
-      });
+      this.gateway.broadcastToEstablishment(
+        establishmentId,
+        'delivery:reassigned',
+        {
+          delivery_id: deliveryId,
+          old_courier_id: oldCourierId,
+          new_courier_id: newCourierId,
+        },
+      );
     } catch (err) {
       this.logger.warn('WS broadcast failed for delivery:reassigned', err);
     }
 
     // DEL old courier active_order, SET new courier active_order
-    this.trackingService.clearActiveOrder(oldCourierId, deliveryId).catch((err: unknown) =>
-      this.logger.warn('clearActiveOrder failed on reassign (old courier)', err),
-    );
+    this.trackingService
+      .clearActiveOrder(oldCourierId, deliveryId)
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'clearActiveOrder failed on reassign (old courier)',
+          err,
+        ),
+      );
 
     // Fetch order + establishment coords for new active_order key
-    void this.prisma.order.findUnique({
-      where: { id: delivery.order_id },
-      select: { lat: true, lng: true, establishment: { select: { lat: true, lng: true } } },
-    }).then((ord) => {
-      if (!ord) return;
-      return this.prisma.courier.findUnique({
-        where: { id: newCourierId },
-        select: { transport_mode: true },
-      }).then((c) => {
-        return this.trackingService.setActiveOrder(
-          newCourierId,
-          delivery.order_id,
-          deliveryId,
-          ord.lat,
-          ord.lng,
-          c?.transport_mode ?? null,
-          ord.establishment.lat,
-          ord.establishment.lng,
-        );
-      });
-    }).catch((err) => this.logger.warn('setActiveOrder failed after reassign', err));
+    void this.prisma.order
+      .findUnique({
+        where: { id: delivery.order_id },
+        select: {
+          lat: true,
+          lng: true,
+          establishment: { select: { lat: true, lng: true } },
+        },
+      })
+      .then((ord) => {
+        if (!ord) return;
+        return this.prisma.courier
+          .findUnique({
+            where: { id: newCourierId },
+            select: { transport_mode: true },
+          })
+          .then((c) => {
+            return this.trackingService.setActiveOrder(
+              newCourierId,
+              delivery.order_id,
+              deliveryId,
+              ord.lat,
+              ord.lng,
+              c?.transport_mode ?? null,
+              ord.establishment.lat,
+              ord.establishment.lng,
+            );
+          });
+      })
+      .catch((err) =>
+        this.logger.warn('setActiveOrder failed after reassign', err),
+      );
 
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: delivery.order_id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (reassign)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: delivery.order_id,
+          orderStatus: 'assigned',
+          deliveryStatus: 'assigned',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (reassign)', err),
+      );
 
     // Invalidate workload cache — fire-and-forget
-    this.couriersService.invalidateWorkloadCache(establishmentId).catch((err) =>
-      this.logger.warn('Failed to invalidate workload cache after reassignDelivery', err),
-    );
+    this.couriersService
+      .invalidateWorkloadCache(establishmentId)
+      .catch((err) =>
+        this.logger.warn(
+          'Failed to invalidate workload cache after reassignDelivery',
+          err,
+        ),
+      );
   }
 
   private buildTransportWarning(
@@ -828,10 +1023,16 @@ export class OrdersService {
     orderDistanceMeters: number | null,
   ): string | undefined {
     if (orderDistanceMeters === null) return undefined;
-    if (mode === TransportMode.walking && orderDistanceMeters > WALKING_WARN_METERS) {
+    if (
+      mode === TransportMode.walking &&
+      orderDistanceMeters > WALKING_WARN_METERS
+    ) {
       return `Доставка ${(orderDistanceMeters / 1000).toFixed(1)} км — велика відстань для пішки`;
     }
-    if (mode === TransportMode.bicycle && orderDistanceMeters > BICYCLE_WARN_METERS) {
+    if (
+      mode === TransportMode.bicycle &&
+      orderDistanceMeters > BICYCLE_WARN_METERS
+    ) {
       return `Доставка ${(orderDistanceMeters / 1000).toFixed(1)} км — велика відстань для велосипеда`;
     }
     return undefined;
@@ -844,7 +1045,9 @@ export class OrdersService {
       select: { dispatch_mode: true, lat: true, lng: true, timezone: true },
     });
     if (est.dispatch_mode !== 'auto') {
-      throw new BadRequestException('Self-assignment is not enabled for this establishment');
+      throw new BadRequestException(
+        'Self-assignment is not enabled for this establishment',
+      );
     }
     return est;
   }
@@ -854,10 +1057,16 @@ export class OrdersService {
       throw new ForbiddenException('Only couriers can access available orders');
     }
     const activeShift = await this.prisma.shift.findFirst({
-      where: { courier_id: user.courier_id, establishment_id: user.establishment_id, ended_at: null },
+      where: {
+        courier_id: user.courier_id,
+        establishment_id: user.establishment_id,
+        ended_at: null,
+      },
     });
     if (!activeShift) {
-      throw new BadRequestException('You must be on an active shift to access available orders');
+      throw new BadRequestException(
+        'You must be on an active shift to access available orders',
+      );
     }
   }
 
@@ -881,18 +1090,30 @@ export class OrdersService {
     if (activeDelivery) {
       this.trackingService
         .clearActiveOrder(activeDelivery.courier_id, activeDelivery.id)
-        .catch((err: unknown) => this.logger.warn('clearActiveOrder failed on cancel', err));
+        .catch((err: unknown) =>
+          this.logger.warn('clearActiveOrder failed on cancel', err),
+        );
     }
 
     // Publish order:cancelled for public WS
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: id, orderStatus: 'cancelled', deliveryStatus: null }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (cancel)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: id,
+          orderStatus: 'cancelled',
+          deliveryStatus: null,
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (cancel)', err),
+      );
 
-    this.webhooks.dispatch(user.establishment_id, 'order.cancelled', { order_id: id }).catch(
-      (err) => this.logger.warn('webhook dispatch failed for order.cancelled', err),
-    );
+    this.webhooks
+      .dispatch(user.establishment_id, 'order.cancelled', { order_id: id })
+      .catch((err) =>
+        this.logger.warn('webhook dispatch failed for order.cancelled', err),
+      );
     return updated;
   }
 
@@ -907,7 +1128,10 @@ export class OrdersService {
     this.assertManagerOrOwner(user);
     const order = await this.assertBelongs(id, user.establishment_id);
 
-    if (order.status !== OrderStatus.pending && order.status !== OrderStatus.assigned) {
+    if (
+      order.status !== OrderStatus.pending &&
+      order.status !== OrderStatus.assigned
+    ) {
       throw new ConflictException(
         `Cannot mark order ready in status '${order.status}'`,
       );
@@ -922,10 +1146,14 @@ export class OrdersService {
     });
 
     try {
-      this.gateway.broadcastToEstablishment(user.establishment_id, 'order:ready', {
-        orderId: id,
-        readyAt,
-      });
+      this.gateway.broadcastToEstablishment(
+        user.establishment_id,
+        'order:ready',
+        {
+          orderId: id,
+          readyAt,
+        },
+      );
     } catch (err) {
       this.logger.warn('WS broadcast failed for order:ready', err);
     }
@@ -934,17 +1162,26 @@ export class OrdersService {
     // receives an `order:recommendation` WS event. Only for pending orders — assigned
     // orders already have a courier. The jobId makes this idempotent.
     if (order.status === OrderStatus.pending) {
-      void this.prisma.establishment.findUnique({
-        where: { id: user.establishment_id },
-        select: { dispatch_mode: true },
-      }).then((est) => {
-        if (est?.dispatch_mode === DispatchMode.recommend) {
-          return this.dispatchQueue.add(
-            { orderId: id, establishmentId: user.establishment_id, attempt: 1 },
-            { jobId: `dispatch:${id}` },
-          );
-        }
-      }).catch((err: unknown) => this.logger.warn('Failed to enqueue dispatch job in markReady', err));
+      void this.prisma.establishment
+        .findUnique({
+          where: { id: user.establishment_id },
+          select: { dispatch_mode: true },
+        })
+        .then((est) => {
+          if (est?.dispatch_mode === DispatchMode.recommend) {
+            return this.dispatchQueue.add(
+              {
+                orderId: id,
+                establishmentId: user.establishment_id,
+                attempt: 1,
+              },
+              { jobId: `dispatch:${id}` },
+            );
+          }
+        })
+        .catch((err: unknown) =>
+          this.logger.warn('Failed to enqueue dispatch job in markReady', err),
+        );
     }
 
     this.logger.log(`Order ${id} marked ready at ${readyAt.toISOString()}`);
@@ -1016,19 +1253,24 @@ export class OrdersService {
         throw new ConflictException('Order has already been assigned');
       }
 
-      await tx.delivery.create({
-        data: {
-          order_id: id,
-          courier_id: courierId,
-          status: 'assigned',
-          ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
-        },
-      }).catch((err) => {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-          throw new ConflictException('Order is already being assigned');
-        }
-        throw err;
-      });
+      await tx.delivery
+        .create({
+          data: {
+            order_id: id,
+            courier_id: courierId,
+            status: 'assigned',
+            ...(etaSeconds !== null && { eta_seconds: etaSeconds }),
+          },
+        })
+        .catch((err) => {
+          if (
+            err instanceof Prisma.PrismaClientKnownRequestError &&
+            err.code === 'P2002'
+          ) {
+            throw new ConflictException('Order is already being assigned');
+          }
+          throw err;
+        });
 
       return tx.order.findUniqueOrThrow({ where: { id } });
     });
@@ -1040,13 +1282,19 @@ export class OrdersService {
         body: `Вам призначено доставку: ${order.address}`,
         data: { type: 'delivery_assigned', order_id: id },
       })
-      .catch((err) => this.logger.warn(`FCM push failed for courier ${courierId}`, err));
+      .catch((err) =>
+        this.logger.warn(`FCM push failed for courier ${courierId}`, err),
+      );
 
     try {
-      this.gateway.broadcastToEstablishment(user.establishment_id, 'order:assigned', {
-        order_id: id,
-        courier_id: courierId,
-      });
+      this.gateway.broadcastToEstablishment(
+        user.establishment_id,
+        'order:assigned',
+        {
+          order_id: id,
+          courier_id: courierId,
+        },
+      );
     } catch (err) {
       this.logger.warn('WS broadcast failed for order:assigned', err);
     }
@@ -1057,11 +1305,18 @@ export class OrdersService {
         `🚴 Доставку призначено курʼєру ${courier.name}: ${order.address}`,
         MANAGER_EVENT.DELIVERY_ASSIGNED,
       )
-      .catch((err: unknown) => this.logger.warn('Telegram notification failed (assign_recommended manager)', err));
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (assign_recommended manager)',
+          err,
+        ),
+      );
 
     this.webhooks
       .dispatch(user.establishment_id, 'order.assigned', { order_id: id })
-      .catch((err) => this.logger.warn('webhook dispatch failed for order.assigned', err));
+      .catch((err) =>
+        this.logger.warn('webhook dispatch failed for order.assigned', err),
+      );
 
     // Set courier:active_order Redis key for public tracking
     const createdDelivery = await this.prisma.delivery.findFirst({
@@ -1070,28 +1325,48 @@ export class OrdersService {
       orderBy: { assigned_at: 'desc' },
     });
     if (createdDelivery) {
-      this.trackingService.setActiveOrder(
-        courierId,
-        id,
-        createdDelivery.id,
-        order.lat,
-        order.lng,
-        courier.transport_mode,
-        establishment.lat,
-        establishment.lng,
-      ).catch((err) => this.logger.warn('setActiveOrder failed after assignRecommended', err));
+      this.trackingService
+        .setActiveOrder(
+          courierId,
+          id,
+          createdDelivery.id,
+          order.lat,
+          order.lng,
+          courier.transport_mode,
+          establishment.lat,
+          establishment.lng,
+        )
+        .catch((err) =>
+          this.logger.warn(
+            'setActiveOrder failed after assignRecommended',
+            err,
+          ),
+        );
     }
 
     // Publish delivery status for public WS
-    this.redis.publish(
-      PUBLIC_DELIVERY_STATUS_CHANNEL,
-      JSON.stringify({ orderId: id, orderStatus: 'assigned', deliveryStatus: 'assigned' }),
-    ).catch((err: unknown) => this.logger.warn('Redis publish failed (assign_recommended)', err));
+    this.redis
+      .publish(
+        PUBLIC_DELIVERY_STATUS_CHANNEL,
+        JSON.stringify({
+          orderId: id,
+          orderStatus: 'assigned',
+          deliveryStatus: 'assigned',
+        }),
+      )
+      .catch((err: unknown) =>
+        this.logger.warn('Redis publish failed (assign_recommended)', err),
+      );
 
     // Invalidate workload cache — fire-and-forget
-    this.couriersService.invalidateWorkloadCache(user.establishment_id).catch((err) =>
-      this.logger.warn('Failed to invalidate workload cache after assignRecommended', err),
-    );
+    this.couriersService
+      .invalidateWorkloadCache(user.establishment_id)
+      .catch((err) =>
+        this.logger.warn(
+          'Failed to invalidate workload cache after assignRecommended',
+          err,
+        ),
+      );
 
     return result;
   }
@@ -1119,7 +1394,9 @@ export class OrdersService {
     establishmentId: string,
   ): Promise<{ id: string } | null> {
     // Verify order belongs to establishment first
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
     if (!order || order.establishment_id !== establishmentId) return null;
 
     return this.prisma.delivery.findFirst({
@@ -1134,7 +1411,9 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException('Order not found');
     if (order.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Order does not belong to your establishment');
+      throw new ForbiddenException(
+        'Order does not belong to your establishment',
+      );
     }
     return order;
   }
@@ -1147,7 +1426,12 @@ export class OrdersService {
    * Returns a proximity_warning when the chosen coordinates are suspiciously far from the
    * establishment — the manager can override but should double-check before confirming.
    */
-  async updateCoordinates(id: string, lat: number, lng: number, user: AuthenticatedUser) {
+  async updateCoordinates(
+    id: string,
+    lat: number,
+    lng: number,
+    user: AuthenticatedUser,
+  ) {
     this.assertManagerOrOwner(user);
     const order = await this.assertBelongs(id, user.establishment_id);
 
@@ -1174,11 +1458,15 @@ export class OrdersService {
     });
 
     // Broadcast to all managers of this establishment so the dashboard updates in real time
-    this.gateway.broadcastToEstablishment(user.establishment_id, 'order:coords_ready', {
-      order_id: order.id,
-      lat,
-      lng,
-    });
+    this.gateway.broadcastToEstablishment(
+      user.establishment_id,
+      'order:coords_ready',
+      {
+        order_id: order.id,
+        lat,
+        lng,
+      },
+    );
 
     // Re-trigger auto-dispatch if the order is still pending.
     // Covers the case where geocoding failed (address not found / proximity check rejected)
@@ -1191,11 +1479,19 @@ export class OrdersService {
           { jobId: `dispatch:${id}` },
         )
         .catch((err) =>
-          this.logger.warn(`Failed to enqueue dispatch after manual coord update for order ${id}`, err),
+          this.logger.warn(
+            `Failed to enqueue dispatch after manual coord update for order ${id}`,
+            err,
+          ),
         );
     }
 
-    return { id, lat, lng, ...(proximityWarning ? { proximity_warning: proximityWarning } : {}) };
+    return {
+      id,
+      lat,
+      lng,
+      ...(proximityWarning ? { proximity_warning: proximityWarning } : {}),
+    };
   }
 
   private assertManagerOrOwner(user: AuthenticatedUser): void {

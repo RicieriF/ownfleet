@@ -17,7 +17,9 @@ export class WebhookDispatchProcessor {
   async handleDeliver(job: Job<WebhookJob>): Promise<void> {
     const { webhookId, event, payload } = job.data;
 
-    const webhook = await this.prisma.webhook.findUnique({ where: { id: webhookId } });
+    const webhook = await this.prisma.webhook.findUnique({
+      where: { id: webhookId },
+    });
     if (!webhook || !webhook.active) {
       // Deleted or disabled since it was queued — skip silently
       return;
@@ -65,7 +67,9 @@ export class WebhookDispatchProcessor {
       if (this.isFinalAttempt(job)) {
         await this.recordFailure(webhookId, errorMsg);
       }
-      throw new Error(`Webhook delivery failed: ${errorMsg} for ${webhook.url}`);
+      throw new Error(
+        `Webhook delivery failed: ${errorMsg} for ${webhook.url}`,
+      );
     }
 
     // ── Success ─────────────────────────────────────────────────────────
@@ -74,7 +78,9 @@ export class WebhookDispatchProcessor {
       data: { consecutive_failures: 0, last_error: null, last_error_at: null },
     });
 
-    this.logger.debug(`Delivered event "${event}" to ${webhook.url} [webhook: ${webhookId}]`);
+    this.logger.debug(
+      `Delivered event "${event}" to ${webhook.url} [webhook: ${webhookId}]`,
+    );
   }
 
   /**
@@ -102,6 +108,11 @@ export class WebhookDispatchProcessor {
           last_error_at: new Date(),
         },
       })
-      .catch((e) => this.logger.error(`Failed to record webhook failure for ${webhookId}`, e));
+      .catch((e) =>
+        this.logger.error(
+          `Failed to record webhook failure for ${webhookId}`,
+          e,
+        ),
+      );
   }
 }

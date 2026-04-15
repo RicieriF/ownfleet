@@ -10,12 +10,12 @@ global.fetch = mockFetch;
 
 const makeOsrmOk = (duration: number) => ({
   ok: true,
-  json: async () => ({ code: 'Ok', routes: [{ duration }] }),
+  json: () => Promise.resolve({ code: 'Ok', routes: [{ duration }] }),
 });
 
 const makeOsrmBadCode = (code: string) => ({
   ok: true,
-  json: async () => ({ code, routes: [] }),
+  json: () => Promise.resolve({ code, routes: [] }),
 });
 
 const makeHttpError = (status: number) => ({ ok: false, status });
@@ -57,7 +57,10 @@ describe('EtaService', () => {
         EtaService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: TelegramService, useValue: mockTelegramService },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -73,7 +76,9 @@ describe('EtaService', () => {
 
   describe('calculateEta', () => {
     // Pin time to 14:00 UTC — outside peak hours (7–9, 17–19) so coefficient = 1.0
-    beforeAll(() => jest.useFakeTimers({ now: new Date('2024-01-15T14:00:00.000Z') }));
+    beforeAll(() =>
+      jest.useFakeTimers({ now: new Date('2024-01-15T14:00:00.000Z') }),
+    );
     afterAll(() => jest.useRealTimers());
 
     it('car mode → returns OSRM duration + 3-minute buffer', async () => {
@@ -88,7 +93,10 @@ describe('EtaService', () => {
     it('moto_electric → applies 50/35 speed correction before buffer', async () => {
       mockFetch.mockResolvedValue(makeOsrmOk(300));
 
-      const result = await service.calculateEta({ ...BASE_PARAMS, transportMode: 'moto_electric' });
+      const result = await service.calculateEta({
+        ...BASE_PARAMS,
+        transportMode: 'moto_electric',
+      });
 
       expect(result).toBe(Math.round(300 * MOTO_ELECTRIC_FACTOR + BUFFER));
     });
@@ -96,17 +104,26 @@ describe('EtaService', () => {
     it('moto_gas → no speed correction (same as car)', async () => {
       mockFetch.mockResolvedValue(makeOsrmOk(300));
 
-      const result = await service.calculateEta({ ...BASE_PARAMS, transportMode: 'moto_gas' });
+      const result = await service.calculateEta({
+        ...BASE_PARAMS,
+        transportMode: 'moto_gas',
+      });
 
       expect(result).toBe(480);
     });
 
     it('bicycle and walking → no moto correction applied', async () => {
       mockFetch.mockResolvedValue(makeOsrmOk(600));
-      const bicycle = await service.calculateEta({ ...BASE_PARAMS, transportMode: 'bicycle' });
+      const bicycle = await service.calculateEta({
+        ...BASE_PARAMS,
+        transportMode: 'bicycle',
+      });
 
       mockFetch.mockResolvedValue(makeOsrmOk(600));
-      const walking = await service.calculateEta({ ...BASE_PARAMS, transportMode: 'walking' });
+      const walking = await service.calculateEta({
+        ...BASE_PARAMS,
+        transportMode: 'walking',
+      });
 
       expect(bicycle).toBe(780);
       expect(walking).toBe(780);
@@ -120,7 +137,9 @@ describe('EtaService', () => {
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain('/route/v1/driving/');
       // OSRM expects lng,lat — not lat,lng
-      expect(url).toContain(`${BASE_PARAMS.establishmentLng},${BASE_PARAMS.establishmentLat}`);
+      expect(url).toContain(
+        `${BASE_PARAMS.establishmentLng},${BASE_PARAMS.establishmentLat}`,
+      );
       expect(url).toContain(`${BASE_PARAMS.orderLng},${BASE_PARAMS.orderLat}`);
     });
 
@@ -151,7 +170,7 @@ describe('EtaService', () => {
     it('empty routes array → returns null', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ code: 'Ok', routes: [] }),
+        json: () => Promise.resolve({ code: 'Ok', routes: [] }),
       });
 
       const result = await service.calculateEta(BASE_PARAMS);
@@ -186,7 +205,9 @@ describe('EtaService', () => {
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('skips delivery when eta_alert_enabled = false', async () => {
@@ -196,7 +217,10 @@ describe('EtaService', () => {
           order: {
             address: 'addr',
             establishment_id: 'est-1',
-            establishment: { settings: { eta_alert_enabled: false }, timezone: 'UTC' },
+            establishment: {
+              settings: { eta_alert_enabled: false },
+              timezone: 'UTC',
+            },
           },
         },
       ]);
@@ -204,13 +228,17 @@ describe('EtaService', () => {
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(0);
-      expect(mockTelegramService.notifyEstablishmentManagers).not.toHaveBeenCalled();
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).not.toHaveBeenCalled();
     });
 
     it('skips delivery that is not yet overdue', async () => {
       // started 2 min ago, ETA 10 min, delay 5 min → overdue in 13 min from now
       mockDelivery.findMany.mockResolvedValue([
-        makeOverdueDelivery({ eta_started_at: new Date(Date.now() - 2 * 60_000) }),
+        makeOverdueDelivery({
+          eta_started_at: new Date(Date.now() - 2 * 60_000),
+        }),
       ]);
 
       const result = await service.checkOverdueDeliveries();
@@ -224,7 +252,9 @@ describe('EtaService', () => {
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(1);
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(
         'est-1',
         expect.stringContaining('Ivan'),
         'delivery_assigned',
@@ -239,12 +269,17 @@ describe('EtaService', () => {
       // started 25 min ago, ETA 10 min, delay null (default 10 min) → overdue by 5 min
       mockDelivery.findMany.mockResolvedValue([
         {
-          ...makeOverdueDelivery({ eta_started_at: new Date(Date.now() - 25 * 60_000) }),
+          ...makeOverdueDelivery({
+            eta_started_at: new Date(Date.now() - 25 * 60_000),
+          }),
           order: {
             address: 'addr',
             establishment_id: 'est-1',
             establishment: {
-              settings: { eta_alert_enabled: true, eta_alert_delay_minutes: null },
+              settings: {
+                eta_alert_enabled: true,
+                eta_alert_delay_minutes: null,
+              },
               timezone: 'UTC',
             },
           },
@@ -257,7 +292,11 @@ describe('EtaService', () => {
     });
 
     it('batches multiple overdue deliveries into a single updateMany', async () => {
-      const d2 = { ...makeOverdueDelivery(), id: 'd2', courier: { name: 'Petro' } };
+      const d2 = {
+        ...makeOverdueDelivery(),
+        id: 'd2',
+        courier: { name: 'Petro' },
+      };
       mockDelivery.findMany.mockResolvedValue([makeOverdueDelivery(), d2]);
 
       const result = await service.checkOverdueDeliveries();

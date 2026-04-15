@@ -52,7 +52,10 @@ export class OnboardingService {
     });
 
     // Advance onboarding status to couriers_added if still pending
-    await this.tryAdvanceOnboarding(user.establishment_id, OnboardingStatus.couriers_added);
+    await this.tryAdvanceOnboarding(
+      user.establishment_id,
+      OnboardingStatus.couriers_added,
+    );
 
     this.logger.log(`Invite created for courier ${courierId} by ${user.id}`);
 
@@ -105,7 +108,11 @@ export class OnboardingService {
 
   // ── Courier (public): accept invite ────────────────────────────────────
 
-  async acceptInvite(token: string, password: string, transportMode: TransportMode) {
+  async acceptInvite(
+    token: string,
+    password: string,
+    transportMode: TransportMode,
+  ) {
     const now = new Date();
 
     // Atomic claim: only succeeds if token exists, unused, and not expired.
@@ -115,9 +122,12 @@ export class OnboardingService {
     });
 
     if (updated.count === 0) {
-      const invite = await this.prisma.inviteToken.findUnique({ where: { token } });
+      const invite = await this.prisma.inviteToken.findUnique({
+        where: { token },
+      });
       if (!invite) throw new NotFoundException('Invalid invite token');
-      if (invite.used_at) throw new BadRequestException('Invite token has already been used');
+      if (invite.used_at)
+        throw new BadRequestException('Invite token has already been used');
       throw new BadRequestException('Invite token has expired');
     }
 
@@ -137,7 +147,9 @@ export class OnboardingService {
       where: { courier_id: courier.id },
     });
     if (existingUser) {
-      throw new ConflictException('Courier account already exists. Please log in instead.');
+      throw new ConflictException(
+        'Courier account already exists. Please log in instead.',
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -161,7 +173,9 @@ export class OnboardingService {
       }),
     ]);
 
-    this.logger.log(`Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`);
+    this.logger.log(
+      `Courier account created for courier ${courier.id} (est: ${invite!.establishment_id})`,
+    );
 
     // Issue tokens so the courier is immediately logged in after accepting invite
     const payload: JwtPayload = {
@@ -181,7 +195,10 @@ export class OnboardingService {
     });
 
     const rawRefresh = crypto.randomBytes(64).toString('hex');
-    const refreshHash = crypto.createHash('sha256').update(rawRefresh).digest('hex');
+    const refreshHash = crypto
+      .createHash('sha256')
+      .update(rawRefresh)
+      .digest('hex');
     await this.prisma.refreshToken.create({
       data: {
         user_id: user.id,

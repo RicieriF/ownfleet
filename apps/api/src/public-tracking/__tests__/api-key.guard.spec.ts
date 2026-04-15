@@ -1,4 +1,9 @@
-import { ExecutionContext, ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  HttpException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiKeyGuard } from '../guards/api-key.guard.js';
 import { ApiKeysService } from '../../api-keys/api-keys.service.js';
 
@@ -83,7 +88,10 @@ describe('ApiKeyGuard', () => {
 
   it('throws UnauthorizedException when key is invalid', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(null);
-    const ctx = makeCtx({ key: 'wgo_bad_key' }, { origin: 'https://pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_bad_key' },
+      { origin: 'https://pizza.com' },
+    );
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
@@ -94,7 +102,10 @@ describe('ApiKeyGuard', () => {
       ...validKeyRecord,
       allowed_domains: [],
     });
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+    );
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
@@ -102,13 +113,19 @@ describe('ApiKeyGuard', () => {
 
   it('throws ForbiddenException when Origin domain not in allowed list', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://evil.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://evil.com' },
+    );
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
   it('allows exact domain match', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+    );
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
@@ -117,7 +134,10 @@ describe('ApiKeyGuard', () => {
     // Wildcard subdomain matching was removed: subdomain takeover (*.pizza.com) must not
     // grant access. expandDomains() stores exactly [host, www.host], nothing broader.
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://order.pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://order.pizza.com' },
+    );
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
@@ -125,8 +145,13 @@ describe('ApiKeyGuard', () => {
     // Security fix: Referer can be spoofed by server-side requests; only Origin is trusted.
     // A missing Origin with no localhost fallback must be denied.
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { referer: 'https://pizza.com/menu' });
-    await expect(guard.canActivate(ctx)).rejects.toThrow('Domain not allowed for this API key');
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { referer: 'https://pizza.com/menu' },
+    );
+    await expect(guard.canActivate(ctx)).rejects.toThrow(
+      'Domain not allowed for this API key',
+    );
   });
 
   // ── Per-key throttle ──────────────────────────────────────────────────────
@@ -228,12 +253,20 @@ describe('ApiKeyGuard', () => {
       exec: jest.fn().mockResolvedValue(makePipelineResult(5, 16)),
     };
 
-    mockRedis.multi
-      .mockReturnValueOnce(multiA)
-      .mockReturnValueOnce(multiB);
+    mockRedis.multi.mockReturnValueOnce(multiA).mockReturnValueOnce(multiB);
 
-    const ctxA = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' }, { externalId: 'order-1' }, '1.1.1.1');
-    const ctxB = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' }, { externalId: 'order-1' }, '2.2.2.2');
+    const ctxA = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
+      '1.1.1.1',
+    );
+    const ctxB = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+      { externalId: 'order-1' },
+      '2.2.2.2',
+    );
 
     await expect(guard.canActivate(ctxA)).resolves.toBe(true);
     await expect(guard.canActivate(ctxB)).rejects.toThrow(HttpException);
@@ -288,7 +321,10 @@ describe('ApiKeyGuard', () => {
 
   it('skips throttle check when no externalId in query or params', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+    );
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
     expect(mockRedis.multi).not.toHaveBeenCalled();
@@ -298,7 +334,12 @@ describe('ApiKeyGuard', () => {
 
   it('decorates req.apiKey with id, establishment_id, key_prefix', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const req: any = { query: { key: 'wgo_validkey' }, headers: { origin: 'https://pizza.com' }, params: {}, ip: '1.2.3.4' };
+    const req: any = {
+      query: { key: 'wgo_validkey' },
+      headers: { origin: 'https://pizza.com' },
+      params: {},
+      ip: '1.2.3.4',
+    };
     const ctx: any = { switchToHttp: () => ({ getRequest: () => req }) };
 
     await guard.canActivate(ctx);
@@ -314,9 +355,15 @@ describe('ApiKeyGuard', () => {
 
   it('calls updateLastUsed fire-and-forget', async () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'https://pizza.com' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'https://pizza.com' },
+    );
     await guard.canActivate(ctx);
-    expect(mockApiKeysService.updateLastUsed).toHaveBeenCalledWith('k1', 'pizza.com');
+    expect(mockApiKeysService.updateLastUsed).toHaveBeenCalledWith(
+      'k1',
+      'pizza.com',
+    );
   });
 
   // ── localhost always allowed ──────────────────────────────────────────────
@@ -326,7 +373,10 @@ describe('ApiKeyGuard', () => {
       ...validKeyRecord,
       allowed_domains: [],
     });
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'http://localhost:3000' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'http://localhost:3000' },
+    );
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
@@ -336,7 +386,10 @@ describe('ApiKeyGuard', () => {
       ...validKeyRecord,
       allowed_domains: [],
     });
-    const ctx = makeCtx({ key: 'wgo_validkey' }, { origin: 'http://127.0.0.1:8080' });
+    const ctx = makeCtx(
+      { key: 'wgo_validkey' },
+      { origin: 'http://127.0.0.1:8080' },
+    );
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
@@ -366,7 +419,7 @@ describe('ApiKeyGuard', () => {
     mockApiKeysService.verifyKey.mockResolvedValue(validKeyRecord);
 
     const ctx = makeCtx(
-      { key: 'wgo_validkey' },          // query: only API key
+      { key: 'wgo_validkey' }, // query: only API key
       { origin: 'https://pizza.com' },
       { externalId: 'order-from-path' }, // params: externalId from URL path
     );

@@ -31,20 +31,21 @@ export interface EstablishmentSettings {
   locale: string;
 }
 
-export const ESTABLISHMENT_SETTINGS_DEFAULTS: Readonly<EstablishmentSettings> = {
-  retention_orders_days: 90,
-  retention_pings_days: 3,
-  courier_not_responding_min: 15,
-  show_sla_on_dashboard: false,
-  eta_alert_enabled: false,
-  eta_alert_delay_minutes: 10,
-  dispatch_recommend_timeout_minutes: null,
-  dispatch_recommend_radius_km: 1,
-  dispatch_anomaly_threshold_minutes: 30,
-  dispatch_anomaly_min_deliveries: 5,
-  dispatch_no_courier_escalation_minutes: 10,
-  locale: 'uk',
-};
+export const ESTABLISHMENT_SETTINGS_DEFAULTS: Readonly<EstablishmentSettings> =
+  {
+    retention_orders_days: 90,
+    retention_pings_days: 3,
+    courier_not_responding_min: 15,
+    show_sla_on_dashboard: false,
+    eta_alert_enabled: false,
+    eta_alert_delay_minutes: 10,
+    dispatch_recommend_timeout_minutes: null,
+    dispatch_recommend_radius_km: 1,
+    dispatch_anomaly_threshold_minutes: 30,
+    dispatch_anomaly_min_deliveries: 5,
+    dispatch_no_courier_escalation_minutes: 10,
+    locale: 'uk',
+  };
 
 /**
  * Parses the raw JSONB `settings` value from the DB into a fully-typed object.
@@ -53,14 +54,17 @@ export const ESTABLISHMENT_SETTINGS_DEFAULTS: Readonly<EstablishmentSettings> = 
  * NOTE: `retention_orders_days` also checks the legacy key `retention_days`
  * (used before the column was renamed) for backward compatibility with existing rows.
  */
-export function parseEstablishmentSettings(raw: unknown): EstablishmentSettings {
+export function parseEstablishmentSettings(
+  raw: unknown,
+): EstablishmentSettings {
   const d = ESTABLISHMENT_SETTINGS_DEFAULTS;
   if (raw === null || typeof raw !== 'object') return { ...d };
   const s = raw as Record<string, unknown>;
 
   return {
     retention_orders_days:
-      typeof s['retention_orders_days'] === 'number' && s['retention_orders_days'] > 0
+      typeof s['retention_orders_days'] === 'number' &&
+      s['retention_orders_days'] > 0
         ? s['retention_orders_days']
         : // legacy key written before the field was renamed — keep reading for backward compat
           typeof s['retention_days'] === 'number' && s['retention_days'] > 0
@@ -68,12 +72,14 @@ export function parseEstablishmentSettings(raw: unknown): EstablishmentSettings 
           : d.retention_orders_days,
 
     retention_pings_days:
-      typeof s['retention_pings_days'] === 'number' && s['retention_pings_days'] > 0
+      typeof s['retention_pings_days'] === 'number' &&
+      s['retention_pings_days'] > 0
         ? s['retention_pings_days']
         : d.retention_pings_days,
 
     courier_not_responding_min:
-      typeof s['courier_not_responding_min'] === 'number' && s['courier_not_responding_min'] > 0
+      typeof s['courier_not_responding_min'] === 'number' &&
+      s['courier_not_responding_min'] > 0
         ? s['courier_not_responding_min']
         : d.courier_not_responding_min,
 
@@ -82,7 +88,8 @@ export function parseEstablishmentSettings(raw: unknown): EstablishmentSettings 
     eta_alert_enabled: s['eta_alert_enabled'] === true,
 
     eta_alert_delay_minutes:
-      typeof s['eta_alert_delay_minutes'] === 'number' && s['eta_alert_delay_minutes'] > 0
+      typeof s['eta_alert_delay_minutes'] === 'number' &&
+      s['eta_alert_delay_minutes'] > 0
         ? s['eta_alert_delay_minutes']
         : d.eta_alert_delay_minutes,
 
@@ -92,7 +99,8 @@ export function parseEstablishmentSettings(raw: unknown): EstablishmentSettings 
         : d.dispatch_recommend_timeout_minutes,
 
     dispatch_recommend_radius_km:
-      typeof s['dispatch_recommend_radius_km'] === 'number' && s['dispatch_recommend_radius_km'] > 0
+      typeof s['dispatch_recommend_radius_km'] === 'number' &&
+      s['dispatch_recommend_radius_km'] > 0
         ? s['dispatch_recommend_radius_km']
         : d.dispatch_recommend_radius_km,
 

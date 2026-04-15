@@ -22,7 +22,10 @@ export interface CourierTelegramPrefs {
 
 export type ManagerTelegramEvent = keyof ManagerTelegramPrefs;
 // Explicit union — excludes `shift_ending_soon_min` (a config value, not an event)
-export type CourierTelegramEvent = 'delivery_assigned' | 'manager_reminder' | 'shift_ending_soon';
+export type CourierTelegramEvent =
+  | 'delivery_assigned'
+  | 'manager_reminder'
+  | 'shift_ending_soon';
 
 /**
  * Named constants for all manager Telegram event types.

@@ -12,7 +12,10 @@ export class DispatchService implements OnModuleInit {
     private readonly prisma: PrismaService,
   ) {}
 
-  async enqueueDispatch(orderId: string, establishmentId: string): Promise<void> {
+  async enqueueDispatch(
+    orderId: string,
+    establishmentId: string,
+  ): Promise<void> {
     await this.dispatchQueue.add(
       { orderId, establishmentId, attempt: 1 },
       { jobId: `dispatch:${orderId}` },
@@ -31,7 +34,9 @@ export class DispatchService implements OnModuleInit {
     });
 
     if (pendingOrders.length > 0) {
-      this.logger.log(`Requeuing ${pendingOrders.length} pending orders on startup`);
+      this.logger.log(
+        `Requeuing ${pendingOrders.length} pending orders on startup`,
+      );
       for (const order of pendingOrders) {
         await this.enqueueDispatch(order.id, order.establishment_id);
       }

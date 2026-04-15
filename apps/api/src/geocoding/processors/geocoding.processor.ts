@@ -8,7 +8,11 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { GeocodingService, GeocodeJob } from '../geocoding.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { MANAGER_EVENT } from '../../telegram/telegram.types.js';
-import { GEOCODING_QUEUE, GEOCODING_DONE_CHANNEL, GEOCODING_FAILED_CHANNEL } from '../geocoding.constants.js';
+import {
+  GEOCODING_QUEUE,
+  GEOCODING_DONE_CHANNEL,
+  GEOCODING_FAILED_CHANNEL,
+} from '../geocoding.constants.js';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 import { haversineMeters } from '../../shared/geo.js';
 
@@ -76,8 +80,15 @@ export class GeocodingProcessor {
     const coords = await this.geocodingService.geocode(fullAddress);
 
     if (!coords) {
-      this.logger.warn(`Geocoding returned null for order ${orderId}, address: "${fullAddress}"`);
-      await this.alertGeocodingFailure(orderId, address, establishmentId, 'not_found');
+      this.logger.warn(
+        `Geocoding returned null for order ${orderId}, address: "${fullAddress}"`,
+      );
+      await this.alertGeocodingFailure(
+        orderId,
+        address,
+        establishmentId,
+        'not_found',
+      );
       return; // order stays with lat=null; recovery cron will retry after negative-cache TTL (10 min)
     }
 
@@ -87,7 +98,12 @@ export class GeocodingProcessor {
     // to a different city — reject it to avoid routing couriers to the wrong location.
     if (establishment?.lat != null && establishment?.lng != null) {
       const distanceKm =
-        haversineMeters(establishment.lat, establishment.lng, coords.lat, coords.lng) / 1000;
+        haversineMeters(
+          establishment.lat,
+          establishment.lng,
+          coords.lat,
+          coords.lng,
+        ) / 1000;
 
       if (distanceKm > GEOCODE_PROXIMITY_MAX_KM) {
         this.logger.error(
@@ -95,7 +111,12 @@ export class GeocodingProcessor {
             `result is ${distanceKm.toFixed(1)} km from establishment (max ${GEOCODE_PROXIMITY_MAX_KM} km). ` +
             `Address: "${address}" → geocoded to ${coords.lat},${coords.lng}. Coordinates rejected.`,
         );
-        await this.alertGeocodingFailure(orderId, address, establishmentId, 'proximity_failed');
+        await this.alertGeocodingFailure(
+          orderId,
+          address,
+          establishmentId,
+          'proximity_failed',
+        );
         return; // order stays with lat=null; manager must set coordinates manually
       }
     }
@@ -108,18 +129,33 @@ export class GeocodingProcessor {
       });
     } catch (err) {
       // P2025: order was deleted (e.g. by retention) between enqueue and processing — skip silently
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-        this.logger.warn(`Geocoding skipped — order ${orderId} no longer exists`);
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2025'
+      ) {
+        this.logger.warn(
+          `Geocoding skipped — order ${orderId} no longer exists`,
+        );
         return;
       }
       throw err;
     }
 
     // ── Notify dashboard and public tracking ───────────────────────────────
-    const donePayload: GeocodingDonePayload = { orderId, lat: coords.lat, lng: coords.lng, establishmentId };
-    await this.redis.publish(GEOCODING_DONE_CHANNEL, JSON.stringify(donePayload));
+    const donePayload: GeocodingDonePayload = {
+      orderId,
+      lat: coords.lat,
+      lng: coords.lng,
+      establishmentId,
+    };
+    await this.redis.publish(
+      GEOCODING_DONE_CHANNEL,
+      JSON.stringify(donePayload),
+    );
 
-    this.logger.log(`Geocoded order ${orderId} ("${fullAddress}"): ${coords.lat},${coords.lng}`);
+    this.logger.log(
+      `Geocoded order ${orderId} ("${fullAddress}"): ${coords.lat},${coords.lng}`,
+    );
 
     // ── Trigger auto-dispatch if order is still pending ────────────────────
     // When an order is created in auto-dispatch mode but has no coordinates yet,
@@ -139,7 +175,12 @@ export class GeocodingProcessor {
     this.logger.error(
       `Geocoding permanently failed for order ${orderId} after all retries: ${err.message}`,
     );
-    await this.alertGeocodingFailure(orderId, address, establishmentId, 'transient_failure');
+    await this.alertGeocodingFailure(
+      orderId,
+      address,
+      establishmentId,
+      'transient_failure',
+    );
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -162,10 +203,17 @@ export class GeocodingProcessor {
     await this.redis.set(dedupKey, reason, 'EX', GEOCODE_ALERT_DEDUP_TTL);
 
     // Broadcast to dashboard via WS (TrackingGateway subscribes to this channel)
-    const failedPayload: GeocodingFailedPayload = { orderId, address, establishmentId, reason };
+    const failedPayload: GeocodingFailedPayload = {
+      orderId,
+      address,
+      establishmentId,
+      reason,
+    };
     this.redis
       .publish(GEOCODING_FAILED_CHANNEL, JSON.stringify(failedPayload))
-      .catch((err) => this.logger.warn('Failed to publish geocoding:failed event', err));
+      .catch((err) =>
+        this.logger.warn('Failed to publish geocoding:failed event', err),
+      );
 
     // Telegram — fire-and-forget (never blocks delivery flow)
     const reasonText =
@@ -182,7 +230,11 @@ export class GeocodingProcessor {
       `Встановіть координати вручну через кнопку «Карта» у дашборді.`;
 
     this.telegram
-      .notifyEstablishmentManagers(establishmentId, message, MANAGER_EVENT.GEOCODE_FAILED)
+      .notifyEstablishmentManagers(
+        establishmentId,
+        message,
+        MANAGER_EVENT.GEOCODE_FAILED,
+      )
       .catch((err) => this.logger.warn('Telegram geocoding alert failed', err));
   }
 
@@ -192,23 +244,34 @@ export class GeocodingProcessor {
   ): Promise<void> {
     try {
       const [order, establishment] = await Promise.all([
-        this.prisma.order.findUnique({ where: { id: orderId }, select: { status: true } }),
+        this.prisma.order.findUnique({
+          where: { id: orderId },
+          select: { status: true },
+        }),
         this.prisma.establishment.findUnique({
           where: { id: establishmentId },
           select: { dispatch_mode: true },
         }),
       ]);
 
-      if (order?.status === 'pending' && establishment?.dispatch_mode === 'auto') {
+      if (
+        order?.status === 'pending' &&
+        establishment?.dispatch_mode === 'auto'
+      ) {
         await this.dispatchQueue.add(
           { orderId, establishmentId, attempt: 1 },
           { jobId: `dispatch:${orderId}` },
         );
-        this.logger.log(`Auto-dispatch re-triggered for order ${orderId} after geocoding`);
+        this.logger.log(
+          `Auto-dispatch re-triggered for order ${orderId} after geocoding`,
+        );
       }
     } catch (err) {
       // Non-critical: dispatch will be retried by the next recommend-timeout-check cron
-      this.logger.warn(`Failed to trigger auto-dispatch for order ${orderId} after geocoding`, err);
+      this.logger.warn(
+        `Failed to trigger auto-dispatch for order ${orderId} after geocoding`,
+        err,
+      );
     }
   }
 }

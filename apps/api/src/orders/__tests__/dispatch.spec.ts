@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
   ForbiddenException,
-  BadRequestException,
   ConflictException,
 } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bull';
@@ -21,7 +20,11 @@ import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
 const EST_A = 'est-a';
 
 const manager: any = { id: 'u1', establishment_id: EST_A, role: 'manager' };
-const dispatcher: any = { id: 'u2', establishment_id: EST_A, role: 'dispatcher' };
+const dispatcher: any = {
+  id: 'u2',
+  establishment_id: EST_A,
+  role: 'dispatcher',
+};
 
 // Order fixtures
 const pendingOrder = {
@@ -80,11 +83,6 @@ const estWithRecommend = {
   ...estWithAuto,
   dispatch_mode: 'recommend',
 };
-const estWithManual = {
-  ...estWithAuto,
-  dispatch_mode: 'manual',
-};
-
 const mockDispatchQueue = { add: jest.fn().mockResolvedValue(undefined) };
 
 const mockTx = {
@@ -129,11 +127,17 @@ const mockTelegramService = {
   notifyCourier: jest.fn().mockResolvedValue(undefined),
 };
 
-const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
+const mockWebhooksService = {
+  dispatch: jest.fn().mockResolvedValue(undefined),
+};
 const mockEtaService = { calculateEta: jest.fn().mockResolvedValue(300) };
 const mockGateway = { broadcastToEstablishment: jest.fn() };
-const mockNotificationsService = { sendPush: jest.fn().mockResolvedValue(undefined) };
-const mockCouriersService = { invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined) };
+const mockNotificationsService = {
+  sendPush: jest.fn().mockResolvedValue(undefined),
+};
+const mockCouriersService = {
+  invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined),
+};
 
 // ── OrdersService dispatch tests ─────────────────────────────────────────────
 
@@ -149,11 +153,20 @@ describe('OrdersService — dispatch algorithm', () => {
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TrackingGateway, useValue: mockGateway },
-        { provide: TrackingService, useValue: { setActiveOrder: jest.fn().mockResolvedValue(undefined), clearActiveOrder: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: TrackingService,
+          useValue: {
+            setActiveOrder: jest.fn().mockResolvedValue(undefined),
+            clearActiveOrder: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
-        { provide: REDIS_CLIENT, useValue: { publish: jest.fn().mockResolvedValue(1) } },
+        {
+          provide: REDIS_CLIENT,
+          useValue: { publish: jest.fn().mockResolvedValue(1) },
+        },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);
@@ -237,16 +250,18 @@ describe('OrdersService — dispatch algorithm', () => {
       mockPrisma.order.findUnique.mockResolvedValue(null);
       mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
 
-      await expect(service.runDispatchAlgorithm('nonexistent', EST_A)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.runDispatchAlgorithm('nonexistent', EST_A),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('OSRM fails for all couriers → returns { error: eta_unavailable, canRetry: true }', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
       mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
       mockPrisma.$queryRaw.mockResolvedValue([makeWorkloadRow(100)]);
-      mockEtaService.calculateEta.mockRejectedValue(new Error('OSRM unavailable'));
+      mockEtaService.calculateEta.mockRejectedValue(
+        new Error('OSRM unavailable'),
+      );
 
       const result = await service.runDispatchAlgorithm('order-1', EST_A);
 
@@ -287,7 +302,11 @@ describe('OrdersService — dispatch algorithm', () => {
         .mockResolvedValueOnce(400);
 
       // assignCourier dependencies for auto-assign of c2
-      mockPrisma.courier.findUnique.mockResolvedValue({ ...courierA, id: 'c2', name: 'Petro' });
+      mockPrisma.courier.findUnique.mockResolvedValue({
+        ...courierA,
+        id: 'c2',
+        name: 'Petro',
+      });
       mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithAuto);
 
       const result = await service.runDispatchAlgorithm('order-1', EST_A);
@@ -323,7 +342,10 @@ describe('OrdersService — dispatch algorithm', () => {
   describe('markReady', () => {
     it('pending order → sets ready_at and broadcasts order:ready WS event', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
-      mockPrisma.order.update.mockResolvedValue({ ...pendingOrder, ready_at: new Date() });
+      mockPrisma.order.update.mockResolvedValue({
+        ...pendingOrder,
+        ready_at: new Date(),
+      });
 
       await service.markReady('order-1', manager);
 
@@ -345,9 +367,14 @@ describe('OrdersService — dispatch algorithm', () => {
 
     it('assigned order → also sets ready_at without throwing', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(assignedOrder);
-      mockPrisma.order.update.mockResolvedValue({ ...assignedOrder, ready_at: new Date() });
+      mockPrisma.order.update.mockResolvedValue({
+        ...assignedOrder,
+        ready_at: new Date(),
+      });
 
-      await expect(service.markReady('order-2', manager)).resolves.not.toThrow();
+      await expect(
+        service.markReady('order-2', manager),
+      ).resolves.not.toThrow();
 
       expect(mockPrisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -359,13 +386,17 @@ describe('OrdersService — dispatch algorithm', () => {
     it('completed order → throws ConflictException', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(completedOrder);
 
-      await expect(service.markReady('order-3', manager)).rejects.toThrow(ConflictException);
+      await expect(service.markReady('order-3', manager)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('dispatcher user → throws ForbiddenException', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
 
-      await expect(service.markReady('order-1', dispatcher)).rejects.toThrow(ForbiddenException);
+      await expect(service.markReady('order-1', dispatcher)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -396,16 +427,18 @@ describe('OrdersService — dispatch algorithm', () => {
         'order.assigned',
         { order_id: 'order-1' },
       );
-      expect(mockCouriersService.invalidateWorkloadCache).toHaveBeenCalledWith(EST_A);
+      expect(mockCouriersService.invalidateWorkloadCache).toHaveBeenCalledWith(
+        EST_A,
+      );
       expect(result).toEqual(assignedOrder);
     });
 
     it('race condition (updateMany count=0) → throws ConflictException', async () => {
       mockTx.order.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.assignRecommended('order-1', 'c1', manager)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.assignRecommended('order-1', 'c1', manager),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('courier from different establishment → throws NotFoundException', async () => {
@@ -414,15 +447,15 @@ describe('OrdersService — dispatch algorithm', () => {
         establishment_id: 'est-b',
       });
 
-      await expect(service.assignRecommended('order-1', 'c1', manager)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.assignRecommended('order-1', 'c1', manager),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('dispatcher cannot assign-recommended → throws ForbiddenException', async () => {
-      await expect(service.assignRecommended('order-1', 'c1', dispatcher)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        service.assignRecommended('order-1', 'c1', dispatcher),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });
@@ -434,7 +467,10 @@ describe('DispatchProcessor', () => {
   let mockOrdersService: { runDispatchAlgorithm: jest.Mock };
   let mockProcessorQueue: { add: jest.Mock };
   let mockProcessorGateway: { broadcastToEstablishment: jest.Mock };
-  let mockProcessorPrisma: { establishment: { findUnique: jest.Mock }; order: { findUnique: jest.Mock } };
+  let mockProcessorPrisma: {
+    establishment: { findUnique: jest.Mock };
+    order: { findUnique: jest.Mock };
+  };
   let mockProcessorTelegram: { notifyEstablishmentManagers: jest.Mock };
 
   beforeEach(async () => {
@@ -468,23 +504,38 @@ describe('DispatchProcessor', () => {
     processor = module.get<DispatchProcessor>(DispatchProcessor);
     jest.clearAllMocks();
     mockProcessorQueue.add.mockResolvedValue(undefined);
-    mockProcessorPrisma.establishment.findUnique.mockResolvedValue({ dispatch_mode: 'auto' });
-    mockProcessorPrisma.order.findUnique.mockResolvedValue({ address: 'вул. Тестова 1' });
-    mockProcessorTelegram.notifyEstablishmentManagers.mockResolvedValue(undefined);
+    mockProcessorPrisma.establishment.findUnique.mockResolvedValue({
+      dispatch_mode: 'auto',
+    });
+    mockProcessorPrisma.order.findUnique.mockResolvedValue({
+      address: 'вул. Тестова 1',
+    });
+    mockProcessorTelegram.notifyEstablishmentManagers.mockResolvedValue(
+      undefined,
+    );
     mockProcessorGateway.broadcastToEstablishment.mockReturnValue(undefined);
   });
 
-  const makeJob = (attempt: number) => ({
-    data: {
-      orderId: 'order-1',
-      establishmentId: EST_A,
-      attempt,
-    },
-  } as any);
+  const makeJob = (attempt: number) =>
+    ({
+      data: {
+        orderId: 'order-1',
+        establishmentId: EST_A,
+        attempt,
+      },
+    }) as any;
 
   it('assigned=true (recommended in result) → does NOT re-enqueue', async () => {
     mockOrdersService.runDispatchAlgorithm.mockResolvedValue({
-      recommended: { courierId: 'c1', name: 'Ivan', etaSeconds: 300, distanceMeters: 100, transportMode: 'moto_electric', workloadSeconds: 0, deliveriesCount: 0 },
+      recommended: {
+        courierId: 'c1',
+        name: 'Ivan',
+        etaSeconds: 300,
+        distanceMeters: 100,
+        transportMode: 'moto_electric',
+        workloadSeconds: 0,
+        deliveriesCount: 0,
+      },
       pool: [],
     });
 
@@ -524,7 +575,9 @@ describe('DispatchProcessor', () => {
     expect(mockProcessorPrisma.order.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'order-1' } }),
     );
-    expect(mockProcessorTelegram.notifyEstablishmentManagers).toHaveBeenCalledWith(
+    expect(
+      mockProcessorTelegram.notifyEstablishmentManagers,
+    ).toHaveBeenCalledWith(
       EST_A,
       expect.stringContaining('Немає курʼєра'),
       'dispatch_no_courier',
@@ -539,7 +592,9 @@ describe('DispatchProcessor', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(mockProcessorTelegram.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    expect(
+      mockProcessorTelegram.notifyEstablishmentManagers,
+    ).not.toHaveBeenCalled();
   });
 
   it('assigned=false, attempt = 1 → does NOT send Telegram alert yet', async () => {
@@ -550,7 +605,9 @@ describe('DispatchProcessor', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(mockProcessorTelegram.notifyEstablishmentManagers).not.toHaveBeenCalled();
+    expect(
+      mockProcessorTelegram.notifyEstablishmentManagers,
+    ).not.toHaveBeenCalled();
   });
 
   it('recommend mode → broadcasts order:recommendation WS event', async () => {
@@ -585,7 +642,10 @@ describe('DispatchProcessor', () => {
   });
 
   it('eta_unavailable result (no recommended key) → re-enqueues if attempt < 30', async () => {
-    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({ error: 'eta_unavailable', canRetry: true });
+    mockOrdersService.runDispatchAlgorithm.mockResolvedValue({
+      error: 'eta_unavailable',
+      canRetry: true,
+    });
 
     await processor.handle(makeJob(5));
 

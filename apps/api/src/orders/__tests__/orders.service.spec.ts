@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bull';
 import { OrdersService } from '../orders.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -16,14 +21,43 @@ const EST_A = 'est-a';
 const EST_B = 'est-b';
 
 const manager: any = { id: 'u1', establishment_id: EST_A, role: 'manager' };
-const dispatcher: any = { id: 'u2', establishment_id: EST_A, role: 'dispatcher' };
+const dispatcher: any = {
+  id: 'u2',
+  establishment_id: EST_A,
+  role: 'dispatcher',
+};
 
-const pendingOrder = { id: 'o1', establishment_id: EST_A, status: 'pending', external_id: null };
-const orderEstB = { id: 'o2', establishment_id: EST_B, status: 'pending', external_id: null };
-const assignedOrder = { id: 'o3', establishment_id: EST_A, status: 'assigned', external_id: null };
-const completedOrder = { id: 'o4', establishment_id: EST_A, status: 'completed', external_id: null };
+const pendingOrder = {
+  id: 'o1',
+  establishment_id: EST_A,
+  status: 'pending',
+  external_id: null,
+};
+const orderEstB = {
+  id: 'o2',
+  establishment_id: EST_B,
+  status: 'pending',
+  external_id: null,
+};
+const assignedOrder = {
+  id: 'o3',
+  establishment_id: EST_A,
+  status: 'assigned',
+  external_id: null,
+};
+const completedOrder = {
+  id: 'o4',
+  establishment_id: EST_A,
+  status: 'completed',
+  external_id: null,
+};
 
-const courierA = { id: 'c1', establishment_id: EST_A, name: 'Ivan', transport_mode: 'moto_electric' };
+const courierA = {
+  id: 'c1',
+  establishment_id: EST_A,
+  name: 'Ivan',
+  transport_mode: 'moto_electric',
+};
 
 const mockTx = {
   order: {
@@ -72,11 +106,17 @@ const mockTelegramService = {
   notifyCourier: jest.fn().mockResolvedValue(undefined),
 };
 
-const mockWebhooksService = { dispatch: jest.fn().mockResolvedValue(undefined) };
+const mockWebhooksService = {
+  dispatch: jest.fn().mockResolvedValue(undefined),
+};
 const mockEtaService = { calculateEta: jest.fn().mockResolvedValue(900) };
 const mockGateway = { broadcastToEstablishment: jest.fn() };
-const mockNotificationsService = { sendPush: jest.fn().mockResolvedValue(undefined) };
-const mockCouriersService = { invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined) };
+const mockNotificationsService = {
+  sendPush: jest.fn().mockResolvedValue(undefined),
+};
+const mockCouriersService = {
+  invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -90,11 +130,23 @@ describe('OrdersService', () => {
         { provide: TelegramService, useValue: mockTelegramService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TrackingGateway, useValue: mockGateway },
-        { provide: TrackingService, useValue: { setActiveOrder: jest.fn().mockResolvedValue(undefined), clearActiveOrder: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: TrackingService,
+          useValue: {
+            setActiveOrder: jest.fn().mockResolvedValue(undefined),
+            clearActiveOrder: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
-        { provide: getQueueToken('dispatch'), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
-        { provide: REDIS_CLIENT, useValue: { publish: jest.fn().mockResolvedValue(1) } },
+        {
+          provide: getQueueToken('dispatch'),
+          useValue: { add: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: REDIS_CLIENT,
+          useValue: { publish: jest.fn().mockResolvedValue(1) },
+        },
       ],
     }).compile();
     service = module.get<OrdersService>(OrdersService);
@@ -109,7 +161,9 @@ describe('OrdersService', () => {
   describe('multi-tenant isolation', () => {
     it('findOne rejects order from another establishment', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(orderEstB);
-      await expect(service.findOne('o2', manager)).rejects.toThrow(ForbiddenException);
+      await expect(service.findOne('o2', manager)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('assign rejects order from another establishment', async () => {
@@ -121,7 +175,9 @@ describe('OrdersService', () => {
 
     it('cancel rejects order from another establishment', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(orderEstB);
-      await expect(service.cancel('o2', manager)).rejects.toThrow(ForbiddenException);
+      await expect(service.cancel('o2', manager)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -136,7 +192,9 @@ describe('OrdersService', () => {
 
     it('cannot cancel a completed order', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(completedOrder);
-      await expect(service.cancel('o4', manager)).rejects.toThrow(BadRequestException);
+      await expect(service.cancel('o4', manager)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('assigns pending order successfully', async () => {
@@ -167,7 +225,10 @@ describe('OrdersService', () => {
       mockPrisma.order.findFirst.mockResolvedValue(null);
       mockPrisma.order.create.mockResolvedValue(pendingOrder);
 
-      await service.create({ address: 'вул. Хрещатик 1', external_id: 'EXT-002' }, manager);
+      await service.create(
+        { address: 'вул. Хрещатик 1', external_id: 'EXT-002' },
+        manager,
+      );
       expect(mockPrisma.order.create).toHaveBeenCalledTimes(1);
     });
   });
@@ -182,7 +243,9 @@ describe('OrdersService', () => {
 
     it('dispatcher cannot cancel order', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
-      await expect(service.cancel('o1', dispatcher)).rejects.toThrow(ForbiddenException);
+      await expect(service.cancel('o1', dispatcher)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -190,7 +253,8 @@ describe('OrdersService', () => {
     it('cannot assign courier from another establishment', async () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
       mockPrisma.courier.findUnique.mockResolvedValue({
-        id: 'c2', establishment_id: EST_B,
+        id: 'c2',
+        establishment_id: EST_B,
       });
       await expect(
         service.assign('o1', { courier_id: 'c2' }, manager),
@@ -205,11 +269,9 @@ describe('OrdersService', () => {
 
       await service.create({ address: 'вул. Хрещатик 1' }, manager);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-        EST_A,
-        expect.any(String),
-        'order_created',
-      );
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(EST_A, expect.any(String), 'order_created');
     });
 
     it('assign() fires delivery_assigned to establishment managers', async () => {
@@ -218,11 +280,9 @@ describe('OrdersService', () => {
 
       await service.assign('o1', { courier_id: 'c1' }, manager);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-        EST_A,
-        expect.any(String),
-        'delivery_assigned',
-      );
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(EST_A, expect.any(String), 'delivery_assigned');
     });
 
     it('assign() fires delivery_assigned to the courier', async () => {
@@ -265,11 +325,20 @@ describe('OrdersService', () => {
     };
 
     const availableOrders = [
-      { id: 'order-1', address: 'вул. Хрещатик 1', lat: 50.44, lng: 30.51, notes: null, created_at: new Date() },
+      {
+        id: 'order-1',
+        address: 'вул. Хрещатик 1',
+        lat: 50.44,
+        lng: 30.51,
+        notes: null,
+        created_at: new Date(),
+      },
     ];
 
     it('happy path: dispatch_mode=auto, courier on shift → returns pending orders', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findMany.mockResolvedValue(availableOrders);
 
@@ -283,8 +352,10 @@ describe('OrdersService', () => {
       );
     });
 
-    it('multi-tenant: findMany is scoped to the courier\'s establishment only', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+    it("multi-tenant: findMany is scoped to the courier's establishment only", async () => {
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findMany.mockResolvedValue(availableOrders);
 
@@ -302,15 +373,21 @@ describe('OrdersService', () => {
       });
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
 
-      await expect(service.getAvailable(courierUser)).rejects.toThrow(BadRequestException);
+      await expect(service.getAvailable(courierUser)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockPrisma.order.findMany).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when courier has no active shift', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(null);
 
-      await expect(service.getAvailable(courierUser)).rejects.toThrow(BadRequestException);
+      await expect(service.getAvailable(courierUser)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockPrisma.order.findMany).not.toHaveBeenCalled();
     });
 
@@ -323,9 +400,13 @@ describe('OrdersService', () => {
         is_platform_admin: false,
       };
       // fetchEstablishmentForDispatch will succeed but assertCourierOnShift checks courier_id first
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
 
-      await expect(service.getAvailable(nonCourierUser)).rejects.toThrow(ForbiddenException);
+      await expect(service.getAvailable(nonCourierUser)).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(mockPrisma.order.findMany).not.toHaveBeenCalled();
     });
   });
@@ -391,7 +472,9 @@ describe('OrdersService', () => {
     });
 
     it('happy path: dispatch_mode=auto, courier on shift, pending order → returns claimed order', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
@@ -400,7 +483,9 @@ describe('OrdersService', () => {
 
       expect(result).toEqual(claimedOrder);
       expect(mockTx2.order.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'order-1', status: 'pending' } }),
+        expect.objectContaining({
+          where: { id: 'order-1', status: 'pending' },
+        }),
       );
       expect(mockTx2.delivery.create).toHaveBeenCalledTimes(1);
       expect(mockTx2.delivery.create).toHaveBeenCalledWith(
@@ -415,7 +500,9 @@ describe('OrdersService', () => {
     });
 
     it('happy path: ETA is calculated when all coordinates and transport_mode are set', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
@@ -459,9 +546,15 @@ describe('OrdersService', () => {
     });
 
     it('ETA is skipped when order coordinates are null', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
-      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, lat: null, lng: null });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        lat: null,
+        lng: null,
+      });
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
 
       await service.claim('order-1', courierUser);
@@ -470,10 +563,15 @@ describe('OrdersService', () => {
     });
 
     it('ETA is skipped when courier transport_mode is null', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
-      mockPrisma.courier.findUniqueOrThrow.mockResolvedValue({ ...mockCourier, transport_mode: null });
+      mockPrisma.courier.findUniqueOrThrow.mockResolvedValue({
+        ...mockCourier,
+        transport_mode: null,
+      });
 
       await service.claim('order-1', courierUser);
 
@@ -489,7 +587,9 @@ describe('OrdersService', () => {
         is_platform_admin: false,
       };
 
-      await expect(service.claim('order-1', nonCourierUser)).rejects.toThrow(ForbiddenException);
+      await expect(service.claim('order-1', nonCourierUser)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('throws BadRequestException when dispatch_mode=manual', async () => {
@@ -499,58 +599,82 @@ describe('OrdersService', () => {
       });
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
 
-      await expect(service.claim('order-1', courierUser)).rejects.toThrow(BadRequestException);
+      await expect(service.claim('order-1', courierUser)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws NotFoundException when order does not exist', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(null);
 
-      await expect(service.claim('order-1', courierUser)).rejects.toThrow(NotFoundException);
+      await expect(service.claim('order-1', courierUser)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when order belongs to different establishment', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
-      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, establishment_id: EST_B });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        establishment_id: EST_B,
+      });
 
-      await expect(service.claim('order-1', courierUser)).rejects.toThrow(NotFoundException);
+      await expect(service.claim('order-1', courierUser)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ConflictException when order status is not pending', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
-      mockPrisma.order.findUnique.mockResolvedValue({ ...mockOrder, status: 'assigned' });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        ...mockOrder,
+        status: 'assigned',
+      });
 
-      await expect(service.claim('order-1', courierUser)).rejects.toThrow(ConflictException);
+      await expect(service.claim('order-1', courierUser)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws ConflictException with race-condition message when updateMany returns count=0', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
       mockTx2.order.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(service.claim('order-1', courierUser)).rejects.toThrow(
-        new ConflictException('Order has already been claimed by another courier'),
+        new ConflictException(
+          'Order has already been claimed by another courier',
+        ),
       );
     });
 
     it('fires Telegram notifications to managers and courier (fire-and-forget)', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
 
       await service.claim('order-1', courierUser);
 
-      expect(mockTelegramService.notifyEstablishmentManagers).toHaveBeenCalledWith(
-        EST_A,
-        expect.any(String),
-        'delivery_assigned',
-      );
+      expect(
+        mockTelegramService.notifyEstablishmentManagers,
+      ).toHaveBeenCalledWith(EST_A, expect.any(String), 'delivery_assigned');
       expect(mockTelegramService.notifyCourier).toHaveBeenCalledWith(
         'courier-1',
         expect.any(String),
@@ -559,25 +683,37 @@ describe('OrdersService', () => {
     });
 
     it('fires order.assigned webhook (fire-and-forget)', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
 
       await service.claim('order-1', courierUser);
 
-      expect(mockWebhooksService.dispatch).toHaveBeenCalledWith(EST_A, 'order.assigned', { order_id: 'order-1' });
+      expect(mockWebhooksService.dispatch).toHaveBeenCalledWith(
+        EST_A,
+        'order.assigned',
+        { order_id: 'order-1' },
+      );
     });
 
     it('broadcasts order:assigned WS event to establishment room', async () => {
-      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(estWithDispatch);
+      mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue(
+        estWithDispatch,
+      );
       mockPrisma.shift.findFirst.mockResolvedValue(activeShift);
       mockPrisma.order.findUnique.mockResolvedValue(mockOrder);
       mockPrisma.courier.findUniqueOrThrow.mockResolvedValue(mockCourier);
 
       await service.claim('order-1', courierUser);
 
-      expect(mockGateway.broadcastToEstablishment).toHaveBeenCalledWith(EST_A, 'order:assigned', { order_id: 'order-1' });
+      expect(mockGateway.broadcastToEstablishment).toHaveBeenCalledWith(
+        EST_A,
+        'order:assigned',
+        { order_id: 'order-1' },
+      );
     });
   });
 });

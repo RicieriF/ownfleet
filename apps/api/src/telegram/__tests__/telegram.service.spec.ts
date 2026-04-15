@@ -3,7 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { TelegramService } from '../telegram.service.js';
 import { TELEGRAM_REDIS } from '../telegram-redis.provider.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { DEFAULT_MANAGER_PREFS, DEFAULT_COURIER_PREFS } from '../telegram.types.js';
+import {
+  DEFAULT_MANAGER_PREFS,
+  DEFAULT_COURIER_PREFS,
+} from '../telegram.types.js';
 
 const managerUser = { id: 'u1', courier_id: null };
 const courierUser = { id: 'u2', courier_id: 'c1' };
@@ -70,7 +73,9 @@ describe('TelegramService', () => {
     mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.courier.update.mockResolvedValue({});
     mockPrisma.courier.updateMany.mockResolvedValue({ count: 0 });
-    mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops));
+    mockPrisma.$transaction.mockImplementation((ops: Promise<unknown>[]) =>
+      Promise.all(ops),
+    );
   });
 
   describe('generateConnectCode', () => {
@@ -86,7 +91,10 @@ describe('TelegramService', () => {
     });
 
     it('stores courier_id in payload for courier user', async () => {
-      const code = await service.generateConnectCode(courierUser.id, courierUser.courier_id);
+      const code = await service.generateConnectCode(
+        courierUser.id,
+        courierUser.courier_id,
+      );
 
       expect(mockRedis.setex).toHaveBeenCalledWith(
         `telegram:connect:${code}`,
@@ -107,7 +115,10 @@ describe('TelegramService', () => {
   describe('handleWebhookUpdate — secret validation', () => {
     it('rejects update with wrong secret token', async () => {
       const result = await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' },
+        },
         'wrong-secret',
       );
       expect(result).toBe(false);
@@ -117,7 +128,10 @@ describe('TelegramService', () => {
     it('accepts update with correct secret token', async () => {
       mockRedis.getdel.mockResolvedValue(null); // code not found
       const result = await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' },
+        },
         'secret-xyz',
       );
       expect(result).toBe(true);
@@ -140,7 +154,10 @@ describe('TelegramService', () => {
       const svc = module.get<TelegramService>(TelegramService);
 
       const result = await svc.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 123 }, text: '/start ABC' },
+        },
         undefined,
       );
       expect(result).toBe(false);
@@ -149,14 +166,19 @@ describe('TelegramService', () => {
 
   describe('handleWebhookUpdate — /start with valid code', () => {
     it('connects manager account and sets default prefs', async () => {
-      mockRedis.getdel.mockResolvedValue(JSON.stringify({ user_id: 'u1', courier_id: null }));
+      mockRedis.getdel.mockResolvedValue(
+        JSON.stringify({ user_id: 'u1', courier_id: null }),
+      );
       mockPrisma.user.findUnique.mockResolvedValue({ telegram_prefs: {} }); // no existing prefs
 
       // spy on sendMessage to avoid real HTTP
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/start AAAA-BB' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/start AAAA-BB' },
+        },
         'secret-xyz',
       );
 
@@ -167,12 +189,17 @@ describe('TelegramService', () => {
     });
 
     it('connects courier account and sets default courier prefs', async () => {
-      mockRedis.getdel.mockResolvedValue(JSON.stringify({ user_id: 'u2', courier_id: 'c1' }));
+      mockRedis.getdel.mockResolvedValue(
+        JSON.stringify({ user_id: 'u2', courier_id: 'c1' }),
+      );
       mockPrisma.courier.findUnique.mockResolvedValue({ telegram_prefs: {} });
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 99 }, text: '/start AAAA-BB' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 99 }, text: '/start AAAA-BB' },
+        },
         'secret-xyz',
       );
 
@@ -187,7 +214,10 @@ describe('TelegramService', () => {
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/start BAD-CD' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/start BAD-CD' },
+        },
         'secret-xyz',
       );
 
@@ -201,7 +231,10 @@ describe('TelegramService', () => {
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/stop' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/stop' },
+        },
         'secret-xyz',
       );
 
@@ -228,7 +261,10 @@ describe('TelegramService', () => {
     });
 
     it('returns connected=false for manager without chat_id', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({ telegram_chat_id: null, telegram_prefs: {} });
+      mockPrisma.user.findUnique.mockResolvedValue({
+        telegram_chat_id: null,
+        telegram_prefs: {},
+      });
       const result = await service.getStatus('u1', null, 'est-1');
       expect(result.connected).toBe(false);
     });
@@ -270,7 +306,11 @@ describe('TelegramService', () => {
       ]);
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
-      await service.notifyEstablishmentManagers('est-1', 'Нове замовлення', 'order_created');
+      await service.notifyEstablishmentManagers(
+        'est-1',
+        'Нове замовлення',
+        'order_created',
+      );
 
       expect(service.sendMessage).toHaveBeenCalledTimes(1);
       expect(service.sendMessage).toHaveBeenCalledWith('11', 'Нове замовлення');
@@ -281,15 +321,26 @@ describe('TelegramService', () => {
     const RECONNECT_PREFIX = 'telegram:pending_reconnect:';
 
     it('stores pending reconnect and asks confirmation when P2002 on /start', async () => {
-      mockRedis.getdel.mockResolvedValueOnce(JSON.stringify({ user_id: 'u1', courier_id: null }));
+      mockRedis.getdel.mockResolvedValueOnce(
+        JSON.stringify({ user_id: 'u1', courier_id: null }),
+      );
       mockPrisma.user.findUnique.mockResolvedValue({ telegram_prefs: {} });
-      const p2002 = Object.assign(new Error('Unique constraint'), { code: 'P2002' });
+      const p2002 = Object.assign(new Error('Unique constraint'), {
+        code: 'P2002',
+      });
       mockPrisma.user.update.mockRejectedValueOnce(p2002);
       mockRedis.setex.mockResolvedValue('OK');
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/start AAAA-BBBB' } },
+        {
+          update_id: 1,
+          message: {
+            message_id: 1,
+            chat: { id: 42 },
+            text: '/start AAAA-BBBB',
+          },
+        },
         'secret-xyz',
       );
 
@@ -298,35 +349,54 @@ describe('TelegramService', () => {
         300,
         JSON.stringify({ user_id: 'u1', courier_id: null }),
       );
-      expect(service.sendMessage).toHaveBeenCalledWith('42', expect.stringContaining('/підтвердити'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '42',
+        expect.stringContaining('/підтвердити'),
+      );
     });
 
     it('/підтвердити reconnects manager: clears old chatId + sets new in transaction', async () => {
-      mockRedis.getdel.mockResolvedValueOnce(JSON.stringify({ user_id: 'u1', courier_id: null }));
+      mockRedis.getdel.mockResolvedValueOnce(
+        JSON.stringify({ user_id: 'u1', courier_id: null }),
+      );
       mockPrisma.user.findUnique.mockResolvedValue({ telegram_prefs: {} });
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/підтвердити' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/підтвердити' },
+        },
         'secret-xyz',
       );
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
-      expect(service.sendMessage).toHaveBeenCalledWith('42', expect.stringContaining('✅'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '42',
+        expect.stringContaining('✅'),
+      );
     });
 
     it('/підтвердити reconnects courier: uses courier updateMany + update in transaction', async () => {
-      mockRedis.getdel.mockResolvedValueOnce(JSON.stringify({ user_id: 'u2', courier_id: 'c1' }));
+      mockRedis.getdel.mockResolvedValueOnce(
+        JSON.stringify({ user_id: 'u2', courier_id: 'c1' }),
+      );
       mockPrisma.courier.findUnique.mockResolvedValue({ telegram_prefs: {} });
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 99 }, text: '/підтвердити' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 99 }, text: '/підтвердити' },
+        },
         'secret-xyz',
       );
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
-      expect(service.sendMessage).toHaveBeenCalledWith('99', expect.stringContaining('✅'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '99',
+        expect.stringContaining('✅'),
+      );
     });
 
     it('/підтвердити with expired pending reconnect sends error message', async () => {
@@ -334,12 +404,18 @@ describe('TelegramService', () => {
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/підтвердити' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/підтвердити' },
+        },
         'secret-xyz',
       );
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-      expect(service.sendMessage).toHaveBeenCalledWith('42', expect.stringContaining('не знайдено'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '42',
+        expect.stringContaining('не знайдено'),
+      );
     });
 
     it('/скасувати deletes pending key and sends cancellation message', async () => {
@@ -347,12 +423,18 @@ describe('TelegramService', () => {
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/скасувати' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/скасувати' },
+        },
         'secret-xyz',
       );
 
       expect(mockRedis.del).toHaveBeenCalledWith(`${RECONNECT_PREFIX}42`);
-      expect(service.sendMessage).toHaveBeenCalledWith('42', expect.stringContaining('Скасовано'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '42',
+        expect.stringContaining('Скасовано'),
+      );
     });
 
     it('/скасувати with no pending reconnect sends no-op message', async () => {
@@ -360,11 +442,17 @@ describe('TelegramService', () => {
       jest.spyOn(service, 'sendMessage').mockResolvedValue();
 
       await service.handleWebhookUpdate(
-        { update_id: 1, message: { message_id: 1, chat: { id: 42 }, text: '/скасувати' } },
+        {
+          update_id: 1,
+          message: { message_id: 1, chat: { id: 42 }, text: '/скасувати' },
+        },
         'secret-xyz',
       );
 
-      expect(service.sendMessage).toHaveBeenCalledWith('42', expect.stringContaining('Немає активного'));
+      expect(service.sendMessage).toHaveBeenCalledWith(
+        '42',
+        expect.stringContaining('Немає активного'),
+      );
     });
   });
 

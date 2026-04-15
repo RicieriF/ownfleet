@@ -9,7 +9,6 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
-  Req,
   BadRequestException,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -18,7 +17,8 @@ import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { TelegramService } from './telegram.service.js';
 import { UpdatePrefsDto } from './dto/update-prefs.dto.js';
 import { CONNECT_CODE_TTL_SEC } from './telegram-redis.provider.js';
-import { AuthenticatedUser } from '../auth/auth.types.js';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { TelegramUpdate } from './telegram.types.js';
 
 @Controller('telegram')
@@ -34,15 +34,18 @@ export class TelegramController {
   @HttpCode(HttpStatus.OK)
   @SkipThrottle() // Telegram servers — auth via X-Telegram-Bot-Api-Secret-Token; IP throttle would block retries
   async webhook(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     @Body() body: any,
-    @Headers('x-telegram-bot-api-secret-token') secretHeader: string | undefined,
+    @Headers('x-telegram-bot-api-secret-token')
+    secretHeader: string | undefined,
   ) {
     // Basic shape validation — reject clearly malformed payloads before processing
     if (!body || typeof body.update_id !== 'number') {
       throw new BadRequestException('Invalid Telegram update shape');
     }
-    await this.service.handleWebhookUpdate(body as TelegramUpdate, secretHeader);
+    await this.service.handleWebhookUpdate(
+      body as TelegramUpdate,
+      secretHeader,
+    );
     return { ok: true };
   }
 
@@ -50,9 +53,11 @@ export class TelegramController {
   @Post('connect')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  async connect(@Req() req: any) {
-    const user = req.user as AuthenticatedUser;
-    const code = await this.service.generateConnectCode(user.id, user.courier_id ?? null);
+  async connect(@CurrentUser() user: AuthenticatedUser) {
+    const code = await this.service.generateConnectCode(
+      user.id,
+      user.courier_id ?? null,
+    );
     return { code, expires_in: CONNECT_CODE_TTL_SEC };
   }
 
@@ -60,27 +65,40 @@ export class TelegramController {
   @Delete('connect')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  async disconnect(@Req() req: any) {
-    const user = req.user as AuthenticatedUser;
-    await this.service.disconnect(user.id, user.courier_id ?? null, user.establishment_id);
+  async disconnect(@CurrentUser() user: AuthenticatedUser) {
+    await this.service.disconnect(
+      user.id,
+      user.courier_id ?? null,
+      user.establishment_id,
+    );
     return { disconnected: true };
   }
 
   /** Returns connection status and current prefs. */
   @Get('status')
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  status(@Req() req: any) {
-    const user = req.user as AuthenticatedUser;
-    return this.service.getStatus(user.id, user.courier_id ?? null, user.establishment_id);
+  status(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.getStatus(
+      user.id,
+      user.courier_id ?? null,
+      user.establishment_id,
+    );
   }
 
   /** Save notification preferences. */
   @Patch('prefs')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, PlanAccessGuard)
-  async updatePrefs(@Body() dto: UpdatePrefsDto, @Req() req: any) {
-    const user = req.user as AuthenticatedUser;
-    await this.service.updatePrefs(user.id, user.courier_id ?? null, user.establishment_id, dto);
+  async updatePrefs(
+    @Body() dto: UpdatePrefsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.service.updatePrefs(
+      user.id,
+      user.courier_id ?? null,
+      user.establishment_id,
+      dto,
+    );
     return { ok: true };
   }
 }

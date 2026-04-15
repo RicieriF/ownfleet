@@ -31,13 +31,18 @@ describe('TrackingGateway', () => {
         TrackingGateway,
         { provide: JwtService, useValue: mockJwt },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: RedisSubscriberFactory, useValue: { create: jest.fn().mockReturnValue(mockRedisSub) } },
+        {
+          provide: RedisSubscriberFactory,
+          useValue: { create: jest.fn().mockReturnValue(mockRedisSub) },
+        },
       ],
     }).compile();
     gateway = module.get<TrackingGateway>(TrackingGateway);
     jest.clearAllMocks();
     mockConfig.getOrThrow.mockReturnValue('test-secret');
-    mockRedisSub.subscribe.mockImplementation((_ch: string, cb: (e: null) => void) => cb(null));
+    mockRedisSub.subscribe.mockImplementation(
+      (_ch: string, cb: (e: null) => void) => cb(null),
+    );
     mockRedisSub.on.mockImplementation(() => {});
   });
 
@@ -49,7 +54,9 @@ describe('TrackingGateway', () => {
     });
 
     it('disconnects socket with invalid token', () => {
-      mockJwt.verify.mockImplementation(() => { throw new Error('invalid'); });
+      mockJwt.verify.mockImplementation(() => {
+        throw new Error('invalid');
+      });
       const socket = mockSocket('bad.token') as any;
       gateway.handleConnection(socket);
       expect(socket.disconnect).toHaveBeenCalledWith(true);
@@ -70,7 +77,10 @@ describe('TrackingGateway', () => {
 
     it('joins correct room for different establishments', () => {
       mockJwt.verify.mockReturnValue({
-        sub: 'u2', establishment_id: 'est-99', role: 'owner', is_platform_admin: false,
+        sub: 'u2',
+        establishment_id: 'est-99',
+        role: 'owner',
+        is_platform_admin: false,
       });
       const socket = mockSocket('valid.token') as any;
       gateway.handleConnection(socket);

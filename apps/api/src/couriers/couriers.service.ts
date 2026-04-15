@@ -18,7 +18,7 @@ import { COURIER_EVENT } from '../telegram/telegram.types.js';
 import { COURIERS_REDIS_CLIENT } from './couriers-redis.provider.js';
 
 // Thresholds for online status (in ms)
-const ONLINE_MS = 30_000;        // < 30s  → online
+const ONLINE_MS = 30_000; // < 30s  → online
 const BACKGROUND_MS = 5 * 60_000; // < 5min → background
 
 const WORKLOAD_CACHE_TTL_SEC = 15;
@@ -62,7 +62,12 @@ export class CouriersService {
 
     // Last ping per courier via DISTINCT ON (single query, includes lat/lng)
     const lastPings = await this.prisma.$queryRaw<
-      { courier_id: string; created_at: Date; lat: number | null; lng: number | null }[]
+      {
+        courier_id: string;
+        created_at: Date;
+        lat: number | null;
+        lng: number | null;
+      }[]
     >`
       SELECT DISTINCT ON (courier_id)
         courier_id,
@@ -87,7 +92,12 @@ export class CouriersService {
     // Active shifts per courier
     const activeShifts = await this.prisma.shift.findMany({
       where: { courier_id: { in: courierIds }, ended_at: null },
-      select: { id: true, courier_id: true, started_at: true, planned_end_at: true },
+      select: {
+        id: true,
+        courier_id: true,
+        started_at: true,
+        planned_end_at: true,
+      },
     });
     const shiftMap = new Map(activeShifts.map((s) => [s.courier_id, s]));
 
@@ -150,7 +160,9 @@ export class CouriersService {
   /** Courier fetches their own profile including transport_mode (GET /me) */
   async getMyProfile(user: AuthenticatedUser) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only courier accounts can access this endpoint');
+      throw new ForbiddenException(
+        'Only courier accounts can access this endpoint',
+      );
     }
     return this.prisma.courier.findUniqueOrThrow({
       where: { id: user.courier_id },
@@ -159,9 +171,14 @@ export class CouriersService {
   }
 
   /** Courier updates their own transport mode (PATCH /me/transport-mode) */
-  async updateMyTransportMode(dto: UpdateTransportModeDto, user: AuthenticatedUser) {
+  async updateMyTransportMode(
+    dto: UpdateTransportModeDto,
+    user: AuthenticatedUser,
+  ) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only courier accounts can update transport mode');
+      throw new ForbiddenException(
+        'Only courier accounts can update transport mode',
+      );
     }
     await this.prisma.courier.update({
       where: { id: user.courier_id },
@@ -171,9 +188,14 @@ export class CouriersService {
   }
 
   /** Courier self-registers their own FCM token (PATCH /me/device-token) */
-  async updateMyDeviceToken(dto: UpdateDeviceTokenDto, user: AuthenticatedUser) {
+  async updateMyDeviceToken(
+    dto: UpdateDeviceTokenDto,
+    user: AuthenticatedUser,
+  ) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only courier accounts can register a device token');
+      throw new ForbiddenException(
+        'Only courier accounts can register a device token',
+      );
     }
 
     return this.prisma.courier.update({
@@ -206,13 +228,22 @@ export class CouriersService {
         body: 'Перевірте застосунок — є активне замовлення',
         data: { type: 'reminder' },
       })
-      .catch((err) => this.logger.warn(`FCM remind failed for ${courierId}`, err));
+      .catch((err) =>
+        this.logger.warn(`FCM remind failed for ${courierId}`, err),
+      );
 
-    this.telegram.notifyCourier(
-      courierId,
-      `📢 Нагадування від менеджера: перевірте застосунок — є активне замовлення`,
-      COURIER_EVENT.MANAGER_REMINDER,
-    ).catch((err: unknown) => this.logger.warn('Telegram notification failed (manager_reminder)', err));
+    this.telegram
+      .notifyCourier(
+        courierId,
+        `📢 Нагадування від менеджера: перевірте застосунок — є активне замовлення`,
+        COURIER_EVENT.MANAGER_REMINDER,
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          'Telegram notification failed (manager_reminder)',
+          err,
+        ),
+      );
 
     this.logger.log(`Reminder sent to courier ${courierId} by ${user.id}`);
     return { reminded: true, courier_name: courier.name };
@@ -223,7 +254,9 @@ export class CouriersService {
    * Cached in Redis for 15 seconds per establishment.
    * Accessible by manager, dispatcher, and courier roles (multi-tenant guard handles isolation).
    */
-  async getWorkloadToday(establishmentId: string): Promise<{ couriers: WorkloadTodayCourier[] }> {
+  async getWorkloadToday(
+    establishmentId: string,
+  ): Promise<{ couriers: WorkloadTodayCourier[] }> {
     const cacheKey = `workload:${establishmentId}`;
 
     // Try cache first
@@ -240,7 +273,10 @@ export class CouriersService {
         }
       }
     } catch (err) {
-      this.logger.warn('Redis get failed for workload cache — continuing to DB', err);
+      this.logger.warn(
+        'Redis get failed for workload cache — continuing to DB',
+        err,
+      );
     }
 
     // Query all couriers on active shifts for this establishment
@@ -283,14 +319,19 @@ export class CouriersService {
       name: r.name,
       workloadSeconds: Number(r.workload_seconds),
       deliveriesCount: Number(r.deliveries_count),
-      avgDelayMinutes: r.avg_delay_minutes !== null ? Number(r.avg_delay_minutes) : null,
+      avgDelayMinutes:
+        r.avg_delay_minutes !== null ? Number(r.avg_delay_minutes) : null,
     }));
 
     const result = { couriers };
 
     // Cache result
     try {
-      await this.redis.setex(cacheKey, WORKLOAD_CACHE_TTL_SEC, JSON.stringify(result));
+      await this.redis.setex(
+        cacheKey,
+        WORKLOAD_CACHE_TTL_SEC,
+        JSON.stringify(result),
+      );
     } catch (err) {
       this.logger.warn('Redis setex failed for workload cache', err);
     }
@@ -306,18 +347,26 @@ export class CouriersService {
     try {
       await this.redis.del(`workload:${establishmentId}`);
     } catch (err) {
-      this.logger.warn(`Failed to invalidate workload cache for ${establishmentId}`, err);
+      this.logger.warn(
+        `Failed to invalidate workload cache for ${establishmentId}`,
+        err,
+      );
     }
   }
 
   async clearDeviceToken(courierId: string): Promise<void> {
     // Called internally when FCM returns invalid_registration
-    await this.prisma.courier.update({
-      where: { id: courierId },
-      data: { device_token: null, device_platform: null },
-    }).catch((err) => {
-      this.logger.warn(`Failed to clear device token for courier ${courierId}`, err);
-    });
+    await this.prisma.courier
+      .update({
+        where: { id: courierId },
+        data: { device_token: null, device_platform: null },
+      })
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to clear device token for courier ${courierId}`,
+          err,
+        );
+      });
   }
 
   private async assertBelongs(courierId: string, establishmentId: string) {
@@ -327,7 +376,9 @@ export class CouriersService {
 
     if (!courier) throw new NotFoundException('Courier not found');
     if (courier.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Courier does not belong to your establishment');
+      throw new ForbiddenException(
+        'Courier does not belong to your establishment',
+      );
     }
 
     return courier;

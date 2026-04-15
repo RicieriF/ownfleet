@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ExecutionContext } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PlatformService } from '../platform.service.js';
@@ -167,10 +171,13 @@ describe('PlatformService', () => {
 
   describe('createEstablishment', () => {
     it('throws ConflictException on duplicate slug (P2002 from DB unique constraint)', async () => {
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '5.0.0',
-      });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        },
+      );
       mockPrisma.$transaction.mockRejectedValue(p2002);
 
       await expect(
@@ -180,10 +187,13 @@ describe('PlatformService', () => {
 
     it('throws ConflictException on P2002 race condition (concurrent create)', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '5.0.0',
-      });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        },
+      );
       mockPrisma.$transaction.mockRejectedValue(p2002);
 
       await expect(
@@ -193,41 +203,57 @@ describe('PlatformService', () => {
 
     it('returns credentials with owner and manager emails on success', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
-        mockPrisma.establishment.create.mockResolvedValue({
-          id: 'new-est',
-          name: 'Pizza Place',
-          slug: 'pizza-place',
-          plan: 'starter',
-          trial_ends_at: new Date(),
-        });
-        return fn(mockPrisma);
+      mockPrisma.$transaction.mockImplementation(
+        async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+          mockPrisma.establishment.create.mockResolvedValue({
+            id: 'new-est',
+            name: 'Pizza Place',
+            slug: 'pizza-place',
+            plan: 'starter',
+            trial_ends_at: new Date(),
+          });
+          return fn(mockPrisma);
+        },
+      );
+
+      const result = await service.createEstablishment({
+        name: 'Pizza Place',
+        slug: 'pizza-place',
       });
 
-      const result = await service.createEstablishment({ name: 'Pizza Place', slug: 'pizza-place' });
-
       expect(result.establishment.slug).toBe('pizza-place');
-      expect(result.credentials.owner.email).toBe('owner-pizza-place@weego.app');
-      expect(result.credentials.manager.email).toBe('manager-pizza-place@weego.app');
+      expect(result.credentials.owner.email).toBe(
+        'owner-pizza-place@weego.app',
+      );
+      expect(result.credentials.manager.email).toBe(
+        'manager-pizza-place@weego.app',
+      );
       expect(result.credentials.owner.password).toHaveLength(32); // 16 bytes hex
       expect(result.credentials.manager.password).toHaveLength(32);
     });
 
     it('passwords are different for owner and manager', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
-      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
-        mockPrisma.establishment.create.mockResolvedValue({
-          id: 'new-est-2',
-          name: 'Cafe',
-          slug: 'cafe',
-          plan: 'starter',
-          trial_ends_at: new Date(),
-        });
-        return fn(mockPrisma);
-      });
+      mockPrisma.$transaction.mockImplementation(
+        async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+          mockPrisma.establishment.create.mockResolvedValue({
+            id: 'new-est-2',
+            name: 'Cafe',
+            slug: 'cafe',
+            plan: 'starter',
+            trial_ends_at: new Date(),
+          });
+          return fn(mockPrisma);
+        },
+      );
 
-      const result = await service.createEstablishment({ name: 'Cafe', slug: 'cafe' });
-      expect(result.credentials.owner.password).not.toBe(result.credentials.manager.password);
+      const result = await service.createEstablishment({
+        name: 'Cafe',
+        slug: 'cafe',
+      });
+      expect(result.credentials.owner.password).not.toBe(
+        result.credentials.manager.password,
+      );
     });
   });
 
@@ -247,7 +273,12 @@ describe('PlatformService', () => {
       // Simulate DB GREATEST(COALESCE(expired, NOW()), NOW()) + 30 days = ~now + 30 days
       const expectedPaidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       mockPrisma.$queryRaw.mockResolvedValue([
-        { id: 'est-1', name: 'Test', paid_until: expectedPaidUntil, trial_ends_at: null },
+        {
+          id: 'est-1',
+          name: 'Test',
+          paid_until: expectedPaidUntil,
+          trial_ends_at: null,
+        },
       ]);
 
       const result = await service.extendSubscription('est-1', { days: 30 });
@@ -255,7 +286,9 @@ describe('PlatformService', () => {
       // paid_until should be approx today + 30 days (not expired date + 30)
       const expectedMin = new Date(Date.now() + 29 * 24 * 60 * 60 * 1000);
       const expectedMax = new Date(Date.now() + 31 * 24 * 60 * 60 * 1000);
-      expect(result.paid_until!.getTime()).toBeGreaterThan(expectedMin.getTime());
+      expect(result.paid_until!.getTime()).toBeGreaterThan(
+        expectedMin.getTime(),
+      );
       expect(result.paid_until!.getTime()).toBeLessThan(expectedMax.getTime());
     });
 
@@ -264,16 +297,27 @@ describe('PlatformService', () => {
       // Existence check passes
       mockPrisma.establishment.findUnique.mockResolvedValue({ id: 'est-2' });
       // Simulate DB GREATEST(activeUntil, NOW()) + 30 days = activeUntil + 30 days
-      const expectedPaidUntil = new Date(activeUntil.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const expectedPaidUntil = new Date(
+        activeUntil.getTime() + 30 * 24 * 60 * 60 * 1000,
+      );
       mockPrisma.$queryRaw.mockResolvedValue([
-        { id: 'est-2', name: 'Active', paid_until: expectedPaidUntil, trial_ends_at: null },
+        {
+          id: 'est-2',
+          name: 'Active',
+          paid_until: expectedPaidUntil,
+          trial_ends_at: null,
+        },
       ]);
 
       const result = await service.extendSubscription('est-2', { days: 30 });
 
       // paid_until should be approx activeUntil + 30 days
-      const expected = new Date(activeUntil.getTime() + 30 * 24 * 60 * 60 * 1000);
-      expect(Math.abs(result.paid_until!.getTime() - expected.getTime())).toBeLessThan(1000);
+      const expected = new Date(
+        activeUntil.getTime() + 30 * 24 * 60 * 60 * 1000,
+      );
+      expect(
+        Math.abs(result.paid_until!.getTime() - expected.getTime()),
+      ).toBeLessThan(1000);
     });
   });
 });
@@ -298,13 +342,19 @@ describe('PlatformAdminGuard', () => {
   }
 
   it('allows platform admin when JWT flag set and DB confirms', async () => {
-    mockGuardPrisma.user.findUnique.mockResolvedValue({ is_platform_admin: true });
+    mockGuardPrisma.user.findUnique.mockResolvedValue({
+      is_platform_admin: true,
+    });
     const ctx = makeContext({ id: 'user-1', is_platform_admin: true });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
   });
 
   it('throws ForbiddenException immediately when JWT flag is false (no DB hit)', async () => {
-    const ctx = makeContext({ id: 'user-1', is_platform_admin: false, role: 'manager' });
+    const ctx = makeContext({
+      id: 'user-1',
+      is_platform_admin: false,
+      role: 'manager',
+    });
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
     expect(mockGuardPrisma.user.findUnique).not.toHaveBeenCalled();
   });
@@ -317,7 +367,9 @@ describe('PlatformAdminGuard', () => {
 
   it('throws ForbiddenException when rights revoked in DB after token issued', async () => {
     // JWT says admin, but DB flag was revoked
-    mockGuardPrisma.user.findUnique.mockResolvedValue({ is_platform_admin: false });
+    mockGuardPrisma.user.findUnique.mockResolvedValue({
+      is_platform_admin: false,
+    });
     const ctx = makeContext({ id: 'user-1', is_platform_admin: true });
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });

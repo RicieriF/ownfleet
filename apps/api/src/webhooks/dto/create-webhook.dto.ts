@@ -1,4 +1,11 @@
-import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty, IsIn } from 'class-validator';
+import {
+  IsUrl,
+  IsString,
+  IsArray,
+  ArrayMinSize,
+  IsNotEmpty,
+  IsIn,
+} from 'class-validator';
 
 export const SUPPORTED_EVENTS = [
   'order.created',

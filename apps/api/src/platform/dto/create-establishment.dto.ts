@@ -1,4 +1,14 @@
-import { IsString, IsNotEmpty, Matches, MinLength, MaxLength, IsOptional, IsInt, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  Matches,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CreateEstablishmentDto {
   @IsString()
@@ -11,7 +21,9 @@ export class CreateEstablishmentDto {
   @IsNotEmpty()
   @MinLength(2)
   @MaxLength(40)
-  @Matches(/^[a-z0-9-]+$/, { message: 'slug must be lowercase letters, digits and hyphens only' })
+  @Matches(/^[a-z0-9-]+$/, {
+    message: 'slug must be lowercase letters, digits and hyphens only',
+  })
   slug: string;
 
   /** Trial days to grant. Defaults to 14. Max 365. */

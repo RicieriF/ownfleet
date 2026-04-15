@@ -1,4 +1,13 @@
-import { IsUrl, IsString, IsArray, ArrayMinSize, IsNotEmpty, IsBoolean, IsOptional, IsIn } from 'class-validator';
+import {
+  IsUrl,
+  IsString,
+  IsArray,
+  ArrayMinSize,
+  IsNotEmpty,
+  IsBoolean,
+  IsOptional,
+  IsIn,
+} from 'class-validator';
 import { SUPPORTED_EVENTS, WebhookEvent } from './create-webhook.dto.js';
 
 export class UpdateWebhookDto {

@@ -5,10 +5,20 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
-function makeCtx(establishmentId = 'est-1', is_platform_admin = false): ExecutionContext {
+function makeCtx(
+  establishmentId = 'est-1',
+  is_platform_admin = false,
+): ExecutionContext {
   return {
     switchToHttp: () => ({
-      getRequest: () => ({ user: { id: 'u1', establishment_id: establishmentId, role: 'manager', is_platform_admin } }),
+      getRequest: () => ({
+        user: {
+          id: 'u1',
+          establishment_id: establishmentId,
+          role: 'manager',
+          is_platform_admin,
+        },
+      }),
     }),
   } as unknown as ExecutionContext;
 }
@@ -38,7 +48,9 @@ describe('PlanAccessGuard', () => {
 
   it('allows pilot plan unconditionally', async () => {
     mockPrisma.establishment.findUniqueOrThrow.mockResolvedValue({
-      plan: 'pilot', trial_ends_at: null, paid_until: null,
+      plan: 'pilot',
+      trial_ends_at: null,
+      paid_until: null,
     });
     await expect(guard.canActivate(makeCtx())).resolves.toBe(true);
   });
@@ -99,7 +111,9 @@ describe('PlanAccessGuard', () => {
     } catch (e) {
       expect(e).toBeInstanceOf(HttpException);
       expect((e as HttpException).getStatus()).toBe(402);
-      expect((e as HttpException).getResponse()).toMatchObject({ code: 'PLAN_EXPIRED' });
+      expect((e as HttpException).getResponse()).toMatchObject({
+        code: 'PLAN_EXPIRED',
+      });
     }
   });
 });

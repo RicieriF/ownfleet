@@ -9,8 +9,18 @@ import { CreateWebhookDto } from '../dto/create-webhook.dto.js';
 import { UpdateWebhookDto } from '../dto/update-webhook.dto.js';
 
 const EST_ID = 'est-1';
-const userA: any = { id: 'u1', establishment_id: EST_ID, role: 'manager', is_platform_admin: false };
-const dispatcher: any = { id: 'u2', establishment_id: EST_ID, role: 'dispatcher', is_platform_admin: false };
+const userA: any = {
+  id: 'u1',
+  establishment_id: EST_ID,
+  role: 'manager',
+  is_platform_admin: false,
+};
+const dispatcher: any = {
+  id: 'u2',
+  establishment_id: EST_ID,
+  role: 'dispatcher',
+  is_platform_admin: false,
+};
 
 const baseWebhook = {
   id: 'wh-1',
@@ -58,7 +68,11 @@ describe('WebhooksService', () => {
 
   describe('create', () => {
     it('creates a webhook for the authenticated establishment', async () => {
-      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] } as CreateWebhookDto;
+      const dto = {
+        url: 'https://example.com/hook',
+        secret: 'sec',
+        events: ['order.created'],
+      } as CreateWebhookDto;
       const result = await service.create(dto, userA);
 
       expect(mockWebhook.create).toHaveBeenCalledWith({
@@ -68,8 +82,14 @@ describe('WebhooksService', () => {
     });
 
     it('throws ForbiddenException for dispatcher role', async () => {
-      const dto = { url: 'https://example.com/hook', secret: 'sec', events: ['order.created'] } as CreateWebhookDto;
-      await expect(service.create(dto, dispatcher)).rejects.toThrow(ForbiddenException);
+      const dto = {
+        url: 'https://example.com/hook',
+        secret: 'sec',
+        events: ['order.created'],
+      } as CreateWebhookDto;
+      await expect(service.create(dto, dispatcher)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -92,12 +112,19 @@ describe('WebhooksService', () => {
 
     it('throws NotFoundException for non-existent webhook', async () => {
       mockWebhook.findUnique.mockResolvedValue(null);
-      await expect(service.findOne('missing', userA)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('missing', userA)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException for webhook from another establishment', async () => {
-      mockWebhook.findUnique.mockResolvedValue({ ...baseWebhook, establishment_id: 'est-other' });
-      await expect(service.findOne('wh-1', userA)).rejects.toThrow(ForbiddenException);
+      mockWebhook.findUnique.mockResolvedValue({
+        ...baseWebhook,
+        establishment_id: 'est-other',
+      });
+      await expect(service.findOne('wh-1', userA)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -111,12 +138,19 @@ describe('WebhooksService', () => {
     });
 
     it('throws ForbiddenException for cross-tenant update', async () => {
-      mockWebhook.findUnique.mockResolvedValue({ ...baseWebhook, establishment_id: 'est-other' });
-      await expect(service.update('wh-1', { active: false }, userA)).rejects.toThrow(ForbiddenException);
+      mockWebhook.findUnique.mockResolvedValue({
+        ...baseWebhook,
+        establishment_id: 'est-other',
+      });
+      await expect(
+        service.update('wh-1', { active: false }, userA),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('throws ForbiddenException for dispatcher role', async () => {
-      await expect(service.update('wh-1', { active: false }, dispatcher)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.update('wh-1', { active: false }, dispatcher),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -124,11 +158,15 @@ describe('WebhooksService', () => {
     it('deletes the webhook and returns { deleted: true }', async () => {
       const result = await service.remove('wh-1', userA);
       expect(result.deleted).toBe(true);
-      expect(mockWebhook.delete).toHaveBeenCalledWith({ where: { id: 'wh-1' } });
+      expect(mockWebhook.delete).toHaveBeenCalledWith({
+        where: { id: 'wh-1' },
+      });
     });
 
     it('throws ForbiddenException for dispatcher role', async () => {
-      await expect(service.remove('wh-1', dispatcher)).rejects.toThrow(ForbiddenException);
+      await expect(service.remove('wh-1', dispatcher)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -144,7 +182,10 @@ describe('WebhooksService', () => {
       expect(mockQueue.add).toHaveBeenCalledWith(
         'deliver',
         expect.objectContaining({ event: 'order.created', webhookId: 'wh-1' }),
-        expect.objectContaining({ attempts: 5, backoff: { type: 'exponential', delay: 1000 } }),
+        expect.objectContaining({
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 1000 },
+        }),
       );
     });
 
@@ -202,7 +243,10 @@ describe('CreateWebhookDto — events validation', () => {
   });
 
   it('rejects when events is not an array', async () => {
-    const dto = plainToInstance(CreateWebhookDto, { ...validBase, events: 'order.created' });
+    const dto = plainToInstance(CreateWebhookDto, {
+      ...validBase,
+      events: 'order.created',
+    });
     const errors = await validate(dto);
     expect(errors.find((e) => e.property === 'events')).toBeDefined();
   });
@@ -216,13 +260,17 @@ describe('UpdateWebhookDto — events validation', () => {
   });
 
   it('rejects an unknown event when events is provided', async () => {
-    const dto = plainToInstance(UpdateWebhookDto, { events: ['delivery.teleported'] });
+    const dto = plainToInstance(UpdateWebhookDto, {
+      events: ['delivery.teleported'],
+    });
     const errors = await validate(dto);
     expect(errors.find((e) => e.property === 'events')).toBeDefined();
   });
 
   it('passes with a valid single supported event', async () => {
-    const dto = plainToInstance(UpdateWebhookDto, { events: ['delivery.failed'] });
+    const dto = plainToInstance(UpdateWebhookDto, {
+      events: ['delivery.failed'],
+    });
     const errors = await validate(dto);
     expect(errors).toHaveLength(0);
   });

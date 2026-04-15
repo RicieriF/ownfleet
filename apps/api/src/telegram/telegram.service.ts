@@ -4,7 +4,10 @@ import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import type Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { TELEGRAM_REDIS, CONNECT_CODE_TTL_SEC as TTL_SEC } from './telegram-redis.provider.js';
+import {
+  TELEGRAM_REDIS,
+  CONNECT_CODE_TTL_SEC as TTL_SEC,
+} from './telegram-redis.provider.js';
 import {
   TelegramUpdate,
   ManagerTelegramPrefs,
@@ -54,7 +57,10 @@ export class TelegramService {
    * Generate a one-time connect code for the given user.
    * courierId is set when the connecting user is a courier.
    */
-  async generateConnectCode(userId: string, courierId: string | null): Promise<string> {
+  async generateConnectCode(
+    userId: string,
+    courierId: string | null,
+  ): Promise<string> {
     const code = this.makeCode();
     const payload: ConnectPayload = { user_id: userId, courier_id: courierId };
     await this.redis.setex(
@@ -69,7 +75,10 @@ export class TelegramService {
    * Process an incoming Telegram update (from webhook).
    * Returns false if the secret token is invalid.
    */
-  async handleWebhookUpdate(update: TelegramUpdate, secretHeader: string | undefined): Promise<boolean> {
+  async handleWebhookUpdate(
+    update: TelegramUpdate,
+    secretHeader: string | undefined,
+  ): Promise<boolean> {
     if (!this.webhookSecret || secretHeader !== this.webhookSecret) {
       this.logger.warn('Telegram webhook: missing or invalid secret token');
       return false;
@@ -98,7 +107,11 @@ export class TelegramService {
 
   // ── Status / disconnect ───────────────────────────────────────────────────
 
-  async getStatus(userId: string, courierId: string | null, establishmentId: string): Promise<{
+  async getStatus(
+    userId: string,
+    courierId: string | null,
+    establishmentId: string,
+  ): Promise<{
     connected: boolean;
     prefs: ManagerTelegramPrefs | CourierTelegramPrefs;
   }> {
@@ -134,7 +147,10 @@ export class TelegramService {
         where: { id: courierId, establishment_id: establishmentId },
         select: { telegram_prefs: true },
       });
-      const merged = { ...((existing?.telegram_prefs as object) ?? {}), ...patch } as Prisma.InputJsonValue;
+      const merged = {
+        ...((existing?.telegram_prefs as object) ?? {}),
+        ...patch,
+      } as Prisma.InputJsonValue;
       await this.prisma.courier.update({
         where: { id: courierId, establishment_id: establishmentId },
         data: { telegram_prefs: merged },
@@ -144,7 +160,10 @@ export class TelegramService {
         where: { id: userId },
         select: { telegram_prefs: true },
       });
-      const merged = { ...((existing?.telegram_prefs as object) ?? {}), ...patch } as Prisma.InputJsonValue;
+      const merged = {
+        ...((existing?.telegram_prefs as object) ?? {}),
+        ...patch,
+      } as Prisma.InputJsonValue;
       await this.prisma.user.update({
         where: { id: userId },
         data: { telegram_prefs: merged },
@@ -152,7 +171,11 @@ export class TelegramService {
     }
   }
 
-  async disconnect(userId: string, courierId: string | null, establishmentId: string): Promise<void> {
+  async disconnect(
+    userId: string,
+    courierId: string | null,
+    establishmentId: string,
+  ): Promise<void> {
     if (courierId) {
       await this.prisma.courier.update({
         where: { id: courierId, establishment_id: establishmentId },
@@ -195,7 +218,10 @@ export class TelegramService {
       if (!prefs[event]) continue;
       if (user.telegram_chat_id) {
         this.sendMessage(user.telegram_chat_id, text).catch((err) =>
-          this.logger.warn(`Telegram send failed for manager in ${establishmentId}`, err),
+          this.logger.warn(
+            `Telegram send failed for manager in ${establishmentId}`,
+            err,
+          ),
         );
       }
     }
@@ -233,15 +259,23 @@ export class TelegramService {
     const code = parts[1]?.trim();
 
     if (!code) {
-      await this.sendMessage(chatId, 'Щоб підключити акаунт, введіть код з дашборду або додатку:\n/start ВАШ-КОД');
+      await this.sendMessage(
+        chatId,
+        'Щоб підключити акаунт, введіть код з дашборду або додатку:\n/start ВАШ-КОД',
+      );
       return;
     }
 
     // Atomic get-and-delete (Redis 6.2+) — prevents TOCTOU race where two
     // concurrent /start requests both read the code before either deletes it.
-    const raw = await (this.redis as any).getdel(`${CONNECT_KEY_PREFIX}${code}`);
+    const raw = await (this.redis as any).getdel(
+      `${CONNECT_KEY_PREFIX}${code}`,
+    );
     if (!raw) {
-      await this.sendMessage(chatId, '❌ Код не знайдено або він вже вичерпав термін дії. Згенеруйте новий в налаштуваннях.');
+      await this.sendMessage(
+        chatId,
+        '❌ Код не знайдено або він вже вичерпав термін дії. Згенеруйте новий в налаштуваннях.',
+      );
       return;
     }
 
@@ -254,8 +288,11 @@ export class TelegramService {
           where: { id: payload.courier_id },
           select: { telegram_prefs: true },
         });
-        const prefs = (existing?.telegram_prefs as CourierTelegramPrefs | null) ?? null;
-        const courierPrefs = (prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_COURIER_PREFS) as Prisma.InputJsonValue;
+        const prefs =
+          (existing?.telegram_prefs as CourierTelegramPrefs | null) ?? null;
+        const courierPrefs = (
+          prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_COURIER_PREFS
+        ) as Prisma.InputJsonValue;
         await this.prisma.courier.update({
           where: { id: payload.courier_id },
           data: {
@@ -268,8 +305,11 @@ export class TelegramService {
           where: { id: payload.user_id },
           select: { telegram_prefs: true },
         });
-        const prefs = (existing?.telegram_prefs as ManagerTelegramPrefs | null) ?? null;
-        const userPrefs = (prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_MANAGER_PREFS) as Prisma.InputJsonValue;
+        const prefs =
+          (existing?.telegram_prefs as ManagerTelegramPrefs | null) ?? null;
+        const userPrefs = (
+          prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_MANAGER_PREFS
+        ) as Prisma.InputJsonValue;
         await this.prisma.user.update({
           where: { id: payload.user_id },
           data: {
@@ -296,7 +336,10 @@ export class TelegramService {
       throw err;
     }
 
-    await this.sendMessage(chatId, '✅ Акаунт підключено! Тепер ви будете отримувати сповіщення.\n\nНалаштуйте які сповіщення отримувати в дашборді або додатку.\n\nДля відключення — /stop');
+    await this.sendMessage(
+      chatId,
+      '✅ Акаунт підключено! Тепер ви будете отримувати сповіщення.\n\nНалаштуйте які сповіщення отримувати в дашборді або додатку.\n\nДля відключення — /stop',
+    );
     this.logger.log(`Telegram connected for user ${payload.user_id}`);
   }
 
@@ -314,7 +357,10 @@ export class TelegramService {
     ]);
 
     if (userResult.count > 0 || courierResult.count > 0) {
-      await this.sendMessage(chatId, '✅ Відключено. Ви більше не будете отримувати сповіщення.\n\nДля повторного підключення — згенеруйте новий код в налаштуваннях.');
+      await this.sendMessage(
+        chatId,
+        '✅ Відключено. Ви більше не будете отримувати сповіщення.\n\nДля повторного підключення — згенеруйте новий код в налаштуваннях.',
+      );
       this.logger.log(`Telegram disconnected via /stop for chat ${chatId}`);
     } else {
       await this.sendMessage(chatId, 'Акаунт не був підключений.');
@@ -322,9 +368,14 @@ export class TelegramService {
   }
 
   private async handleConfirmReconnect(chatId: string): Promise<void> {
-    const raw = await (this.redis as any).getdel(`${PENDING_RECONNECT_KEY_PREFIX}${chatId}`);
+    const raw = await (this.redis as any).getdel(
+      `${PENDING_RECONNECT_KEY_PREFIX}${chatId}`,
+    );
     if (!raw) {
-      await this.sendMessage(chatId, 'Запит на перепідключення не знайдено або вичерпав термін дії. Спробуйте знову з новим кодом.');
+      await this.sendMessage(
+        chatId,
+        'Запит на перепідключення не знайдено або вичерпав термін дії. Спробуйте знову з новим кодом.',
+      );
       return;
     }
 
@@ -336,8 +387,11 @@ export class TelegramService {
           where: { id: payload.courier_id },
           select: { telegram_prefs: true },
         });
-        const prefs = (existing?.telegram_prefs as CourierTelegramPrefs | null) ?? null;
-        const courierPrefs = (prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_COURIER_PREFS) as Prisma.InputJsonValue;
+        const prefs =
+          (existing?.telegram_prefs as CourierTelegramPrefs | null) ?? null;
+        const courierPrefs = (
+          prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_COURIER_PREFS
+        ) as Prisma.InputJsonValue;
         await this.prisma.$transaction([
           this.prisma.courier.updateMany({
             where: { telegram_chat_id: chatId },
@@ -353,8 +407,11 @@ export class TelegramService {
           where: { id: payload.user_id },
           select: { telegram_prefs: true },
         });
-        const prefs = (existing?.telegram_prefs as ManagerTelegramPrefs | null) ?? null;
-        const userPrefs = (prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_MANAGER_PREFS) as Prisma.InputJsonValue;
+        const prefs =
+          (existing?.telegram_prefs as ManagerTelegramPrefs | null) ?? null;
+        const userPrefs = (
+          prefs && Object.keys(prefs).length > 0 ? prefs : DEFAULT_MANAGER_PREFS
+        ) as Prisma.InputJsonValue;
         await this.prisma.$transaction([
           this.prisma.user.updateMany({
             where: { telegram_chat_id: chatId },
@@ -367,21 +424,40 @@ export class TelegramService {
         ]);
       }
     } catch (err) {
-      this.logger.error(`Telegram reconnect failed for user ${payload.user_id}`, err);
-      await this.sendMessage(chatId, '❌ Сталася помилка при перепідключенні. Спробуйте ще раз.');
+      this.logger.error(
+        `Telegram reconnect failed for user ${payload.user_id}`,
+        err,
+      );
+      await this.sendMessage(
+        chatId,
+        '❌ Сталася помилка при перепідключенні. Спробуйте ще раз.',
+      );
       return;
     }
 
-    await this.sendMessage(chatId, '✅ Підключено! Старий акаунт відʼєднано.\n\nДля відключення — /stop');
-    this.logger.log(`Telegram reconnected for user ${payload.user_id} (chat ${chatId})`);
+    await this.sendMessage(
+      chatId,
+      '✅ Підключено! Старий акаунт відʼєднано.\n\nДля відключення — /stop',
+    );
+    this.logger.log(
+      `Telegram reconnected for user ${payload.user_id} (chat ${chatId})`,
+    );
   }
 
   private async handleCancelReconnect(chatId: string): Promise<void> {
-    const deleted = await this.redis.del(`${PENDING_RECONNECT_KEY_PREFIX}${chatId}`);
+    const deleted = await this.redis.del(
+      `${PENDING_RECONNECT_KEY_PREFIX}${chatId}`,
+    );
     if (deleted > 0) {
-      await this.sendMessage(chatId, 'Скасовано. Поточне підключення залишено без змін.');
+      await this.sendMessage(
+        chatId,
+        'Скасовано. Поточне підключення залишено без змін.',
+      );
     } else {
-      await this.sendMessage(chatId, 'Немає активного запиту на перепідключення.');
+      await this.sendMessage(
+        chatId,
+        'Немає активного запиту на перепідключення.',
+      );
     }
   }
 
@@ -402,7 +478,11 @@ export class TelegramService {
       return;
     }
 
-    const prefs = (user?.telegram_prefs ?? courier?.telegram_prefs) as Record<string, boolean> ?? {};
+    const prefs =
+      ((user?.telegram_prefs ?? courier?.telegram_prefs) as Record<
+        string,
+        boolean
+      >) ?? {};
     const enabled = Object.entries(prefs)
       .filter(([, v]) => v)
       .map(([k]) => `• ${k}`)

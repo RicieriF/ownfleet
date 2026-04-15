@@ -33,7 +33,6 @@ export function CoordMap({ lat, lng, onChange, readonly = false }: Props) {
       if (cancelled || !containerRef.current) return;
 
       // Fix default icon paths broken by webpack/next bundling
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',

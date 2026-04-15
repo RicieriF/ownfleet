@@ -46,6 +46,10 @@ export class ApiKeysController {
     @Body() dto: UpdateDomainsDto,
     @Req() req: Request,
   ) {
-    return this.apiKeysService.updateDomains(id, dto.website_url, req.user as AuthenticatedUser);
+    return this.apiKeysService.updateDomains(
+      id,
+      dto.website_url,
+      req.user as AuthenticatedUser,
+    );
   }
 }

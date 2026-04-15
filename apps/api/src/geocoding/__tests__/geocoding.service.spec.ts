@@ -12,7 +12,7 @@ global.fetch = mockFetch;
 const makeResponse = (status: number, body: unknown = []) => ({
   ok: status >= 200 && status < 300,
   status,
-  json: async () => body,
+  json: () => Promise.resolve(body),
 });
 
 // ── Redis mock ──────────────────────────────────────────────────────────────
@@ -35,7 +35,10 @@ describe('GeocodingService', () => {
         { provide: REDIS_CLIENT, useValue: mockRedis },
         {
           provide: ConfigService,
-          useValue: { get: () => undefined, getOrThrow: () => 'redis://localhost' },
+          useValue: {
+            get: () => undefined,
+            getOrThrow: () => 'redis://localhost',
+          },
         },
       ],
     }).compile();
@@ -61,7 +64,9 @@ describe('GeocodingService', () => {
 
     it('calls Nominatim on cache miss, caches and returns coords', async () => {
       mockFetch.mockResolvedValue(
-        makeResponse(200, [{ lat: '50.4501', lon: '30.5234', importance: 0.75 }]),
+        makeResponse(200, [
+          { lat: '50.4501', lon: '30.5234', importance: 0.75 },
+        ]),
       );
 
       const result = await service.geocode('вул. Тестова 5, Київ');
@@ -77,7 +82,9 @@ describe('GeocodingService', () => {
 
     it('returns null (no cache) when Nominatim importance is too low (city/district match)', async () => {
       mockFetch.mockResolvedValue(
-        makeResponse(200, [{ lat: '50.4501', lon: '30.5234', importance: 0.15 }]),
+        makeResponse(200, [
+          { lat: '50.4501', lon: '30.5234', importance: 0.15 },
+        ]),
       );
 
       const result = await service.geocode('Київ');
@@ -124,27 +131,34 @@ describe('GeocodingService', () => {
     it('throws on Nominatim HTTP error so Bull can retry the job', async () => {
       mockFetch.mockResolvedValue(makeResponse(503));
 
-      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow('Nominatim HTTP 503');
+      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow(
+        'Nominatim HTTP 503',
+      );
       expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
     it('throws on 2s timeout so Bull can retry the job', async () => {
       mockFetch.mockImplementation(
-        () => new Promise((_, reject) => {
-          const err = new Error('The operation was aborted');
-          (err as NodeJS.ErrnoException).name = 'AbortError';
-          setTimeout(() => reject(err), 50);
-        }),
+        () =>
+          new Promise((_, reject) => {
+            const err = new Error('The operation was aborted');
+            (err as NodeJS.ErrnoException).name = 'AbortError';
+            setTimeout(() => reject(err), 50);
+          }),
       );
 
-      await expect(service.geocode('вул. Повільна 1')).rejects.toThrow('Nominatim timeout');
+      await expect(service.geocode('вул. Повільна 1')).rejects.toThrow(
+        'Nominatim timeout',
+      );
       expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
     it('throws on unexpected network error so Bull can retry the job', async () => {
       mockFetch.mockRejectedValue(new Error('network error'));
 
-      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow('network error');
+      await expect(service.geocode('вул. Тестова 1')).rejects.toThrow(
+        'network error',
+      );
     });
 
     it('uses the same cache key for same address regardless of case/whitespace', async () => {
@@ -154,7 +168,7 @@ describe('GeocodingService', () => {
 
       // First call — populate cache
       await service.geocode('  вул. Хрещатик 1  ');
-      const cacheKey = (mockRedis.set as jest.Mock).mock.calls[0][0] as string;
+      const cacheKey = mockRedis.set.mock.calls[0][0] as string;
 
       // Simulate cache hit for the same normalized key
       mockRedis.get.mockImplementation((key: string) =>
@@ -178,7 +192,11 @@ describe('GeocodingService', () => {
       await service.enqueueGeocode('order-1', 'вул. Тестова 5', 'est-1');
 
       expect(mockQueue.add).toHaveBeenCalledWith(
-        { orderId: 'order-1', address: 'вул. Тестова 5', establishmentId: 'est-1' },
+        {
+          orderId: 'order-1',
+          address: 'вул. Тестова 5',
+          establishmentId: 'est-1',
+        },
         { jobId: 'order-1' },
       );
     });

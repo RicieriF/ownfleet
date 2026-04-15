@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, Logger, Inject } from '@nestjs/common';
+import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRedis } from './redis.provider.js';
 import { InjectQueue } from '@nestjs/bull';
 import type { Redis } from 'ioredis';
@@ -59,7 +59,8 @@ export class TrackingService {
     @InjectQueue(PING_PERSIST_QUEUE) private readonly pingQueue: Queue<PingJob>,
     config: ConfigService,
   ) {
-    this.osrmUrl = config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
+    this.osrmUrl =
+      config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
   }
 
   async handlePing(dto: PingDto, user: AuthenticatedUser): Promise<void> {
@@ -75,7 +76,12 @@ export class TrackingService {
       await this.redis.setex(
         redisKey,
         LOCATION_TTL_SEC,
-        JSON.stringify({ lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null, ts: Date.now() }),
+        JSON.stringify({
+          lat: dto.lat,
+          lng: dto.lng,
+          battery: dto.battery ?? null,
+          ts: Date.now(),
+        }),
       );
     } catch (err) {
       this.logger.warn('Redis setex failed for ping cache — continuing', err);
@@ -90,9 +96,11 @@ export class TrackingService {
       battery: dto.battery ?? null,
       ts: Date.now(),
     };
-    this.redis.publish(PUBSUB_CHANNEL, JSON.stringify(event)).catch((err) =>
-      this.logger.warn('Redis publish failed for courier_moved event', err),
-    );
+    this.redis
+      .publish(PUBSUB_CHANNEL, JSON.stringify(event))
+      .catch((err) =>
+        this.logger.warn('Redis publish failed for courier_moved event', err),
+      );
 
     // ── Public tracking: location + route deviation ────────────────────────
     void this.handlePublicTracking(courierId, dto.lat, dto.lng);
@@ -100,11 +108,19 @@ export class TrackingService {
     // ── Async DB persist ───────────────────────────────────────────────────
     try {
       await this.pingQueue.add(
-        { courier_id: courierId, lat: dto.lat, lng: dto.lng, battery: dto.battery ?? null },
+        {
+          courier_id: courierId,
+          lat: dto.lat,
+          lng: dto.lng,
+          battery: dto.battery ?? null,
+        },
         {},
       );
     } catch (err) {
-      this.logger.warn('Failed to enqueue ping persist job — Redis may be unavailable', err);
+      this.logger.warn(
+        'Failed to enqueue ping persist job — Redis may be unavailable',
+        err,
+      );
     }
   }
 
@@ -118,13 +134,18 @@ export class TrackingService {
       if (!raw) return; // courier has no active delivery
 
       const active = JSON.parse(raw) as ActiveOrderCache;
-      const { orderId, deliveryId, orderLat, orderLng, transportProfile } = active;
+      const { orderId, deliveryId, orderLat, orderLng, transportProfile } =
+        active;
 
       // Publish location to public WS channel
-      this.redis.publish(
-        `order:${orderId}:public`,
-        JSON.stringify({ type: 'location', lat, lng, ts: Date.now() }),
-      ).catch((err: unknown) => this.logger.warn('Redis publish failed (location_update)', err));
+      this.redis
+        .publish(
+          `order:${orderId}:public`,
+          JSON.stringify({ type: 'location', lat, lng, ts: Date.now() }),
+        )
+        .catch((err: unknown) =>
+          this.logger.warn('Redis publish failed (location_update)', err),
+        );
 
       // Route deviation check
       if (orderLat === null || orderLng === null) return;
@@ -145,15 +166,23 @@ export class TrackingService {
 
       // OSRM route recalc (cooldown is already set atomically above)
       const routeGeometry = await this.fetchRouteGeometry(
-        lat, lng, orderLat, orderLng, transportProfile,
+        lat,
+        lng,
+        orderLat,
+        orderLng,
+        transportProfile,
       );
       if (!routeGeometry) return;
 
       // Publish route to public WS channel
-      this.redis.publish(
-        `order:${orderId}:public`,
-        JSON.stringify({ type: 'route', routeGeometry }),
-      ).catch((err: unknown) => this.logger.warn('Redis publish failed (route_update)', err));
+      this.redis
+        .publish(
+          `order:${orderId}:public`,
+          JSON.stringify({ type: 'route', routeGeometry }),
+        )
+        .catch((err: unknown) =>
+          this.logger.warn('Redis publish failed (route_update)', err),
+        );
 
       // Cache route geometry for snapshot requests (reconnects, page reloads).
       // TTL 4h matches tracking token TTL — after 4h the token expires and snapshot
@@ -193,7 +222,9 @@ export class TrackingService {
     establishmentLat: number | null,
     establishmentLng: number | null,
   ): Promise<void> {
-    const transportProfile = transportMode ? (OSRM_PROFILE[transportMode] ?? 'driving') : 'driving';
+    const transportProfile = transportMode
+      ? (OSRM_PROFILE[transportMode] ?? 'driving')
+      : 'driving';
 
     const activeOrder: ActiveOrderCache = {
       orderId,
@@ -238,14 +269,21 @@ export class TrackingService {
   async getLastKnownPosition(
     courierId: string,
     establishmentId: string,
-  ): Promise<{ lat: number; lng: number; battery: number | null; ts: number } | null> {
+  ): Promise<{
+    lat: number;
+    lng: number;
+    battery: number | null;
+    ts: number;
+  } | null> {
     const courier = await this.prisma.courier.findUnique({
       where: { id: courierId },
       select: { establishment_id: true },
     });
 
     if (!courier || courier.establishment_id !== establishmentId) {
-      throw new ForbiddenException('Courier does not belong to your establishment');
+      throw new ForbiddenException(
+        'Courier does not belong to your establishment',
+      );
     }
 
     const raw = await this.redis.get(`courier:location:${courierId}`);
@@ -254,18 +292,33 @@ export class TrackingService {
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (
-        typeof parsed !== 'object' || parsed === null ||
+        typeof parsed !== 'object' ||
+        parsed === null ||
         typeof (parsed as Record<string, unknown>).lat !== 'number' ||
         typeof (parsed as Record<string, unknown>).lng !== 'number' ||
         typeof (parsed as Record<string, unknown>).ts !== 'number'
       ) {
-        this.logger.warn(`Corrupted Redis location for courier ${courierId} — discarding`);
+        this.logger.warn(
+          `Corrupted Redis location for courier ${courierId} — discarding`,
+        );
         return null;
       }
-      const p = parsed as { lat: number; lng: number; battery: unknown; ts: number };
-      return { lat: p.lat, lng: p.lng, battery: typeof p.battery === 'number' ? p.battery : null, ts: p.ts };
+      const p = parsed as {
+        lat: number;
+        lng: number;
+        battery: unknown;
+        ts: number;
+      };
+      return {
+        lat: p.lat,
+        lng: p.lng,
+        battery: typeof p.battery === 'number' ? p.battery : null,
+        ts: p.ts,
+      };
     } catch {
-      this.logger.warn(`Failed to parse Redis location for courier ${courierId}`);
+      this.logger.warn(
+        `Failed to parse Redis location for courier ${courierId}`,
+      );
       return null;
     }
   }
@@ -278,7 +331,7 @@ export class TrackingService {
     toLat: number,
     toLng: number,
     profile: string,
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     const url =
       `${this.osrmUrl}/route/v1/${profile}/${fromLng},${fromLat};${toLng},${toLat}` +
       `?overview=simplified&geometries=geojson`;

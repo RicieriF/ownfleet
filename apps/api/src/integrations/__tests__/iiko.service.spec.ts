@@ -14,11 +14,15 @@ const mockOrder = {
 };
 const mockIntegration = { findMany: jest.fn() };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
-const mockGeocodingService = { enqueueGeocode: jest.fn().mockResolvedValue(undefined) };
+const mockGeocodingService = {
+  enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
 
 // Call-through lock mock: lock is always acquired and fn executes immediately
 const mockLock = {
-  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) => fn()),
+  withLock: jest.fn((_key: string, _ttl: number, fn: () => Promise<void>) =>
+    fn(),
+  ),
 } as unknown as DistributedLockService;
 
 const VALID_CONFIG = {
@@ -34,8 +38,8 @@ const EST_ID = 'est-iiko-1';
 const makeResponse = (status: number, body: unknown = {}) => ({
   ok: status >= 200 && status < 300,
   status,
-  text: async () => 'session-token-abc',
-  json: async () => body,
+  text: () => Promise.resolve('session-token-abc'),
+  json: () => Promise.resolve(body),
 });
 
 describe('IikoService', () => {
@@ -64,7 +68,12 @@ describe('IikoService', () => {
         .mockResolvedValueOnce(
           makeResponse(200, {
             deliveryOrders: [
-              { id: 'iiko-1', address: 'вул. Тестова 1', latitude: 50.0, longitude: 30.0 },
+              {
+                id: 'iiko-1',
+                address: 'вул. Тестова 1',
+                latitude: 50.0,
+                longitude: 30.0,
+              },
             ],
           }),
         );
@@ -87,11 +96,11 @@ describe('IikoService', () => {
     });
 
     it('skips already-ingested orders via skipDuplicates (idempotent)', async () => {
-      mockFetch
-        .mockResolvedValueOnce(makeResponse(200))
-        .mockResolvedValueOnce(makeResponse(200, {
+      mockFetch.mockResolvedValueOnce(makeResponse(200)).mockResolvedValueOnce(
+        makeResponse(200, {
           deliveryOrders: [{ id: 'iiko-exists', address: 'Some St' }],
-        }));
+        }),
+      );
       // DB reports 0 inserted because of duplicate skip
       mockOrder.createMany.mockResolvedValue({ count: 0 });
 
@@ -108,7 +117,9 @@ describe('IikoService', () => {
     it('does NOT throw on 429 — records backoff and returns', async () => {
       mockFetch.mockResolvedValueOnce(makeResponse(429)); // auth returns 429
 
-      await expect(service.pollEstablishment(EST_ID, VALID_CONFIG)).resolves.not.toThrow();
+      await expect(
+        service.pollEstablishment(EST_ID, VALID_CONFIG),
+      ).resolves.not.toThrow();
     });
 
     it('sets backoff state after first 429', async () => {
@@ -219,7 +230,11 @@ describe('IikoService', () => {
 
       await service.pollAll();
 
-      expect(mockLock.withLock).toHaveBeenCalledWith('iiko-poll', 90, expect.any(Function));
+      expect(mockLock.withLock).toHaveBeenCalledWith(
+        'iiko-poll',
+        90,
+        expect.any(Function),
+      );
     });
   });
 
@@ -233,7 +248,12 @@ describe('IikoService', () => {
         .mockResolvedValueOnce(
           makeResponse(200, {
             deliveryOrders: [
-              { id: 'iiko-with-coords', address: 'вул. Тестова 1', latitude: 50.0, longitude: 30.0 },
+              {
+                id: 'iiko-with-coords',
+                address: 'вул. Тестова 1',
+                latitude: 50.0,
+                longitude: 30.0,
+              },
             ],
           }),
         );
@@ -255,7 +275,9 @@ describe('IikoService', () => {
             ],
           }),
         );
-      mockOrder.findMany.mockResolvedValue([{ id: 'db-order-id', address: 'вул. Хрещатик 10' }]);
+      mockOrder.findMany.mockResolvedValue([
+        { id: 'db-order-id', address: 'вул. Хрещатик 10' },
+      ]);
 
       await service.pollEstablishment(EST_ID, VALID_CONFIG);
 

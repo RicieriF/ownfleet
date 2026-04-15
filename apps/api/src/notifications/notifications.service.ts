@@ -21,7 +21,9 @@ export class NotificationsService implements OnModuleInit {
   ) {
     const telegramToken = this.config.get<string>('TELEGRAM_BOT_TOKEN');
     if (!telegramToken) {
-      this.logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram notifications disabled');
+      this.logger.warn(
+        'TELEGRAM_BOT_TOKEN not set — Telegram notifications disabled',
+      );
       this.telegramApiBase = null;
     } else {
       this.telegramApiBase = `https://api.telegram.org/bot${telegramToken}`;
@@ -29,13 +31,19 @@ export class NotificationsService implements OnModuleInit {
   }
 
   onModuleInit(): void {
-    const serviceAccountJson = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON');
+    const serviceAccountJson = this.config.get<string>(
+      'FIREBASE_SERVICE_ACCOUNT_JSON',
+    );
     if (!serviceAccountJson) {
-      this.logger.warn('FIREBASE_SERVICE_ACCOUNT_JSON not set — FCM push disabled');
+      this.logger.warn(
+        'FIREBASE_SERVICE_ACCOUNT_JSON not set — FCM push disabled',
+      );
       return;
     }
     try {
-      const serviceAccount = JSON.parse(serviceAccountJson) as admin.ServiceAccount;
+      const serviceAccount = JSON.parse(
+        serviceAccountJson,
+      ) as admin.ServiceAccount;
       this.fcmApp = admin.initializeApp(
         { credential: admin.credential.cert(serviceAccount) },
         'weego-cmi',
@@ -52,7 +60,9 @@ export class NotificationsService implements OnModuleInit {
    */
   async sendPush(courierId: string, payload: PushPayload): Promise<void> {
     if (!this.fcmApp) {
-      this.logger.warn(`FCM not initialized — skipping push for courier ${courierId}`);
+      this.logger.warn(
+        `FCM not initialized — skipping push for courier ${courierId}`,
+      );
       return;
     }
 
@@ -62,7 +72,9 @@ export class NotificationsService implements OnModuleInit {
     });
 
     if (!courier?.device_token) {
-      this.logger.debug(`Courier ${courierId} has no device_token — skipping push`);
+      this.logger.debug(
+        `Courier ${courierId} has no device_token — skipping push`,
+      );
       return;
     }
 
@@ -94,12 +106,22 @@ export class NotificationsService implements OnModuleInit {
         code === 'messaging/invalid-registration-token' ||
         code === 'messaging/registration-token-not-registered'
       ) {
-        this.logger.warn(`Invalid FCM token for courier ${courierId} — clearing`);
+        this.logger.warn(
+          `Invalid FCM token for courier ${courierId} — clearing`,
+        );
         await this.prisma.courier
           .update({ where: { id: courierId }, data: { device_token: null } })
-          .catch((e) => this.logger.error(`Failed to clear device_token for ${courierId}`, e));
+          .catch((e) =>
+            this.logger.error(
+              `Failed to clear device_token for ${courierId}`,
+              e,
+            ),
+          );
       } else {
-        this.logger.warn(`FCM send failed for courier ${courierId}: ${code}`, err);
+        this.logger.warn(
+          `FCM send failed for courier ${courierId}: ${code}`,
+          err,
+        );
       }
     }
   }
@@ -110,7 +132,9 @@ export class NotificationsService implements OnModuleInit {
    */
   async sendTelegram(chatId: string, text: string): Promise<void> {
     if (!this.telegramApiBase) {
-      this.logger.debug(`Telegram disabled — skipping message to chat ${chatId}`);
+      this.logger.debug(
+        `Telegram disabled — skipping message to chat ${chatId}`,
+      );
       return;
     }
     const url = `${this.telegramApiBase}/sendMessage`;
@@ -123,7 +147,9 @@ export class NotificationsService implements OnModuleInit {
 
       if (!response.ok) {
         const body = await response.text();
-        this.logger.warn(`Telegram sendMessage failed: ${response.status} ${body}`);
+        this.logger.warn(
+          `Telegram sendMessage failed: ${response.status} ${body}`,
+        );
       }
     } catch (err) {
       this.logger.warn('Telegram sendMessage error', err);

@@ -10,9 +10,20 @@ const EST_A = 'est-a';
 const EST_B = 'est-b';
 
 // Courier-linked user (has courier_id in JWT)
-const courierUser: any = { id: 'u1', establishment_id: EST_A, role: 'manager', is_platform_admin: false, courier_id: 'c1' };
+const courierUser: any = {
+  id: 'u1',
+  establishment_id: EST_A,
+  role: 'manager',
+  is_platform_admin: false,
+  courier_id: 'c1',
+};
 // Manager user (no courier_id)
-const managerUser: any = { id: 'u2', establishment_id: EST_A, role: 'manager', is_platform_admin: false };
+const managerUser: any = {
+  id: 'u2',
+  establishment_id: EST_A,
+  role: 'manager',
+  is_platform_admin: false,
+};
 
 const courierA = { id: 'c1', establishment_id: EST_A };
 const courierB = { id: 'c2', establishment_id: EST_B };
@@ -44,7 +55,10 @@ describe('TrackingService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: REDIS_CLIENT, useValue: mockRedis },
         { provide: getQueueToken(PING_PERSIST_QUEUE), useValue: mockPingQueue },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(undefined) },
+        },
       ],
     }).compile();
     service = module.get<TrackingService>(TrackingService);
@@ -59,13 +73,20 @@ describe('TrackingService', () => {
     const validPing = { lat: 50.45, lng: 30.52, battery: 80 };
 
     it('rejects ping from non-courier (manager) account', async () => {
-      await expect(service.handlePing(validPing, managerUser)).rejects.toThrow(ForbiddenException);
+      await expect(service.handlePing(validPing, managerUser)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('enqueues ping for async DB persist via Bull', async () => {
       await service.handlePing(validPing, courierUser);
       expect(mockPingQueue.add).toHaveBeenCalledWith(
-        { courier_id: courierUser.courier_id, lat: 50.45, lng: 30.52, battery: 80 },
+        {
+          courier_id: courierUser.courier_id,
+          lat: 50.45,
+          lng: 30.52,
+          battery: 80,
+        },
         // removeOnComplete/removeOnFail are configured in defaultJobOptions at module level,
         // not per-call — so the per-call options object is empty.
         {},
@@ -106,8 +127,17 @@ describe('TrackingService', () => {
       transportProfile: 'driving',
     });
 
-    function callHandlePublicTracking(svc: TrackingService, lat: number, lng: number) {
-      return (svc as any)['handlePublicTracking'].call(svc, 'c1', lat, lng) as Promise<void>;
+    function callHandlePublicTracking(
+      svc: TrackingService,
+      lat: number,
+      lng: number,
+    ) {
+      return (svc as any)['handlePublicTracking'].call(
+        svc,
+        'c1',
+        lat,
+        lng,
+      ) as Promise<void>;
     }
 
     beforeEach(() => {
@@ -134,7 +164,7 @@ describe('TrackingService', () => {
     it('returns after publish when no route:origin key (no route recalc)', async () => {
       mockRedis.get
         .mockResolvedValueOnce(activeOrderCache) // courier:active_order
-        .mockResolvedValueOnce(null);             // route:origin → missing
+        .mockResolvedValueOnce(null); // route:origin → missing
       const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
       await callHandlePublicTracking(service, 50.45, 30.52);
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -145,7 +175,7 @@ describe('TrackingService', () => {
       const origin = JSON.stringify({ lat: 50.45, lng: 30.52 });
       mockRedis.get
         .mockResolvedValueOnce(activeOrderCache) // courier:active_order
-        .mockResolvedValueOnce(origin);          // route:origin
+        .mockResolvedValueOnce(origin); // route:origin
       const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
       await callHandlePublicTracking(service, 50.45, 30.52);
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -156,7 +186,7 @@ describe('TrackingService', () => {
       const origin = JSON.stringify({ lat: 49.0, lng: 29.0 });
       mockRedis.get
         .mockResolvedValueOnce(activeOrderCache) // courier:active_order
-        .mockResolvedValueOnce(origin);          // route:origin
+        .mockResolvedValueOnce(origin); // route:origin
       // NX EX fails → cooldown already set
       mockRedis.set = jest.fn().mockResolvedValue(null);
       const fetchSpy = jest.spyOn(service as any, 'fetchRouteGeometry');
@@ -169,9 +199,11 @@ describe('TrackingService', () => {
       const fakeRoute = { type: 'LineString', coordinates: [[30.52, 50.45]] };
       mockRedis.get
         .mockResolvedValueOnce(activeOrderCache) // courier:active_order
-        .mockResolvedValueOnce(origin);          // route:origin
+        .mockResolvedValueOnce(origin); // route:origin
       mockRedis.set = jest.fn().mockResolvedValue('OK'); // NX EX acquired
-      jest.spyOn(service as any, 'fetchRouteGeometry').mockResolvedValue(fakeRoute);
+      jest
+        .spyOn(service as any, 'fetchRouteGeometry')
+        .mockResolvedValue(fakeRoute);
 
       await callHandlePublicTracking(service, 50.45, 30.52);
 
@@ -208,8 +240,8 @@ describe('TrackingService', () => {
 
       expect(mockRedis.set).toHaveBeenCalledTimes(1); // only the NX EX cooldown set
       // Route NOT published
-      const routePublish = (mockRedis.publish as jest.Mock).mock.calls.find(
-        (c) => String(c[1]).includes('"type":"route"'),
+      const routePublish = mockRedis.publish.mock.calls.find((c) =>
+        String(c[1]).includes('"type":"route"'),
       );
       expect(routePublish).toBeUndefined();
     });
@@ -240,14 +272,18 @@ describe('TrackingService', () => {
 
     it('returns parsed position from Redis', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(courierA);
-      mockRedis.get.mockResolvedValue(JSON.stringify({ lat: 50.45, lng: 30.52, battery: 80, ts: 1000 }));
+      mockRedis.get.mockResolvedValue(
+        JSON.stringify({ lat: 50.45, lng: 30.52, battery: 80, ts: 1000 }),
+      );
       const result = await service.getLastKnownPosition('c1', EST_A);
       expect(result?.lat).toBe(50.45);
     });
 
     it('rejects access to courier from another establishment', async () => {
       mockPrisma.courier.findUnique.mockResolvedValue(courierB);
-      await expect(service.getLastKnownPosition('c2', EST_A)).rejects.toThrow(ForbiddenException);
+      await expect(service.getLastKnownPosition('c2', EST_A)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

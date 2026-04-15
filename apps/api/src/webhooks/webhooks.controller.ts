@@ -6,7 +6,6 @@ import {
   Delete,
   Param,
   Body,
-  Req,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -16,7 +15,8 @@ import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { WebhooksService } from './webhooks.service.js';
 import { CreateWebhookDto } from './dto/create-webhook.dto.js';
 import { UpdateWebhookDto } from './dto/update-webhook.dto.js';
-import { AuthenticatedUser } from '../auth/auth.types.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
 
 @Controller('webhooks')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
@@ -24,28 +24,35 @@ export class WebhooksController {
   constructor(private readonly service: WebhooksService) {}
 
   @Post()
-  create(@Body() dto: CreateWebhookDto, @Req() req: any) {
-    return this.service.create(dto, req.user as AuthenticatedUser);
+  create(
+    @Body() dto: CreateWebhookDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.create(dto, user);
   }
 
   @Get()
-  findAll(@Req() req: any) {
-    return this.service.findAll(req.user as AuthenticatedUser);
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.findAll(user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: any) {
-    return this.service.findOne(id, req.user as AuthenticatedUser);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.findOne(id, user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateWebhookDto, @Req() req: any) {
-    return this.service.update(id, dto, req.user as AuthenticatedUser);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateWebhookDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.update(id, dto, user);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id') id: string, @Req() req: any) {
-    return this.service.remove(id, req.user as AuthenticatedUser);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.remove(id, user);
   }
 }

@@ -6,12 +6,12 @@ import { OrderStatus, DeliveryStatus } from '@prisma/client';
 //          ↘ cancelled  ↘ cancelled   ↘ failed
 
 const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending:     ['assigned', 'cancelled'],
-  assigned:    ['in_progress', 'cancelled'],
+  pending: ['assigned', 'cancelled'],
+  assigned: ['in_progress', 'cancelled'],
   in_progress: ['completed', 'failed'],
-  completed:   [],
-  cancelled:   [],
-  failed:      [],
+  completed: [],
+  cancelled: [],
+  failed: [],
 };
 
 // ─── Delivery transitions ─────────────────────────────────────────────────────
@@ -19,10 +19,10 @@ const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 //                  ↘ failed
 
 const DELIVERY_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
-  assigned:    ['in_progress'],
+  assigned: ['in_progress'],
   in_progress: ['completed', 'failed'],
-  completed:   [],
-  failed:      [],
+  completed: [],
+  failed: [],
 };
 
 export function assertOrderTransition(

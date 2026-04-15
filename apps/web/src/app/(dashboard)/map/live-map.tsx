@@ -44,9 +44,7 @@ function makeMarkerHtml(name: string, status: string): string {
 
 export function LiveMap({ couriers, initialCenter }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<Map<string, any>>(new Map());
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const leafletMapRef = useRef<any>(null);
 
   useEffect(() => {

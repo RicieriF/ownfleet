@@ -8,9 +8,12 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 const EST_A = 'est-a';
 const EST_B = 'est-b';
 
-const ownerUser: any = { id: 'u1', establishment_id: EST_A, role: 'owner', is_platform_admin: false };
-const otherUser: any = { id: 'u2', establishment_id: EST_B, role: 'owner', is_platform_admin: false };
-
+const ownerUser: any = {
+  id: 'u1',
+  establishment_id: EST_A,
+  role: 'owner',
+  is_platform_admin: false,
+};
 const API_KEY_SECRET = 'test-secret-32-bytes-exactly!!!!';
 
 const mockApiKey = {
@@ -50,7 +53,10 @@ describe('ApiKeysService', () => {
   describe('createKey', () => {
     it('creates a key with wgo_ prefix and returns plaintext once', async () => {
       const dto = { name: 'Test Key', website_url: 'https://pizza.com' };
-      mockApiKey.create.mockResolvedValue({ id: 'key-id', key_prefix: 'wgo_xxxx' });
+      mockApiKey.create.mockResolvedValue({
+        id: 'key-id',
+        key_prefix: 'wgo_xxxx',
+      });
 
       const result = await service.createKey(dto, ownerUser);
 
@@ -69,9 +75,15 @@ describe('ApiKeysService', () => {
     });
 
     it('auto-expands website_url to include www variant', async () => {
-      mockApiKey.create.mockResolvedValue({ id: 'key-id', key_prefix: 'wgo_xxxx' });
+      mockApiKey.create.mockResolvedValue({
+        id: 'key-id',
+        key_prefix: 'wgo_xxxx',
+      });
 
-      await service.createKey({ name: 'K', website_url: 'pizza.com' }, ownerUser);
+      await service.createKey(
+        { name: 'K', website_url: 'pizza.com' },
+        ownerUser,
+      );
 
       const call = mockApiKey.create.mock.calls[0][0].data;
       expect(call.allowed_domains).toContain('pizza.com');
@@ -79,7 +91,10 @@ describe('ApiKeysService', () => {
     });
 
     it('sets empty allowed_domains when no website_url provided', async () => {
-      mockApiKey.create.mockResolvedValue({ id: 'key-id', key_prefix: 'wgo_xxxx' });
+      mockApiKey.create.mockResolvedValue({
+        id: 'key-id',
+        key_prefix: 'wgo_xxxx',
+      });
 
       await service.createKey({ name: 'K' }, ownerUser);
 
@@ -157,16 +172,28 @@ describe('ApiKeysService', () => {
   describe('toggleActive', () => {
     it('throws NotFoundException when key not found', async () => {
       mockApiKey.findUnique.mockResolvedValue(null);
-      await expect(service.toggleActive('k1', ownerUser)).rejects.toThrow(NotFoundException);
+      await expect(service.toggleActive('k1', ownerUser)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when key belongs to different establishment', async () => {
-      mockApiKey.findUnique.mockResolvedValue({ id: 'k1', establishment_id: EST_B, is_active: true });
-      await expect(service.toggleActive('k1', ownerUser)).rejects.toThrow(NotFoundException);
+      mockApiKey.findUnique.mockResolvedValue({
+        id: 'k1',
+        establishment_id: EST_B,
+        is_active: true,
+      });
+      await expect(service.toggleActive('k1', ownerUser)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('toggles is_active from true to false', async () => {
-      mockApiKey.findUnique.mockResolvedValue({ id: 'k1', establishment_id: EST_A, is_active: true });
+      mockApiKey.findUnique.mockResolvedValue({
+        id: 'k1',
+        establishment_id: EST_A,
+        is_active: true,
+      });
       mockApiKey.update.mockResolvedValue({});
 
       await service.toggleActive('k1', ownerUser);
@@ -178,7 +205,11 @@ describe('ApiKeysService', () => {
     });
 
     it('toggles is_active from false to true', async () => {
-      mockApiKey.findUnique.mockResolvedValue({ id: 'k1', establishment_id: EST_A, is_active: false });
+      mockApiKey.findUnique.mockResolvedValue({
+        id: 'k1',
+        establishment_id: EST_A,
+        is_active: false,
+      });
       mockApiKey.update.mockResolvedValue({});
 
       await service.toggleActive('k1', ownerUser);

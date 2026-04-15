@@ -29,14 +29,22 @@ export class PingPersistProcessor {
         )
       `;
     } catch (err) {
-      this.logger.error(`Failed to persist ping for courier ${courier_id}`, err);
+      this.logger.error(
+        `Failed to persist ping for courier ${courier_id}`,
+        err,
+      );
       throw err; // rethrow so Bull marks the job as failed and can retry
     }
 
     // Fire-and-forget: check if courier has departed 100m from establishment
     // to start the ETA countdown timer
-    this.etaService.checkAndMarkDeparture(courier_id, lat, lng).catch((err) =>
-      this.logger.warn(`checkAndMarkDeparture failed for courier ${courier_id}`, err),
-    );
+    this.etaService
+      .checkAndMarkDeparture(courier_id, lat, lng)
+      .catch((err) =>
+        this.logger.warn(
+          `checkAndMarkDeparture failed for courier ${courier_id}`,
+          err,
+        ),
+      );
   }
 }

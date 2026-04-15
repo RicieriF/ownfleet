@@ -10,10 +10,12 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
-import { AuthenticatedUser } from './auth.types.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from './auth.types.js';
 import { LoginDto } from './dto/login.dto.js';
 
 const REFRESH_COOKIE = 'refresh_token';
@@ -34,9 +36,10 @@ export class AuthController {
   @Throttle({ default: { ttl: 60_000, limit: 10 } }) // 10 attempts / min per IP
   async login(
     @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: any,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<{ access_token: string; refresh_token: string; user: object }> {
-    const { accessToken, refreshToken, user } = await this.authService.login(dto);
+    const { accessToken, refreshToken, user } =
+      await this.authService.login(dto);
     // HttpOnly cookie for web clients; body for mobile (React Native can't read cookies)
     res.cookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTS);
     return { access_token: accessToken, refresh_token: refreshToken, user };
@@ -46,12 +49,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60_000, limit: 30 } }) // 30 refreshes / min per IP
   async refresh(
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<{ access_token: string; refresh_token: string }> {
     // Accept refresh token from HttpOnly cookie (web) or Authorization-like header (mobile)
     const raw: string | undefined =
-      req.cookies?.[REFRESH_COOKIE] ?? req.headers?.['x-refresh-token'];
+      (req.cookies as Record<string, string>)[REFRESH_COOKIE] ??
+      (req.headers['x-refresh-token'] as string | undefined);
     if (!raw) {
       throw new UnauthorizedException('No refresh token');
     }
@@ -69,8 +73,7 @@ export class AuthController {
   @Get('ws-token')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  wsToken(@Req() req: any): { token: string } {
-    const user = req.user as AuthenticatedUser;
+  wsToken(@CurrentUser() user: AuthenticatedUser): { token: string } {
     return { token: this.authService.issueWsToken(user) };
   }
 
@@ -79,10 +82,12 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    const raw: string | undefined = req.cookies?.[REFRESH_COOKIE];
+    const raw: string | undefined = (req.cookies as Record<string, string>)[
+      REFRESH_COOKIE
+    ];
     if (raw) {
       await this.authService.logout(raw);
     }

@@ -35,7 +35,9 @@ export class ApiKeysService {
     user: AuthenticatedUser,
   ): Promise<{ key: string; id: string; key_prefix: string }> {
     this.assertManagerOrOwner(user);
-    const allowedDomains = dto.website_url ? this.expandDomains(dto.website_url) : [];
+    const allowedDomains = dto.website_url
+      ? this.expandDomains(dto.website_url)
+      : [];
 
     // Retry up to 3 times on key_prefix collision (P2002 unique constraint).
     // Probability per attempt is ~1/16M, but a retry loop makes failures impossible
@@ -62,7 +64,9 @@ export class ApiKeysService {
           },
         });
 
-        this.logger.log(`API key created for establishment ${user.establishment_id}: ${keyPrefix}...`);
+        this.logger.log(
+          `API key created for establishment ${user.establishment_id}: ${keyPrefix}...`,
+        );
         return { key, id: record.id, key_prefix: keyPrefix };
       } catch (err) {
         if (
@@ -70,7 +74,9 @@ export class ApiKeysService {
           err.code === 'P2002' &&
           attempt < 3
         ) {
-          this.logger.warn(`key_prefix collision on attempt ${attempt}, retrying`);
+          this.logger.warn(
+            `key_prefix collision on attempt ${attempt}, retrying`,
+          );
           continue;
         }
         throw err;
@@ -123,7 +129,11 @@ export class ApiKeysService {
    * Updates allowed_domains for the API key (e.g. from /settings website URL change).
    * Auto-expands to include www variant.
    */
-  async updateDomains(id: string, websiteUrl: string, user: AuthenticatedUser): Promise<void> {
+  async updateDomains(
+    id: string,
+    websiteUrl: string,
+    user: AuthenticatedUser,
+  ): Promise<void> {
     this.assertManagerOrOwner(user);
     const key = await this.prisma.apiKey.findUnique({ where: { id } });
     if (!key || key.establishment_id !== user.establishment_id) {
@@ -134,7 +144,9 @@ export class ApiKeysService {
     try {
       allowedDomains = websiteUrl.trim() ? this.expandDomains(websiteUrl) : [];
     } catch {
-      throw new BadRequestException('Invalid website URL — must be a valid domain (e.g. pizza.com)');
+      throw new BadRequestException(
+        'Invalid website URL — must be a valid domain (e.g. pizza.com)',
+      );
     }
     await this.prisma.apiKey.update({
       where: { id },
@@ -210,7 +222,9 @@ export class ApiKeysService {
         where: { id: keyId },
         data: { last_used_at: new Date(), last_used_domain: domain },
       })
-      .catch((err: unknown) => this.logger.warn('Failed to update last_used_at', err));
+      .catch((err: unknown) =>
+        this.logger.warn('Failed to update last_used_at', err),
+      );
   }
 
   /**

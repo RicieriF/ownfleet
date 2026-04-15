@@ -50,7 +50,10 @@ describe('EtaService', () => {
         EtaService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: TelegramService, useValue: mockTelegram },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(undefined) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -118,7 +121,10 @@ describe('EtaService', () => {
       jest.spyOn(global, 'fetch').mockResolvedValue(mockOsrmResponse(350));
       jest.spyOn(Date.prototype, 'toLocaleString').mockReturnValue('10'); // off-peak
 
-      const result = await service.calculateEta({ ...baseParams, transportMode: 'moto_electric' });
+      const result = await service.calculateEta({
+        ...baseParams,
+        transportMode: 'moto_electric',
+      });
 
       const corrected = 350 * (50 / 35); // ≈ 500
       const expected = Math.round(corrected + 180);
@@ -126,7 +132,9 @@ describe('EtaService', () => {
     });
 
     it('uses driving profile for moto_gas (same URL pattern as car)', async () => {
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(mockOsrmResponse(300));
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(mockOsrmResponse(300));
       jest.spyOn(Date.prototype, 'toLocaleString').mockReturnValue('10');
 
       await service.calculateEta({ ...baseParams, transportMode: 'moto_gas' });
@@ -138,7 +146,9 @@ describe('EtaService', () => {
     });
 
     it('uses cycling profile for bicycle', async () => {
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(mockOsrmResponse(300));
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(mockOsrmResponse(300));
       jest.spyOn(Date.prototype, 'toLocaleString').mockReturnValue('10');
 
       await service.calculateEta({ ...baseParams, transportMode: 'bicycle' });
@@ -150,7 +160,9 @@ describe('EtaService', () => {
     });
 
     it('uses foot profile for walking', async () => {
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(mockOsrmResponse(300));
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(mockOsrmResponse(300));
       jest.spyOn(Date.prototype, 'toLocaleString').mockReturnValue('10');
 
       await service.calculateEta({ ...baseParams, transportMode: 'walking' });
@@ -162,7 +174,9 @@ describe('EtaService', () => {
     });
 
     it('returns null when OSRM responds with non-ok HTTP status', async () => {
-      jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 503 } as Response);
+      jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue({ ok: false, status: 503 } as Response);
 
       const result = await service.calculateEta(baseParams);
 
@@ -192,7 +206,9 @@ describe('EtaService', () => {
     });
 
     it('returns null when fetch throws (network error)', async () => {
-      jest.spyOn(global, 'fetch').mockRejectedValue(new Error('Network failure'));
+      jest
+        .spyOn(global, 'fetch')
+        .mockRejectedValue(new Error('Network failure'));
 
       const result = await service.calculateEta(baseParams);
 
@@ -200,7 +216,9 @@ describe('EtaService', () => {
     });
 
     it('orders coordinates as lng,lat in OSRM URL (lon first)', async () => {
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(mockOsrmResponse(300));
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(mockOsrmResponse(300));
       jest.spyOn(Date.prototype, 'toLocaleString').mockReturnValue('10');
 
       await service.calculateEta({
@@ -226,7 +244,10 @@ describe('EtaService', () => {
     const EST_LAT = 50.45;
     const EST_LNG = 30.52;
 
-    const deliveryWithEstablishment = (lat: number | null, lng: number | null) => ({
+    const deliveryWithEstablishment = (
+      lat: number | null,
+      lng: number | null,
+    ) => ({
       id: 'delivery-1',
       order: {
         establishment: { lat, lng },
@@ -425,14 +446,19 @@ describe('EtaService', () => {
         startedMsAgo: 5 * 60_000, // 5 min into a 20-min delivery
         etaAlertDelayMinutes: 10,
       });
-      mockPrisma.delivery.findMany.mockResolvedValue([overdueDelivery, notYetOverdueDelivery]);
+      mockPrisma.delivery.findMany.mockResolvedValue([
+        overdueDelivery,
+        notYetOverdueDelivery,
+      ]);
       mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.checkOverdueDeliveries();
 
       expect(result).toBe(1);
       expect(mockPrisma.delivery.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: { in: ['delivery-overdue'] } } }),
+        expect.objectContaining({
+          where: { id: { in: ['delivery-overdue'] } },
+        }),
       );
     });
 
@@ -465,7 +491,9 @@ describe('EtaService', () => {
       });
       mockPrisma.delivery.findMany.mockResolvedValue([delivery]);
       mockPrisma.delivery.updateMany.mockResolvedValue({ count: 1 });
-      mockTelegram.notifyEstablishmentManagers.mockRejectedValue(new Error('Telegram down'));
+      mockTelegram.notifyEstablishmentManagers.mockRejectedValue(
+        new Error('Telegram down'),
+      );
 
       // Should not throw
       const result = await service.checkOverdueDeliveries();

@@ -6,10 +6,11 @@ import { TelegramService } from '../telegram/telegram.service.js';
 import { MANAGER_EVENT } from '../telegram/telegram.types.js';
 import { DistributedLockService } from '../shared/redis/distributed-lock.service.js';
 import { IntegrationType, OrderSource } from '@prisma/client';
+import { parseIikoConfig } from './integration-configs.js';
 
 const POLL_INTERVAL_CRON = '*/2 * * * *'; // every 2 minutes
 const MAX_BACKOFF_MS = 5 * 60_000; // 5 min cap
-const BASE_BACKOFF_MS = 5_000;     // 5 sec initial
+const BASE_BACKOFF_MS = 5_000; // 5 sec initial
 
 interface BackoffState {
   until: number;
@@ -50,7 +51,10 @@ export class IikoService {
       });
 
       for (const integration of integrations) {
-        await this.pollEstablishment(integration.establishment_id, integration.config);
+        await this.pollEstablishment(
+          integration.establishment_id,
+          integration.config,
+        );
       }
     });
   }
@@ -59,7 +63,10 @@ export class IikoService {
    * Poll one establishment's iiko instance.
    * Public so it can be called from tests or admin tooling.
    */
-  async pollEstablishment(establishmentId: string, config: unknown): Promise<void> {
+  async pollEstablishment(
+    establishmentId: string,
+    config: unknown,
+  ): Promise<void> {
     if (this.isBackingOff(establishmentId)) {
       const state = this.backoff.get(establishmentId)!;
       this.logger.debug(
@@ -68,20 +75,27 @@ export class IikoService {
       return;
     }
 
-    const cfg = config as Record<string, unknown>;
-    const serverUrl = cfg['server_url'] as string | undefined;
-    const login = cfg['login'] as string | undefined;
-    const password = cfg['password'] as string | undefined;
-    const organizationId = cfg['organization_id'] as string | undefined;
-
-    if (!serverUrl || !login || !password || !organizationId) {
-      this.logger.warn(`[iiko:${establishmentId}] incomplete config — skipping`);
+    const cfg = parseIikoConfig(config);
+    if (!cfg) {
+      this.logger.warn(
+        `[iiko:${establishmentId}] incomplete config — skipping`,
+      );
       return;
     }
+    const {
+      server_url: serverUrl,
+      login,
+      password,
+      organization_id: organizationId,
+    } = cfg;
 
     try {
       const token = await this.getSessionToken(serverUrl, login, password);
-      const orders = await this.fetchDeliveryOrders(serverUrl, token, organizationId);
+      const orders = await this.fetchDeliveryOrders(
+        serverUrl,
+        token,
+        organizationId,
+      );
 
       this.clearBackoff(establishmentId);
 
@@ -102,13 +116,17 @@ export class IikoService {
         });
 
         if (result.count > 0) {
-          this.logger.log(`[iiko:${establishmentId}] ingested ${result.count} new orders`);
+          this.logger.log(
+            `[iiko:${establishmentId}] ingested ${result.count} new orders`,
+          );
         }
 
         // Enqueue geocoding for all newly ingested orders with a valid address.
         // Fetch only orders that are still lat=null (skipDuplicates means some may
         // already exist with geocoded coords from a prior poll cycle).
-        const withAddress = orders.filter((o) => o.address && o.address !== 'Unknown');
+        const withAddress = orders.filter(
+          (o) => o.address && o.address !== 'Unknown',
+        );
         if (withAddress.length > 0) {
           const forGeocode = await this.prisma.order.findMany({
             where: {
@@ -119,7 +137,11 @@ export class IikoService {
             select: { id: true, address: true },
           });
           for (const order of forGeocode) {
-            void this.geocodingService.enqueueGeocode(order.id, order.address, establishmentId);
+            void this.geocodingService.enqueueGeocode(
+              order.id,
+              order.address,
+              establishmentId,
+            );
           }
         }
 
@@ -147,12 +169,17 @@ export class IikoService {
                 `⚠️ Замовлення${label} від iiko надійшло без адреси.\nВстановіть координати вручну через кнопку «Карта» у дашборді.`,
                 MANAGER_EVENT.GEOCODE_FAILED,
               )
-              .catch((err) => this.logger.warn(`Telegram alert failed for no-address iiko order ${order.id}`, err));
+              .catch((err) =>
+                this.logger.warn(
+                  `Telegram alert failed for no-address iiko order ${order.id}`,
+                  err,
+                ),
+              );
           }
         }
       }
     } catch (err: unknown) {
-      await this.handlePollError(establishmentId, err);
+      this.handlePollError(establishmentId, err);
     }
   }
 
@@ -166,7 +193,7 @@ export class IikoService {
     url.searchParams.set('login', login);
     url.searchParams.set('pass', password);
     const res = await fetch(url.toString());
-    await this.assertNotRateLimited(res);
+    this.assertNotRateLimited(res);
     if (!res.ok) throw new Error(`iiko auth failed: ${res.status}`);
     const text = await res.text();
     return text.trim();
@@ -179,15 +206,15 @@ export class IikoService {
   ): Promise<IikoOrder[]> {
     const url = `${serverUrl}/resto/api/v2/deliveries/search?organization=${organizationId}&statuses=Unconfirmed,WaitCooking`;
     const res = await fetch(url, { headers: { Cookie: `key=${token}` } });
-    await this.assertNotRateLimited(res);
+    this.assertNotRateLimited(res);
     if (!res.ok) throw new Error(`iiko fetch orders failed: ${res.status}`);
-    const data = await res.json() as { deliveryOrders?: IikoOrder[] };
+    const data = (await res.json()) as { deliveryOrders?: IikoOrder[] };
     return data.deliveryOrders ?? [];
   }
 
   // ── Rate-limiting / backoff helpers ──────────────────────────────────────
 
-  private async assertNotRateLimited(res: Response): Promise<void> {
+  private assertNotRateLimited(res: Response): void {
     if (res.status === 429) {
       throw new RateLimitError();
     }
@@ -202,10 +229,19 @@ export class IikoService {
   }
 
   private recordBackoff(establishmentId: string): void {
-    const current = this.backoff.get(establishmentId) ?? { until: 0, attempts: 0 };
+    const current = this.backoff.get(establishmentId) ?? {
+      until: 0,
+      attempts: 0,
+    };
     const attempts = current.attempts + 1;
-    const delayMs = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * Math.pow(2, attempts - 1));
-    this.backoff.set(establishmentId, { until: Date.now() + delayMs, attempts });
+    const delayMs = Math.min(
+      MAX_BACKOFF_MS,
+      BASE_BACKOFF_MS * Math.pow(2, attempts - 1),
+    );
+    this.backoff.set(establishmentId, {
+      until: Date.now() + delayMs,
+      attempts,
+    });
     this.logger.warn(
       `[iiko:${establishmentId}] rate limited — backoff ${delayMs}ms (attempt ${attempts})`,
     );
@@ -215,7 +251,7 @@ export class IikoService {
     this.backoff.delete(establishmentId);
   }
 
-  private async handlePollError(establishmentId: string, err: unknown): Promise<void> {
+  private handlePollError(establishmentId: string, err: unknown): void {
     if (err instanceof RateLimitError) {
       this.recordBackoff(establishmentId);
     } else {
