@@ -210,3 +210,33 @@ export interface ManagerKpi {
   inRideCount: number;
   freeCount: number;
 }
+
+// ── Analytics types ────────────────────────────────────────────────────────────
+
+export interface AnalyticsSummary {
+  period: { from: string; to: string };
+  totals: {
+    total: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    in_progress: number;
+    pending: number;
+    assigned: number;
+  };
+  metrics: {
+    avg_delivery_minutes: number | null;
+    completion_rate: number;
+    geo_match_rate: number;
+  };
+}
+
+export interface AnalyticsCourierStat {
+  courier_id: string;
+  courier_name: string;
+  total: number;
+  completed: number;
+  failed: number;
+  avg_delivery_minutes: number | null;
+  completion_rate: number;
+}

@@ -46,6 +46,13 @@ const TABS: TabDef[] = [
     iconActive: 'people',
     matchSegments: ['/shifts'],
   },
+  {
+    href: '/(manager)/analytics',
+    label: 'Аналітика',
+    icon: 'bar-chart-outline',
+    iconActive: 'bar-chart',
+    matchSegments: ['/analytics'],
+  },
 ];
 
 export function ManagerTabBar() {
