@@ -330,7 +330,18 @@ export default function StatsScreen() {
                 <View style={styles.card}>
                   {recentDeliveries.map((d, i) => (
                     <View key={d.id}>
-                      <DeliveryRow delivery={d} />
+                      <DeliveryRow delivery={d} onPress={() => router.push({
+                        pathname: '/(app)/delivery-detail',
+                        params: {
+                          deliveryId: d.id,
+                          status: d.status,
+                          address: d.order.address,
+                          external_id: d.order.external_id ?? '',
+                          assigned_at: d.assigned_at,
+                          started_at: d.started_at ?? '',
+                          completed_at: d.completed_at ?? '',
+                        },
+                      })} />
                       {i < recentDeliveries.length - 1 && <View style={styles.divider} />}
                     </View>
                   ))}
@@ -358,7 +369,7 @@ export default function StatsScreen() {
                         <TouchableOpacity
                           style={[styles.dayRow, isToday && styles.dayRowToday]}
                           activeOpacity={0.7}
-                          onPress={() => router.push('/(app)/history')}
+                          onPress={() => router.push({ pathname: '/(app)/day-detail', params: { date: day.date } })}
                         >
                           <View style={styles.dayDot} />
                           <View style={styles.dayContent}>
@@ -421,7 +432,7 @@ function HeroColumn({
   );
 }
 
-function DeliveryRow({ delivery }: { delivery: DeliveryHistoryItem }) {
+function DeliveryRow({ delivery, onPress }: { delivery: DeliveryHistoryItem; onPress: () => void }) {
   const isCompleted = delivery.status === 'completed';
   // FIX #2: use completed_at for time display
   const time = formatTime(delivery.completed_at ?? delivery.assigned_at);
@@ -431,7 +442,7 @@ function DeliveryRow({ delivery }: { delivery: DeliveryHistoryItem }) {
     : delivery.order.address.split(',')[0];
 
   return (
-    <View style={styles.deliveryRow}>
+    <TouchableOpacity style={styles.deliveryRow} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.deliveryRowTop}>
         <View style={[styles.dot, isCompleted ? styles.dotOk : styles.dotFail]} />
         <Text style={styles.deliveryOrderId} numberOfLines={1}>
@@ -445,7 +456,7 @@ function DeliveryRow({ delivery }: { delivery: DeliveryHistoryItem }) {
       <Text style={styles.deliverySub}>
         {time}{duration ? ` · ${duration}` : ''}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
