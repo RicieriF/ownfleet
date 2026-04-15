@@ -20,22 +20,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { apiGet } from '@/api/client';
 import { useAuthStore } from '@/store/auth';
-import type { ManagerCourier, ManagerOrder, ManagerKpi, CourierOnlineStatus } from '@/types';
+import type { ManagerCourier, ManagerOrder, ManagerKpi } from '@/types';
 
 const POLL_INTERVAL = 15_000;
 
-function computeOnlineStatus(courier: ManagerCourier): CourierOnlineStatus {
-  if (!courier.last_ping) return 'offline';
-  const diffMs = Date.now() - new Date(courier.last_ping.created_at).getTime();
-  const diffSec = diffMs / 1000;
-  if (diffSec < 30) return 'online';
-  if (diffSec < 300) return 'background';
-  if (courier.active_delivery) return 'no_response';
-  return 'offline';
-}
-
 function computeKpi(couriers: ManagerCourier[], orders: ManagerOrder[]): ManagerKpi {
-  const onShift = couriers.filter((c) => c.active_shift);
+  const onShift = couriers.filter((c) => c.active && c.active_shift);
   const inRide = onShift.filter((c) => c.active_delivery);
   const free = onShift.filter((c) => !c.active_delivery);
   const notStarted = couriers.filter((c) => c.active && !c.active_shift);
@@ -85,11 +75,7 @@ export default function ManagerDashboard() {
         apiGet<ManagerCourier[]>('/api/v1/couriers'),
         apiGet<ManagerOrder[]>('/api/v1/orders?status=pending,assigned,in_progress'),
       ]);
-      const couriersWithStatus = couriers.map((c) => ({
-        ...c,
-        online_status: computeOnlineStatus(c),
-      }));
-      setKpi(computeKpi(couriersWithStatus, orders));
+      setKpi(computeKpi(couriers, orders));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Помилка завантаження');
     } finally {

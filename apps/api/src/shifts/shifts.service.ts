@@ -233,19 +233,83 @@ export class ShiftsService {
     if (
       user.role !== 'manager' &&
       user.role !== 'owner' &&
+      user.role !== 'dispatcher' &&
       !user.is_platform_admin
     ) {
       throw new ForbiddenException(
-        'Only managers and owners can view all active shifts',
+        'Only managers, owners and dispatchers can view all active shifts',
       );
     }
 
-    return this.prisma.shift.findMany({
+    const shifts = await this.prisma.shift.findMany({
       where: { establishment_id: user.establishment_id, ended_at: null },
       include: {
-        courier: { select: { id: true, name: true, phone: true } },
+        courier: {
+          select: { id: true, name: true, phone: true, transport_mode: true },
+        },
       },
       orderBy: { started_at: 'asc' },
+    });
+
+    if (shifts.length === 0) return [];
+
+    const courierIds = shifts.map((s) => s.courier_id);
+
+    // Last ping per courier
+    const lastPings = await this.prisma.$queryRaw<
+      {
+        courier_id: string;
+        created_at: Date;
+        lat: number | null;
+        lng: number | null;
+        battery: number | null;
+      }[]
+    >`
+      SELECT DISTINCT ON (courier_id)
+        courier_id, created_at,
+        ST_Y(location::geometry) AS lat,
+        ST_X(location::geometry) AS lng,
+        battery
+      FROM location_pings
+      WHERE courier_id = ANY(${courierIds}::text[])
+      ORDER BY courier_id, created_at DESC
+    `;
+    const pingMap = new Map(lastPings.map((p) => [p.courier_id, p]));
+
+    // Active deliveries with order address
+    const activeDeliveries = await this.prisma.delivery.findMany({
+      where: {
+        courier_id: { in: courierIds },
+        status: { in: ['assigned', 'in_progress'] },
+      },
+      select: {
+        id: true,
+        courier_id: true,
+        order: { select: { id: true, address: true } },
+      },
+    });
+    const deliveryMap = new Map(activeDeliveries.map((d) => [d.courier_id, d]));
+
+    return shifts.map((s) => {
+      const ping = pingMap.get(s.courier_id) ?? null;
+      const delivery = deliveryMap.get(s.courier_id) ?? null;
+      return {
+        ...s,
+        courier: {
+          ...s.courier,
+          last_ping: ping
+            ? {
+                lat: ping.lat,
+                lng: ping.lng,
+                battery: ping.battery,
+                created_at: ping.created_at,
+              }
+            : null,
+          active_delivery: delivery
+            ? { id: delivery.id, order: delivery.order }
+            : null,
+        },
+      };
     });
   }
 

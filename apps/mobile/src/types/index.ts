@@ -143,7 +143,7 @@ export interface ManagerOrder {
 }
 
 /** Courier status for manager dashboard — based on last ping timestamp */
-export type CourierOnlineStatus = 'online' | 'background' | 'no_response' | 'offline';
+export type CourierOnlineStatus = 'online' | 'background' | 'not_responding' | 'offline';
 
 export interface ManagerCourier {
   id: string;
@@ -151,24 +151,33 @@ export interface ManagerCourier {
   phone: string;
   active: boolean;
   transport_mode: TransportMode | null;
-  last_ping?: {
+  // Flat fields (web compat)
+  last_ping_at: string | null;
+  last_lat: number | null;
+  last_lng: number | null;
+  // Nested object for mobile (battery + coordinates in one place)
+  last_ping: {
     lat: number;
     lng: number;
     battery: number | null;
     created_at: string;
   } | null;
-  active_shift?: {
+  active_shift: {
     id: string;
     started_at: string;
     planned_end_at: string | null;
   } | null;
-  active_delivery?: {
+  active_delivery: {
     id: string;
     order: {
+      id: string;
       address: string;
+      lat: number | null;
+      lng: number | null;
     };
   } | null;
-  online_status: CourierOnlineStatus;
+  /** Resolved online status from API */
+  status: CourierOnlineStatus;
 }
 
 export interface ActiveShiftItem {
@@ -188,7 +197,7 @@ export interface ActiveShiftItem {
     } | null;
     active_delivery: {
       id: string;
-      order: { address: string };
+      order: { id: string; address: string };
     } | null;
   };
 }

@@ -60,34 +60,42 @@ export class CouriersService {
 
     const courierIds = couriers.map((c) => c.id);
 
-    // Last ping per courier via DISTINCT ON (single query, includes lat/lng)
+    // Last ping per courier via DISTINCT ON (single query, includes lat/lng/battery)
     const lastPings = await this.prisma.$queryRaw<
       {
         courier_id: string;
         created_at: Date;
         lat: number | null;
         lng: number | null;
+        battery: number | null;
       }[]
     >`
       SELECT DISTINCT ON (courier_id)
         courier_id,
         created_at,
         ST_Y(location::geometry) AS lat,
-        ST_X(location::geometry) AS lng
+        ST_X(location::geometry) AS lng,
+        battery
       FROM location_pings
       WHERE courier_id = ANY(${courierIds}::text[])
       ORDER BY courier_id, created_at DESC
     `;
 
-    // Couriers with active deliveries (assigned or in_progress)
+    // Active deliveries with order address + coordinates for map routing
     const activeDeliveries = await this.prisma.delivery.findMany({
       where: {
         courier_id: { in: courierIds },
         status: { in: ['assigned', 'in_progress'] },
       },
-      select: { courier_id: true },
+      select: {
+        id: true,
+        courier_id: true,
+        order: {
+          select: { id: true, address: true, lat: true, lng: true },
+        },
+      },
     });
-    const activeSet = new Set(activeDeliveries.map((d) => d.courier_id));
+    const deliveryMap = new Map(activeDeliveries.map((d) => [d.courier_id, d]));
 
     // Active shifts per courier
     const activeShifts = await this.prisma.shift.findMany({
@@ -106,18 +114,35 @@ export class CouriersService {
     return couriers.map((c) => {
       const ping = pingMap.get(c.id) ?? null;
       const activeShift = shiftMap.get(c.id) ?? null;
-      const hasActiveDelivery = activeSet.has(c.id);
+      const activeDelivery = deliveryMap.get(c.id) ?? null;
+      const hasActiveDelivery = activeDelivery !== null;
       return {
         ...c,
+        // Flat fields kept for web dashboard compatibility
         last_ping_at: ping?.created_at ?? null,
         last_lat: ping?.lat ?? null,
         last_lng: ping?.lng ?? null,
+        // Nested object for mobile
+        last_ping: ping
+          ? {
+              lat: ping.lat,
+              lng: ping.lng,
+              battery: ping.battery,
+              created_at: ping.created_at,
+            }
+          : null,
         on_shift: activeShift !== null,
         active_shift: activeShift
           ? {
               id: activeShift.id,
               started_at: activeShift.started_at,
               planned_end_at: activeShift.planned_end_at,
+            }
+          : null,
+        active_delivery: activeDelivery
+          ? {
+              id: activeDelivery.id,
+              order: activeDelivery.order,
             }
           : null,
         status: resolveStatus(ping?.created_at ?? null, hasActiveDelivery),

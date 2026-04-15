@@ -26,21 +26,21 @@ function computeStatus(lastPingAt: string | null, hasDelivery: boolean): Courier
   const diffSec = (Date.now() - new Date(lastPingAt).getTime()) / 1000;
   if (diffSec < 30) return 'online';
   if (diffSec < 300) return 'background';
-  if (hasDelivery) return 'no_response';
+  if (hasDelivery) return 'not_responding';
   return 'offline';
 }
 
 const STATUS_COLOR: Record<CourierOnlineStatus, string> = {
   online: '#22c55e',
   background: '#f59e0b',
-  no_response: '#ef4444',
+  not_responding: '#ef4444',
   offline: '#78776e',
 };
 
 const STATUS_LABEL: Record<CourierOnlineStatus, string> = {
   online: 'Онлайн',
   background: 'Фон',
-  no_response: 'Не відповідає',
+  not_responding: 'Не відповідає',
   offline: 'Офлайн',
 };
 
@@ -95,7 +95,7 @@ function ShiftRow({ shift, onRemind, onForceEnd, reminding, ending }: ShiftRowPr
       </View>
 
       <View style={styles.actions}>
-        {(status === 'no_response' || status === 'offline') ? (
+        {(status === 'not_responding' || status === 'offline') ? (
           <TouchableOpacity
             style={styles.remindBtn}
             onPress={() => onRemind(courier.id)}
@@ -133,7 +133,7 @@ export default function ShiftsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [reminding, setReminding] = useState<Set<string>>(new Set());
   const [ending, setEnding] = useState<Set<string>>(new Set());
-  const { socket } = useManagerSocket();
+  const { socket, connected } = useManagerSocket();
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -239,6 +239,13 @@ export default function ShiftsScreen() {
         <Text style={styles.headerCount}>{shifts.length} активних</Text>
       </View>
 
+      {!connected ? (
+        <View style={styles.offlineBanner}>
+          <View style={styles.offlineDot} />
+          <Text style={styles.offlineBannerText}>Офлайн · оновлення призупинено</Text>
+        </View>
+      ) : null}
+
       {error ? (
         <View style={styles.centered}>
           <Ionicons name="warning-outline" size={32} color="#ef4444" />
@@ -299,6 +306,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'JetBrainsMono_400Regular',
     color: '#78776e',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(239,68,68,0.2)',
+  },
+  offlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ef4444',
+  },
+  offlineBannerText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontFamily: Platform.OS === 'ios' ? 'Manrope_400Regular' : undefined,
   },
   list: { paddingVertical: 4 },
   shiftRow: {
