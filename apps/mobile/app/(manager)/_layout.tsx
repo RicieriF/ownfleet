@@ -14,6 +14,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="couriers" />
         <Stack.Screen name="history" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="telegram" />
       </Stack>
       <ManagerTabBar />
     </View>

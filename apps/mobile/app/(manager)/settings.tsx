@@ -390,6 +390,20 @@ export default function SettingsScreen() {
               </View>
             </View>
 
+            {/* ── Telegram ─────────────────────────────────────────────────── */}
+            <SectionLabel>TELEGRAM СПОВІЩЕННЯ</SectionLabel>
+            <TouchableOpacity
+              style={styles.telegramRow}
+              onPress={() => router.push('/(manager)/telegram' as Parameters<typeof router.push>[0])}
+              activeOpacity={0.7}
+            >
+              <View style={styles.telegramRowLeft}>
+                <Ionicons name="paper-plane-outline" size={18} color="#78776e" />
+                <Text style={styles.telegramRowLabel}>Налаштувати Telegram</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#3a3935" />
+            </TouchableOpacity>
+
             {/* ── Save button ──────────────────────────────────────────────── */}
             <View style={styles.saveWrap}>
               {saveError ? (
@@ -778,6 +792,29 @@ const styles = StyleSheet.create({
     color: '#faf9f6',
   },
   chipSubActive: {
+    color: '#9c9b96',
+  },
+
+  // Telegram nav row
+  telegramRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: '#1a1917',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(250,249,246,0.08)',
+  },
+  telegramRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  telegramRowLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'Manrope_500Medium' : undefined,
+    fontSize: 14,
     color: '#9c9b96',
   },
 
