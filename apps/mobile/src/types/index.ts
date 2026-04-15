@@ -240,3 +240,13 @@ export interface AnalyticsCourierStat {
   avg_delivery_minutes: number | null;
   completion_rate: number;
 }
+
+export interface InviteItem {
+  id: string;
+  courier_id: string;
+  token: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+  courier: { name: string };
+}

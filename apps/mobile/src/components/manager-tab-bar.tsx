@@ -53,6 +53,13 @@ const TABS: TabDef[] = [
     iconActive: 'bar-chart',
     matchSegments: ['/analytics'],
   },
+  {
+    href: '/(manager)/couriers',
+    label: 'Курʼєри',
+    icon: 'people-circle-outline',
+    iconActive: 'people-circle',
+    matchSegments: ['/couriers'],
+  },
 ];
 
 export function ManagerTabBar() {

@@ -11,6 +11,7 @@ export default function ManagerLayout() {
         <Stack.Screen name="map" />
         <Stack.Screen name="shifts" />
         <Stack.Screen name="analytics" />
+        <Stack.Screen name="couriers" />
       </Stack>
       <ManagerTabBar />
     </View>
