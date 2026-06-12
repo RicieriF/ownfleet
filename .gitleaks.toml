@@ -1,4 +1,4 @@
-title = "weego-cmi gitleaks config"
+title = "ownfleet gitleaks config"
 
 [allowlist]
   paths = [

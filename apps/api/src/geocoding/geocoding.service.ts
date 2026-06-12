@@ -94,7 +94,7 @@ export class GeocodingService {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { 'User-Agent': 'weego-cmi/1.0 (https://weego.app)' },
+        headers: { 'User-Agent': 'ownfleet/1.0 (https://ownfleet.app)' },
       });
       clearTimeout(timer);
 

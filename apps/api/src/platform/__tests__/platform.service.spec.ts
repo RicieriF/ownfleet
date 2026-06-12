@@ -223,10 +223,10 @@ describe('PlatformService', () => {
 
       expect(result.establishment.slug).toBe('pizza-place');
       expect(result.credentials.owner.email).toBe(
-        'owner-pizza-place@weego.app',
+        'owner-pizza-place@ownfleet.app',
       );
       expect(result.credentials.manager.email).toBe(
-        'manager-pizza-place@weego.app',
+        'manager-pizza-place@ownfleet.app',
       );
       expect(result.credentials.owner.password).toHaveLength(32); // 16 bytes hex
       expect(result.credentials.manager.password).toHaveLength(32);

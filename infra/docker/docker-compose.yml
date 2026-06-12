@@ -1,27 +1,27 @@
-name: weego-cmi
+name: ownfleet
 
 services:
   postgres:
     image: postgis/postgis:15-3.4-alpine
-    container_name: weego_postgres
+    container_name: ownfleet_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: weego
-      POSTGRES_PASSWORD: weego_dev
-      POSTGRES_DB: weego_cmi
+      POSTGRES_USER: ownfleet
+      POSTGRES_PASSWORD: ownfleet_dev
+      POSTGRES_DB: ownfleet
     ports:
       - '5435:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U weego -d weego_cmi']
+      test: ['CMD-SHELL', 'pg_isready -U ownfleet -d ownfleet']
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: weego_redis
+    container_name: ownfleet_redis
     restart: unless-stopped
     ports:
       - '6380:6379'

@@ -1,4 +1,4 @@
-# @weego CMI — Telegram Bot: Технічна специфікація
+# OwnFleet — Telegram Bot: Технічна специфікація
 
 > Статус: ✅ Реалізовано (основний флоу + reconnect)
 > Залежності: TELEGRAM_BOT_TOKEN + TELEGRAM_WEBHOOK_SECRET в .env

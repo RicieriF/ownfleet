@@ -68,7 +68,7 @@ export default function LoginScreen() {
         >
           <View style={styles.header}>
             <Text style={styles.logo}>🛵</Text>
-            <Text style={styles.title}>Weego Courier</Text>
+            <Text style={styles.title}>OwnFleet Courier</Text>
             <Text style={styles.subtitle}>Вхід для курʼєрів</Text>
           </View>
 

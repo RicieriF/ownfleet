@@ -1,6 +1,6 @@
-# @weego CMI — API
+# OwnFleet — API
 
-NestJS backend for the @weego CMI courier management platform.
+NestJS backend for the OwnFleet courier management platform.
 
 ## Tech Stack
 

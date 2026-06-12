@@ -31,11 +31,11 @@ export async function requestBatteryOptimizationExemption(): Promise<void> {
   await AsyncStorage.setItem(EXEMPTION_ASKED_KEY, '1');
 
   const packageName =
-    Constants.expoConfig?.android?.package ?? 'ua.weego.courier';
+    Constants.expoConfig?.android?.package ?? 'app.ownfleet.courier';
 
   Alert.alert(
     '⚡ Оптимізація батареї',
-    'Для коректної роботи GPS у фоні (на вашому пристрої це може блокуватися) відключіть оптимізацію батареї для Weego Courier у налаштуваннях.',
+    'Для коректної роботи GPS у фоні (на вашому пристрої це може блокуватися) відключіть оптимізацію батареї для OwnFleet Courier у налаштуваннях.',
     [
       { text: 'Пізніше', style: 'cancel' },
       {

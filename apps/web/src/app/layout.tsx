@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Weego CMI — Управління доставкою',
+  title: 'OwnFleet — Управління доставкою',
   description: 'Платформа управління курʼєрами для закладів доставки',
 };
 

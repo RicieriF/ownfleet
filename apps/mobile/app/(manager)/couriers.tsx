@@ -10,7 +10,7 @@
  *   - Revoke invite      DELETE /api/v1/onboarding/invites/:id
  *
  * Invite flow: manager creates courier → "Створити запрошення" → token generated →
- *   OS share sheet → courier opens weego-courier:///onboarding/TOKEN
+ *   OS share sheet → courier opens ownfleet-courier:///onboarding/TOKEN
  */
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -539,9 +539,9 @@ export default function CouriersScreen() {
   }
 
   function handleShare(token: string, courierName: string) {
-    const deepLink = `weego-courier:///onboarding/${token}`;
+    const deepLink = `ownfleet-courier:///onboarding/${token}`;
     Share.share({
-      message: `Запрошення в Weego Courier для ${courierName}.\n\nТокен: ${token}\n\n${deepLink}`,
+      message: `Запрошення в OwnFleet Courier для ${courierName}.\n\nТокен: ${token}\n\n${deepLink}`,
       title: `Запрошення для ${courierName}`,
     }).catch(() => {
       // user dismissed share sheet — not an error

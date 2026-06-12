@@ -342,7 +342,7 @@ export class TrackingService {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { 'User-Agent': 'weego-cmi/1.0' },
+        headers: { 'User-Agent': 'ownfleet/1.0' },
       });
       clearTimeout(timer);
       if (!res.ok) return null;

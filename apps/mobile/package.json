@@ -1,5 +1,5 @@
 {
-  "name": "@weego/mobile",
+  "name": "@ownfleet/mobile",
   "version": "0.1.0",
   "private": true,
   "main": "expo-router/entry",

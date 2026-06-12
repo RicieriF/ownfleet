@@ -72,7 +72,7 @@ function LivePill() {
 
 export function Topbar() {
   const pathname = usePathname();
-  const title = PAGE_TITLES[pathname] ?? 'Weego CMI';
+  const title = PAGE_TITLES[pathname] ?? 'OwnFleet';
   const isMainDashboard = pathname === '/';
 
   return (

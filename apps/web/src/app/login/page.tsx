@@ -41,7 +41,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
       <div className="w-full max-w-sm bg-[var(--sf)] rounded-lg border border-[var(--br)] p-8 card-shine">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[var(--t1)]">Weego CMI</h1>
+          <h1 className="text-2xl font-bold text-[var(--t1)]">OwnFleet</h1>
           <p className="text-sm text-[var(--t3)] mt-1">Увійдіть до свого облікового запису</p>
         </div>
 

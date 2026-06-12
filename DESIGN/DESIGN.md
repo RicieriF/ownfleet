@@ -1,4 +1,4 @@
-# Design System — Weego CMI
+# Design System — OwnFleet
 
 ## Product Context
 

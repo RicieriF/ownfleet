@@ -91,8 +91,8 @@ export class PlatformService {
   // ── Create new tenant ─────────────────────────────────────────────────────
 
   async createEstablishment(dto: CreateEstablishmentDto) {
-    const ownerEmail = `owner-${dto.slug}@weego.app`;
-    const managerEmail = `manager-${dto.slug}@weego.app`;
+    const ownerEmail = `owner-${dto.slug}@ownfleet.app`;
+    const managerEmail = `manager-${dto.slug}@ownfleet.app`;
 
     const ownerPassword = crypto.randomBytes(PASSWORD_BYTES).toString('hex');
     const managerPassword = crypto.randomBytes(PASSWORD_BYTES).toString('hex');

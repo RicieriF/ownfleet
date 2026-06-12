@@ -1,14 +1,14 @@
 /**
- * Weego customer tracking loader (tracker.js)
+ * OwnFleet customer tracking loader (tracker.js)
  *
  * Embed on restaurant's website:
- *   <script src="https://weego.app/tracker.js"
+ *   <script src="https://ownfleet.app/tracker.js"
  *           data-api-key="wgo_xxxxxx"
  *           data-order-id="1234"
  *           data-lang="uk"></script>
  *
  * Or call imperatively after DOMContentLoaded:
- *   Weego.track({ apiKey: 'wgo_xxx', orderId: '1234' });
+ *   OwnFleet.track({ apiKey: 'wgo_xxx', orderId: '1234' });
  *
  * What it does:
  * 1. Calls GET /api/v1/public/order/:externalId/token?key=API_KEY to get a tracking token
@@ -17,7 +17,7 @@
  *    (handles the race between POS webhook and customer page load)
  */
 
-declare const __WEEGO_BASE_URL__: string;
+declare const __OWNFLEET_BASE_URL__: string;
 
 type Lang = 'uk' | 'en';
 
@@ -31,9 +31,9 @@ interface TokenResponse {
   token: string;
 }
 
-const BASE_URL = typeof __WEEGO_BASE_URL__ !== 'undefined'
-  ? __WEEGO_BASE_URL__
-  : 'https://weego.app';
+const BASE_URL = typeof __OWNFLEET_BASE_URL__ !== 'undefined'
+  ? __OWNFLEET_BASE_URL__
+  : 'https://ownfleet.app';
 
 const MAX_RETRIES = 15;
 const RETRY_DELAY_MS = 2000;
@@ -53,10 +53,10 @@ class TerminalError extends Error {}
 
 export function injectIframe(token: string, lang: Lang): void {
   // Avoid double injection
-  if (document.getElementById('weego-tracking-wrapper')) return;
+  if (document.getElementById('ownfleet-tracking-wrapper')) return;
 
   const wrapper = document.createElement('div');
-  wrapper.id = 'weego-tracking-wrapper';
+  wrapper.id = 'ownfleet-tracking-wrapper';
   wrapper.style.cssText = [
     'position:fixed',
     'bottom:16px',
@@ -73,7 +73,7 @@ export function injectIframe(token: string, lang: Lang): void {
   const src = `${BASE_URL}/embed/track/${encodeURIComponent(token)}?lang=${lang}`;
 
   const iframe = document.createElement('iframe');
-  iframe.id = 'weego-tracking-iframe';
+  iframe.id = 'ownfleet-tracking-iframe';
   iframe.src = src;
   iframe.setAttribute('allow', 'geolocation');
   iframe.setAttribute('loading', 'eager');
@@ -90,7 +90,7 @@ export function injectIframe(token: string, lang: Lang): void {
 
   // Minimize / expand toggle button
   const minimizeBtn = document.createElement('button');
-  minimizeBtn.id = 'weego-minimize-btn';
+  minimizeBtn.id = 'ownfleet-minimize-btn';
   minimizeBtn.setAttribute('aria-label', ARIA_LABELS[lang].minimize);
   minimizeBtn.style.cssText = [
     'position:absolute',
@@ -109,7 +109,7 @@ export function injectIframe(token: string, lang: Lang): void {
   minimizeBtn.textContent = '−';
 
   minimizeBtn.addEventListener('click', () => {
-    const isMin = wrapper.classList.toggle('weego-minimized');
+    const isMin = wrapper.classList.toggle('ownfleet-minimized');
     minimizeBtn.textContent = isMin ? '+' : '−';
     minimizeBtn.setAttribute('aria-label', isMin ? ARIA_LABELS[lang].expand : ARIA_LABELS[lang].minimize);
     iframe.style.display = isMin ? 'none' : 'block';
@@ -141,11 +141,11 @@ export async function fetchToken(apiKey: string, orderId: string): Promise<strin
 }
 
 export function showError(lang: Lang): void {
-  const existing = document.getElementById('weego-tracking-wrapper') ?? document.getElementById('weego-tracking-error');
+  const existing = document.getElementById('ownfleet-tracking-wrapper') ?? document.getElementById('ownfleet-tracking-error');
   if (existing) existing.remove();
 
   const el = document.createElement('div');
-  el.id = 'weego-tracking-error';
+  el.id = 'ownfleet-tracking-error';
   el.style.cssText = [
     'position:fixed',
     'bottom:16px',
@@ -216,7 +216,7 @@ function autoInit(): void {
 }
 
 // Public API
-(window as unknown as Record<string, unknown>).Weego = { track };
+(window as unknown as Record<string, unknown>).OwnFleet = { track };
 
 // Auto-init on script load
 if (document.readyState === 'loading') {

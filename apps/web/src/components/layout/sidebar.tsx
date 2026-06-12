@@ -48,7 +48,7 @@ export function Sidebar({ establishmentName }: SidebarProps) {
     <aside className="flex flex-col w-56 min-h-screen bg-[var(--sf)] border-r border-[var(--br)]">
       <div className="px-5 py-5 border-b border-[var(--br)]">
         <span className="text-lg font-bold tracking-tight text-[var(--t1)]">
-          {establishmentName ?? 'Weego CMI'}
+          {establishmentName ?? 'OwnFleet'}
         </span>
       </div>
 

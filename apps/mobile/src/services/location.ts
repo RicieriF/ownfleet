@@ -13,7 +13,7 @@ import * as Battery from 'expo-battery';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-export const LOCATION_TASK_NAME = 'WEEGO_BACKGROUND_LOCATION';
+export const LOCATION_TASK_NAME = 'OWNFLEET_BACKGROUND_LOCATION';
 const PING_INTERVAL_MS = 15_000; // 15 seconds
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -81,7 +81,7 @@ export async function startBackgroundLocationTask(): Promise<void> {
     showsBackgroundLocationIndicator: true, // iOS blue bar
     foregroundService: Platform.OS === 'android'
       ? {
-          notificationTitle: 'Weego — доставка активна',
+          notificationTitle: 'OwnFleet — доставка активна',
           notificationBody: 'GPS відстеження увімкнено',
           notificationColor: '#6aaa84',
         }

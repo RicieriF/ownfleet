@@ -23,7 +23,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
         <div className="flex items-center gap-2.5">
           <Shield size={14} className="text-[var(--t3)]" strokeWidth={2} />
           <span className="text-sm font-semibold text-[var(--t1)] tracking-tight">
-            Weego Platform
+            OwnFleet Platform
           </span>
           <span className="text-[var(--br2)] text-xs">|</span>
           <span className="text-xs text-[var(--t3)] font-mono">admin</span>

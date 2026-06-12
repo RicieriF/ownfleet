@@ -90,8 +90,8 @@ describe('injectIframe', () => {
   it('injects wrapper and iframe into document.body', () => {
     injectIframe('tok-123', 'uk');
 
-    const wrapper = document.getElementById('weego-tracking-wrapper');
-    const iframe = document.getElementById('weego-tracking-iframe') as HTMLIFrameElement | null;
+    const wrapper = document.getElementById('ownfleet-tracking-wrapper');
+    const iframe = document.getElementById('ownfleet-tracking-iframe') as HTMLIFrameElement | null;
     expect(wrapper).not.toBeNull();
     expect(iframe).not.toBeNull();
     expect(iframe!.src).toContain('/embed/track/tok-123');
@@ -100,7 +100,7 @@ describe('injectIframe', () => {
 
   it('appends iframe src with correct lang parameter', () => {
     injectIframe('tok-en', 'en');
-    const iframe = document.getElementById('weego-tracking-iframe') as HTMLIFrameElement;
+    const iframe = document.getElementById('ownfleet-tracking-iframe') as HTMLIFrameElement;
     expect(iframe.src).toContain('lang=en');
   });
 
@@ -108,33 +108,33 @@ describe('injectIframe', () => {
     injectIframe('tok-a', 'uk');
     injectIframe('tok-b', 'uk'); // should not inject again
 
-    const wrappers = document.querySelectorAll('#weego-tracking-wrapper');
+    const wrappers = document.querySelectorAll('#ownfleet-tracking-wrapper');
     expect(wrappers).toHaveLength(1);
     // First token still in src
-    const iframe = document.getElementById('weego-tracking-iframe') as HTMLIFrameElement;
+    const iframe = document.getElementById('ownfleet-tracking-iframe') as HTMLIFrameElement;
     expect(iframe.src).toContain('tok-a');
   });
 
   // ── minimize toggle ──────────────────────────────────────────────────────
 
-  it('minimize button toggles weego-minimized class on wrapper', () => {
+  it('minimize button toggles ownfleet-minimized class on wrapper', () => {
     injectIframe('tok-min', 'uk');
-    const wrapper = document.getElementById('weego-tracking-wrapper')!;
-    const btn = document.getElementById('weego-minimize-btn')!;
+    const wrapper = document.getElementById('ownfleet-tracking-wrapper')!;
+    const btn = document.getElementById('ownfleet-minimize-btn')!;
 
-    expect(wrapper.classList.contains('weego-minimized')).toBe(false);
-
-    btn.click();
-    expect(wrapper.classList.contains('weego-minimized')).toBe(true);
+    expect(wrapper.classList.contains('ownfleet-minimized')).toBe(false);
 
     btn.click();
-    expect(wrapper.classList.contains('weego-minimized')).toBe(false);
+    expect(wrapper.classList.contains('ownfleet-minimized')).toBe(true);
+
+    btn.click();
+    expect(wrapper.classList.contains('ownfleet-minimized')).toBe(false);
   });
 
   it('minimize button hides iframe when minimized', () => {
     injectIframe('tok-min', 'uk');
-    const iframe = document.getElementById('weego-tracking-iframe') as HTMLIFrameElement;
-    const btn = document.getElementById('weego-minimize-btn')!;
+    const iframe = document.getElementById('ownfleet-tracking-iframe') as HTMLIFrameElement;
+    const btn = document.getElementById('ownfleet-minimize-btn')!;
 
     btn.click();
     expect(iframe.style.display).toBe('none');
@@ -145,7 +145,7 @@ describe('injectIframe', () => {
 
   it('minimize button updates aria-label', () => {
     injectIframe('tok-aria', 'uk');
-    const btn = document.getElementById('weego-minimize-btn')!;
+    const btn = document.getElementById('ownfleet-minimize-btn')!;
 
     expect(btn.getAttribute('aria-label')).toBe('Згорнути');
     btn.click();
@@ -169,33 +169,33 @@ describe('showError', () => {
 
   it('injects error div with Ukrainian message', () => {
     showError('uk');
-    const el = document.getElementById('weego-tracking-error');
+    const el = document.getElementById('ownfleet-tracking-error');
     expect(el).not.toBeNull();
     expect(el!.textContent).toBe('Замовлення не знайдено. Спробуйте оновити сторінку.');
   });
 
   it('injects error div with English message', () => {
     showError('en');
-    const el = document.getElementById('weego-tracking-error');
+    const el = document.getElementById('ownfleet-tracking-error');
     expect(el!.textContent).toBe('Order not found. Try refreshing the page.');
   });
 
   it('removes existing wrapper before injecting error', () => {
     injectIframe('tok-abc', 'uk');
-    expect(document.getElementById('weego-tracking-wrapper')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-wrapper')).not.toBeNull();
 
     showError('uk');
-    expect(document.getElementById('weego-tracking-wrapper')).toBeNull();
-    expect(document.getElementById('weego-tracking-error')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-wrapper')).toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).not.toBeNull();
   });
 
   it('auto-hides after 10 seconds', () => {
     vi.useFakeTimers();
     showError('uk');
-    expect(document.getElementById('weego-tracking-error')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).not.toBeNull();
 
     vi.advanceTimersByTime(10_001);
-    expect(document.getElementById('weego-tracking-error')).toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).toBeNull();
   });
 });
 
@@ -217,8 +217,8 @@ describe('track', () => {
 
     await track({ apiKey: 'wgo_key', orderId: 'order-1' });
 
-    expect(document.getElementById('weego-tracking-wrapper')).not.toBeNull();
-    expect(document.getElementById('weego-tracking-error')).toBeNull();
+    expect(document.getElementById('ownfleet-tracking-wrapper')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).toBeNull();
   });
 
   it('injects iframe on the 3rd attempt (retries on 404)', async () => {
@@ -237,8 +237,8 @@ describe('track', () => {
     await vi.advanceTimersByTimeAsync(2000); // attempt 3 → success, injects iframe
 
     expect(callCount).toBe(3);
-    expect(document.getElementById('weego-tracking-wrapper')).not.toBeNull();
-    expect(document.getElementById('weego-tracking-error')).toBeNull();
+    expect(document.getElementById('ownfleet-tracking-wrapper')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).toBeNull();
   });
 
   it('shows error message after 15 failed attempts', async () => {
@@ -253,9 +253,9 @@ describe('track', () => {
     }
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(15);
-    expect(document.getElementById('weego-tracking-wrapper')).toBeNull();
-    expect(document.getElementById('weego-tracking-error')).not.toBeNull();
-    expect(document.getElementById('weego-tracking-error')!.textContent).toBe(
+    expect(document.getElementById('ownfleet-tracking-wrapper')).toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')).not.toBeNull();
+    expect(document.getElementById('ownfleet-tracking-error')!.textContent).toBe(
       'Замовлення не знайдено. Спробуйте оновити сторінку.',
     );
   });
@@ -281,7 +281,7 @@ describe('track', () => {
     await track({ apiKey: 'wgo_key', orderId: 'order-lang' }); // attempt 1
     for (let i = 0; i < 14; i++) await vi.advanceTimersByTimeAsync(2000); // attempts 2–15
 
-    const el = document.getElementById('weego-tracking-error');
+    const el = document.getElementById('ownfleet-tracking-error');
     expect(el!.textContent).toContain('Замовлення не знайдено');
   });
 });

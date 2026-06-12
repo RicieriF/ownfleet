@@ -46,7 +46,7 @@ export class NotificationsService implements OnModuleInit {
       ) as admin.ServiceAccount;
       this.fcmApp = admin.initializeApp(
         { credential: admin.credential.cert(serviceAccount) },
-        'weego-cmi',
+        'ownfleet',
       );
     } catch (err) {
       this.logger.error('Failed to initialize Firebase Admin SDK', err);

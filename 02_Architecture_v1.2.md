@@ -1,5 +1,5 @@
 ---
-title: "@weego CMI — Technical Architecture Document"
+title: "OwnFleet — Technical Architecture Document"
 version: "1.2"
 status: Draft
 pattern: "Modular Monolith → Microservices"
@@ -11,7 +11,7 @@ changes_v1_2: >
   push token lifecycle, API versioning.
 ---
 
-# @weego CMI
+# OwnFleet
 ## Technical Architecture Document v1.2
 
 ---
@@ -30,7 +30,7 @@ changes_v1_2: >
 
 ## 1. 🏗️ Огляд архітектури
 
-@weego CMI побудований за патерном **Modular Monolith** — єдиний розгорнутий застосунок з чітко розділеними модулями. Оптимальний вибір для MVP: простота розгортання + чіткі межі для майбутнього виділення сервісів.
+OwnFleet побудований за патерном **Modular Monolith** — єдиний розгорнутий застосунок з чітко розділеними модулями. Оптимальний вибір для MVP: простота розгортання + чіткі межі для майбутнього виділення сервісів.
 
 ### Рівні системи
 
@@ -795,7 +795,7 @@ jobs:
         image: postgis/postgis:15-3.3
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: weego_test
+          POSTGRES_DB: ownfleet_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -814,10 +814,10 @@ jobs:
       - run: npm run lint
       - run: npx prisma migrate deploy
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost/weego_test
+          DATABASE_URL: postgresql://postgres:test@localhost/ownfleet_test
       - run: npm test
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost/weego_test
+          DATABASE_URL: postgresql://postgres:test@localhost/ownfleet_test
           REDIS_URL: redis://localhost:6379
           JWT_ACCESS_SECRET: test-secret-ci
           JWT_REFRESH_SECRET: test-refresh-secret-ci
@@ -831,7 +831,7 @@ jobs:
       - name: Deploy to Staging
         # Replace with provider-specific CLI command:
         # Railway:  npx @railway/cli up --service ${{ secrets.STAGING_SERVICE_ID }}
-        # Fly.io:   flyctl deploy --app weego-staging
+        # Fly.io:   flyctl deploy --app ownfleet-staging
         # Render:   curl -X POST ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
         run: echo "TODO: add deploy command for chosen provider"
         env:
@@ -1048,7 +1048,7 @@ S3 bucket layout (any S3-compatible provider — Cloudflare R2, AWS S3, Backblaz
 
 Environment variables required:
 ```
-BACKUP_S3_BUCKET=weego-backups
+BACKUP_S3_BUCKET=ownfleet-backups
 BACKUP_S3_ENDPOINT=https://...   # provider-specific
 BACKUP_S3_ACCESS_KEY=...
 BACKUP_S3_SECRET_KEY=...
@@ -1287,7 +1287,7 @@ Rationale: "Завершити зміну" is the legal GPS-off mechanism requir
 **Left sidebar (desktop, ≥ 1024px):**
 ```
 ┌────────────┬──────────────────────────────────┐
-│  @weego    │                                  │
+│  @ownfleet    │                                  │
 │  [logo]    │     [Main Content Area]          │
 │            │                                  │
 │  🗺 Карта  │                                  │
@@ -1536,7 +1536,7 @@ For the mobile app (React Native): use a consistent spacing scale (same 8px base
 [async] Firebase FCM push до курʼєра:
   title: "Нове замовлення #{ order.number }"
   body:  "{ address } · { client_name }"
-  data:  { delivery_id, deep_link: "weego://deliveries/{id}" }
+  data:  { delivery_id, deep_link: "ownfleet://deliveries/{id}" }
 ```
 Тап на push-повідомлення → додаток відкривається одразу на екрані цієї доставки. Жодної зайвої дії.
 
@@ -1673,8 +1673,8 @@ npm install next-pwa
 **Manifest:**
 ```json
 {
-  "name": "@weego CMI",
-  "short_name": "Weego",
+  "name": "OwnFleet",
+  "short_name": "OwnFleet",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
@@ -1710,7 +1710,7 @@ npm install next-pwa
 
 ```
 ┌─────────────────────────────────┐
-│ @weego · Доставка активна       │
+│ @ownfleet · Доставка активна       │
 │ Замовлення #142 · вул. Хрещатик │  ← незакривне сповіщення
 │ [Відкрити додаток]              │
 └─────────────────────────────────┘

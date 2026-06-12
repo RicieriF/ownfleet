@@ -1,11 +1,11 @@
-# Weego CMI — Courier Management Infrastructure
+# OwnFleet
 
-[![CI](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml/badge.svg)](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml)
+[![CI](https://github.com/Volodymyr4K/ownfleet/actions/workflows/ci.yml/badge.svg)](https://github.com/Volodymyr4K/ownfleet/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [English](README.md) | **Українська**
 
-B2B SaaS платформа для ресторанів, кафе і піцерій, які працюють із **власними** курʼєрами. Одна система замість дзвінків і таблиць: live GPS-трекінг, розумний диспатч, ETA доставки, гео-верифікований пруф доставки, інтеграції з POS і трекінг-віджет для клієнтів.
+Open-source платформа управління курʼєрами для ресторанів, кафе і піцерій, які працюють із **власним** флотом доставки. Одна система замість дзвінків і таблиць: live GPS-трекінг, розумний диспатч, ETA доставки, гео-верифікований пруф доставки, інтеграції з POS і трекінг-віджет для клієнтів.
 
 > Три застосунки в одному монорепо: **REST + WebSocket API** (NestJS), **дашборд менеджера** (Next.js), **додаток курʼєра** (React Native / Expo).
 
@@ -140,8 +140,8 @@ npm start                     # Expo dev server
 
 | Роль | Email | Пароль |
 |------|-------|--------|
-| Owner | `owner-test-kitchen-kyiv@weego.app` | `Owner123!Test` |
-| Manager | `manager-test-kitchen-kyiv@weego.app` | `Manager123!Test` |
+| Owner | `owner-test-kitchen-kyiv@ownfleet.app` | `Owner123!Test` |
+| Manager | `manager-test-kitchen-kyiv@ownfleet.app` | `Manager123!Test` |
 
 ## Тести
 

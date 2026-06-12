@@ -1,11 +1,11 @@
-# Weego CMI — Courier Management Infrastructure
+# OwnFleet
 
-[![CI](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml/badge.svg)](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml)
+[![CI](https://github.com/Volodymyr4K/ownfleet/actions/workflows/ci.yml/badge.svg)](https://github.com/Volodymyr4K/ownfleet/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **English** | [Українська](README.uk.md)
 
-B2B SaaS platform for restaurants, cafés and pizzerias that run their **own** delivery couriers. One system instead of phone calls and spreadsheets: live GPS tracking, smart dispatch, delivery ETA, geo-verified proof of delivery, POS integrations and a customer-facing tracking widget.
+Open-source courier management platform for restaurants, cafés and pizzerias that run their **own** delivery fleet. One system instead of phone calls and spreadsheets: live GPS tracking, smart dispatch, delivery ETA, geo-verified proof of delivery, POS integrations and a customer-facing tracking widget.
 
 > Three apps, one monorepo: **REST + WebSocket API** (NestJS), **manager dashboard** (Next.js), **courier app** (React Native / Expo).
 
@@ -140,8 +140,8 @@ Demo logins after seeding (see `apps/api/scripts/seed-test-tenant.cjs`):
 
 | Role | Email | Password |
 |------|-------|----------|
-| Owner | `owner-test-kitchen-kyiv@weego.app` | `Owner123!Test` |
-| Manager | `manager-test-kitchen-kyiv@weego.app` | `Manager123!Test` |
+| Owner | `owner-test-kitchen-kyiv@ownfleet.app` | `Owner123!Test` |
+| Manager | `manager-test-kitchen-kyiv@ownfleet.app` | `Manager123!Test` |
 
 ## Tests
 

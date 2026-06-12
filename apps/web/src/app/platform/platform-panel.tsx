@@ -202,7 +202,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               />
             </div>
             <p className="mt-1 text-[11px] text-[var(--t3)]">
-              Логін: owner-{slug || '…'}@weego.app
+              Логін: owner-{slug || '…'}@ownfleet.app
             </p>
             {slugIsAutoEmpty && (
               <p className="mt-1 text-[11px] text-[var(--warn)]">

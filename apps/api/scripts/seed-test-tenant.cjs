@@ -31,19 +31,19 @@ const EST = {
 
 const USERS = {
   owner: {
-    email: 'owner-test-kitchen-kyiv@weego.app',
+    email: 'owner-test-kitchen-kyiv@ownfleet.app',
     password: 'Owner123!Test',
     role: 'owner',
     is_platform_admin: true,
   },
   manager: {
-    email: 'manager-test-kitchen-kyiv@weego.app',
+    email: 'manager-test-kitchen-kyiv@ownfleet.app',
     password: 'Manager123!Test',
     role: 'manager',
     is_platform_admin: false,
   },
   dispatcher: {
-    email: 'dispatcher-test-kitchen-kyiv@weego.app',
+    email: 'dispatcher-test-kitchen-kyiv@ownfleet.app',
     password: 'Dispatcher123!Test',
     role: 'dispatcher',
     is_platform_admin: false,
@@ -533,7 +533,7 @@ async function main() {
     });
 
     const apiKeySecret = process.env.API_KEY_SECRET || 'local-dev-api-key-secret';
-    const rawApiKey = 'weego_test_key_for_local_preview_2026';
+    const rawApiKey = 'ownfleet_test_key_for_local_preview_2026';
     const keyPrefix = rawApiKey.slice(0, 8);
     const keyHash = crypto
       .createHmac('sha256', apiKeySecret)

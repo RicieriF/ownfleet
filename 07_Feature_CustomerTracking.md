@@ -28,12 +28,12 @@
 
 **Крок 1.** Вставити script tag в `<head>` сайту:
 ```html
-<script src="https://weego.app/tracker.js" async></script>
+<script src="https://ownfleet.app/tracker.js" async></script>
 ```
 
 **Крок 2.** На сторінці підтвердження замовлення додати один виклик:
 ```javascript
-Weego.track('ORDER_ID');
+OwnFleet.track('ORDER_ID');
 ```
 
 де `ORDER_ID` — це той самий номер замовлення який сайт вже показує клієнту (і який Poster/iiko вже надсилає нам через webhook).
@@ -46,7 +46,7 @@ Weego.track('ORDER_ID');
 
 ```
 Клієнт оформив замовлення → сайт показує сторінку підтвердження
-    → Weego.track('123') викликається
+    → OwnFleet.track('123') викликається
     → tracker.js створює iframe оверлей
     → iframe звертається до нашого API з external_order_id=123
     → ми знаходимо замовлення (воно вже є — Poster надіслав webhook раніше)
@@ -64,7 +64,7 @@ Weego.track('ORDER_ID');
 ### tracker.js
 
 Легкий loader (ціль: < 5kb, без залежностей):
-- Приймає `ORDER_ID` через `Weego.track(id)`
+- Приймає `ORDER_ID` через `OwnFleet.track(id)`
 - Звертається до `GET /api/v1/public/order/:externalId/token?key=API_KEY`
 - Отримує tracking token
 - Ін'єктує iframe оверлей на сторінку
@@ -78,7 +78,7 @@ Webhook від Poster/iiko може оброблятись 2-3 секунди п
 
 API ключ закладу вбудовується в script tag при генерації в дашборді:
 ```html
-<script src="https://weego.app/tracker.js?key=API_KEY" async></script>
+<script src="https://ownfleet.app/tracker.js?key=API_KEY" async></script>
 ```
 
 ### Hosted tracking page (для закладів без сайту)
@@ -88,7 +88,7 @@ API ключ закладу вбудовується в script tag при ген
 **Сценарій:** менеджер (або Telegram-бот автоматично) надсилає клієнту:
 ```
 Ваше замовлення прийнято! Відстежуйте доставку:
-https://weego.app/t/TOKEN
+https://ownfleet.app/t/TOKEN
 ```
 
 Коротке посилання `/t/TOKEN` → redirect на `/embed/track/TOKEN` (відкривається повноекранно, не в iframe).
@@ -205,7 +205,7 @@ POST /api/v1/orders/:id/tracking-token
 Захищений `JwtAuthGuard` + `PlanAccessGuard` + перевірка `establishment_id`.
 Генерує (або повертає існуючий) tracking token для замовлення.
 > **`hosted_tracking_enabled` — UX-тогл, не feature gate.** Ховає кнопку "Копіювати посилання клієнту" в дашборді для закладів у яких є власний сайт (вони використовують embed iframe і ця кнопка їм не потрібна). API endpoint при цьому НЕ блокується — перевірка `hosted_tracking_enabled` на рівні API відсутня навмисно.
-Відповідь: `{ url: "https://weego.app/t/TOKEN" }` — готове посилання для клієнта.
+Відповідь: `{ url: "https://ownfleet.app/t/TOKEN" }` — готове посилання для клієнта.
 Ця URL копіюється в буфер при натисканні кнопки "Копіювати посилання клієнту" в дашборді.
 
 Реалізація ідентична токенам від віджету: catch P2002 + findUnique (описано вище).
@@ -429,7 +429,7 @@ Next.js route, рендериться всередині iframe. Мобайл-ф
 └─────────────────────────────────┘
 ```
 
-Стан активний з моменту першого виклику `Weego.track()` якщо доставка ще не створена. Токен генерується одразу — віджет показує проміжний стан очікування.
+Стан активний з моменту першого виклику `OwnFleet.track()` якщо доставка ще не створена. Токен генерується одразу — віджет показує проміжний стан очікування.
 
 ### Стан 1 — замовлення прийнято (delivery: assigned, курʼєр ще не виїхав)
 
@@ -593,9 +593,9 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 │                                                      │
 │  Код для вашого розробника           [Копіювати 📋]  │
 │  ┌──────────────────────────────────────────────┐   │
-│  │ <script src="https://weego.app/tracker.js    │   │
+│  │ <script src="https://ownfleet.app/tracker.js    │   │
 │  │   ?key=wg_xxxxxxxx" async></script>          │   │
-│  │ <script>Weego.track('ORDER_ID')</script>     │   │
+│  │ <script>OwnFleet.track('ORDER_ID')</script>     │   │
 │  └──────────────────────────────────────────────┘   │
 │  Остання активність: сьогодні о 14:23               │  ← дрібний сірий текст
 │  (або: "Ще не використовувався" якщо last_used_at=null) │
@@ -629,7 +629,7 @@ hosted_tracking_enabled  BOOLEAN NOT NULL DEFAULT FALSE
 [📋 Посилання клієнту]
 ```
 
-Тап → копіює `https://weego.app/t/TOKEN` в буфер. Менеджер пересилає клієнту у Telegram/Viber/SMS. Токен генерується ліниво при першому натисканні.
+Тап → копіює `https://ownfleet.app/t/TOKEN` в буфер. Менеджер пересилає клієнту у Telegram/Viber/SMS. Токен генерується ліниво при першому натисканні.
 
 Кнопка активна з моменту `assigned` (не тільки `in_progress`) — менеджер може одразу поділитись посиланням після призначення курʼєра. Клієнт побачить State 1 ("Ваше замовлення збирається") — вже корисна інформація.
 
@@ -804,7 +804,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 4. Секція в /settings — завжди видима: генерація API ключа + copy-paste код + пояснювальна фраза про hosted page (умовна: тільки якщо `hosted_tracking_enabled = true`)
 5. Кнопка "Копіювати посилання клієнту" в таблиці активних доставок — умовна (тільки якщо `hosted_tracking_enabled = true` і delivery `in_progress`)
 6. Super admin panel: тогл `hosted_tracking_enabled` per-establishment
-7. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://weego.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
+7. `tracker.js` розміщується в `/public` папці Next.js — доступний за `https://ownfleet.app/tracker.js`. Ніякого окремого CDN. Якщо сервер ліг — трекінг однаково не працює, тому окрема інфраструктура не потрібна.
 8. Cache-Control: в `next.config.js` додати header `Cache-Control: public, max-age=3600` для `/tracker.js` — заклад вставляє script tag один раз і ніколи не оновлює його, браузер оновлює скрипт автоматично щогодини.
    **Трейдоф:** баг у tracker.js поширюється з затримкою до 60 хвилин (браузери кешують до TTL). Прийнятно: deploy hotfix → нові браузери отримують виправлення одразу, старі — через максимум 1 годину. Для критичного hotfix можна тимчасово встановити `max-age=60`.
 

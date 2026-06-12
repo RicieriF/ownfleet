@@ -62,7 +62,7 @@ function StepHeader({ n, title, done }: { n: number; title: string; done?: boole
   );
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://weego.app';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ownfleet.app';
 
 export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: Props) {
   const [apiKey, setApiKey] = useState<ApiKeyMeta | null>(initialApiKey);

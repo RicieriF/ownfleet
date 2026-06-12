@@ -1,4 +1,4 @@
-// Grafana Alloy configuration for @weego CMI API metrics
+// Grafana Alloy configuration for OwnFleet API metrics
 //
 // This config scrapes the /metrics endpoint from the NestJS API
 // and remote_writes to Grafana Cloud Prometheus.
@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────
 // Scrape the API /metrics endpoint
 // ─────────────────────────────────────────────
-prometheus.scrape "weego_api" {
+prometheus.scrape "ownfleet_api" {
   // "host.docker.internal" reaches the host machine from inside the Docker container.
   // Works on macOS/Windows Docker Desktop out of the box.
   // On a Linux production server where API runs in docker-compose: replace with the
@@ -54,6 +54,6 @@ prometheus.remote_write "grafana_cloud" {
   // Change "production" to "staging" for non-prod environments.
   external_labels = {
     env = "production",
-    app = "weego-api",
+    app = "ownfleet-api",
   }
 }

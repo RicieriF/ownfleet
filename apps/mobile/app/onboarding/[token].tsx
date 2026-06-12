@@ -2,7 +2,7 @@
  * Accept invite screen.
  *
  * Flow: manager generates an invite link → courier opens
- * weego-courier://onboarding/<token>  or  https://app.weego.ua/onboarding/<token>
+ * ownfleet-courier://onboarding/<token>  or  https://app.ownfleet.app/onboarding/<token>
  *
  * Step 1: password + confirm
  * Step 2: transport mode selection

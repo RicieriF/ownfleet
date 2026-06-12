@@ -32,7 +32,7 @@ interface Props {
   initialSnapshot: TrackSnapshot | null;
 }
 
-const SESSION_KEY = 'weego_widget_minimized';
+const SESSION_KEY = 'ownfleet_widget_minimized';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3000';
 
 async function fetchSnapshot(token: string): Promise<TrackSnapshot | null> {

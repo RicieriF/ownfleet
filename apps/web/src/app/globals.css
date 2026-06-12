@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
-   Weego CMI — Design Tokens
+   OwnFleet — Design Tokens
    Source of truth: DESIGN/DESIGN.md
    Palette: Warm neutral base, no chromatic accent — dark mode first
 ───────────────────────────────────────────────────────────── */
@@ -41,7 +41,7 @@
 
     --radius: 0.5rem;                 /* 8px — max for cards; buttons use 6px explicitly */
 
-    /* ── Weego semantic tokens ── */
+    /* ── OwnFleet semantic tokens ── */
 
     /* Warm neutral base — dark mode */
     --bg:       #0c0b09;   /* warm near-black — page background  */

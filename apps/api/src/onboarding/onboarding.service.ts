@@ -155,7 +155,7 @@ export class OnboardingService {
     const passwordHash = await bcrypt.hash(password, 12);
 
     // Use phone as email for courier accounts (phone is the login identifier)
-    const email = courier.phone ?? `courier-${courier.id}@weego.internal`;
+    const email = courier.phone ?? `courier-${courier.id}@ownfleet.internal`;
 
     const [user] = await this.prisma.$transaction([
       this.prisma.user.create({
