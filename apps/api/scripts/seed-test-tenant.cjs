@@ -8,6 +8,12 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 
 const BCRYPT_ROUNDS = 12;
 
+// SEED_LOCALE=en produces English demo data (transliterated courier names,
+// English addresses and notes) — used for English screenshots and demos.
+// Coordinates are identical in both locales, so the map stays correct.
+const SEED_LOCALE = process.env.SEED_LOCALE === 'en' ? 'en' : 'uk';
+const D = (uk, en) => (SEED_LOCALE === 'en' ? en : uk);
+
 const EST = {
   name: 'Test Kitchen Kyiv',
   slug: 'test-kitchen-kyiv',
@@ -192,7 +198,7 @@ async function main() {
       data: [
         {
           establishment_id: establishment.id,
-          name: 'Андрій',
+          name: D('Андрій', 'Andrii'),
           phone: '+380671110001',
           transport_mode: 'car',
           active: true,
@@ -202,7 +208,7 @@ async function main() {
         },
         {
           establishment_id: establishment.id,
-          name: 'Олена',
+          name: D('Олена', 'Olena'),
           phone: '+380671110002',
           transport_mode: 'moto_gas',
           active: true,
@@ -211,14 +217,14 @@ async function main() {
         },
         {
           establishment_id: establishment.id,
-          name: 'Максим',
+          name: D('Максим', 'Maksym'),
           phone: '+380671110003',
           transport_mode: 'bicycle',
           active: true,
         },
         {
           establishment_id: establishment.id,
-          name: 'Ірина',
+          name: D('Ірина', 'Iryna'),
           phone: '+380671110004',
           transport_mode: 'walking',
           active: true,
@@ -228,10 +234,10 @@ async function main() {
 
     const courierByName = new Map(couriers.map((c) => [c.name, c]));
 
-    const cAndrii = courierByName.get('Андрій');
-    const cOlena = courierByName.get('Олена');
-    const cMaksym = courierByName.get('Максим');
-    const cIryna = courierByName.get('Ірина');
+    const cAndrii = courierByName.get(D('Андрій', 'Andrii'));
+    const cOlena = courierByName.get(D('Олена', 'Olena'));
+    const cMaksym = courierByName.get(D('Максим', 'Maksym'));
+    const cIryna = courierByName.get(D('Ірина', 'Iryna'));
 
     if (!cAndrii || !cOlena || !cMaksym || !cIryna) {
       throw new Error('Courier creation failed');
@@ -272,43 +278,43 @@ async function main() {
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1001',
-          address: 'вул. Саксаганського, 55, Київ',
+          address: D('вул. Саксаганського, 55, Київ', '55 Saksahanskoho St, Kyiv'),
           lat: 50.4383,
           lng: 30.5132,
           status: 'pending',
           source: 'manual',
-          notes: 'Клієнт просив подзвонити перед прибуттям',
+          notes: D('Клієнт просив подзвонити перед прибуттям', 'Customer asked for a call before arrival'),
           ready_at: minutesAgo(25),
           created_at: minutesAgo(30),
         },
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1002',
-          address: 'вул. Антоновича, 80, Київ',
+          address: D('вул. Антоновича, 80, Київ', '80 Antonovycha St, Kyiv'),
           lat: 50.4269,
           lng: 30.5156,
           status: 'assigned',
           source: 'manual',
-          notes: 'Дверний код: 2458',
+          notes: D('Дверний код: 2458', 'Door code: 2458'),
           ready_at: minutesAgo(20),
           created_at: minutesAgo(28),
         },
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1003',
-          address: 'вул. Жилянська, 75, Київ',
+          address: D('вул. Жилянська, 75, Київ', '75 Zhylianska St, Kyiv'),
           lat: 50.4366,
           lng: 30.498,
           status: 'in_progress',
           source: 'poster',
-          notes: 'Безконтактна доставка',
+          notes: D('Безконтактна доставка', 'Contactless delivery'),
           ready_at: minutesAgo(35),
           created_at: minutesAgo(40),
         },
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1004',
-          address: 'б-р Лесі Українки, 19, Київ',
+          address: D('б-р Лесі Українки, 19, Київ', '19 Lesi Ukrainky Blvd, Kyiv'),
           lat: 50.4297,
           lng: 30.5413,
           status: 'completed',
@@ -319,31 +325,31 @@ async function main() {
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1005',
-          address: 'вул. Ділова, 2Б, Київ',
+          address: D('вул. Ділова, 2Б, Київ', '2B Dilova St, Kyiv'),
           lat: 50.429,
           lng: 30.5176,
           status: 'failed',
           source: 'manual',
-          notes: 'Клієнт не відповідав',
+          notes: D('Клієнт не відповідав', 'Customer did not answer'),
           ready_at: hoursAgo(4),
           created_at: hoursAgo(5),
         },
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1006',
-          address: 'вул. Лабораторна, 15, Київ',
+          address: D('вул. Лабораторна, 15, Київ', '15 Laboratorna St, Kyiv'),
           lat: 50.4253,
           lng: 30.5259,
           status: 'cancelled',
           source: 'webhook',
-          notes: 'Скасовано клієнтом',
+          notes: D('Скасовано клієнтом', 'Cancelled by the customer'),
           ready_at: hoursAgo(1),
           created_at: hoursAgo(1),
         },
         {
           establishment_id: establishment.id,
           external_id: 'TEST-1007',
-          address: 'вул. Ярославів Вал, 21Г, Київ',
+          address: D('вул. Ярославів Вал, 21Г, Київ', '21H Yaroslaviv Val St, Kyiv'),
           lat: 50.4549,
           lng: 30.5139,
           status: 'completed',
