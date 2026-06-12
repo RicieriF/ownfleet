@@ -3,8 +3,11 @@ import { apiFetch } from '@/lib/api';
 import { ApiError } from '@/lib/api';
 import { LogOut, Shield } from 'lucide-react';
 import Link from 'next/link';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   // Guard: only platform admins can access /platform
   // We verify by calling a protected endpoint — 403 means not platform admin
   try {
@@ -33,7 +36,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             href="/"
             className="text-xs text-[var(--t3)] hover:text-[var(--t2)] transition-colors"
           >
-            ← Назад до дашборду
+            {t('← Назад до дашборду', locale)}
           </Link>
           <form action="/api/auth/logout" method="POST">
             <button
@@ -41,7 +44,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
               className="flex items-center gap-1.5 text-xs text-[var(--t3)] hover:text-[var(--bad)] transition-colors"
             >
               <LogOut size={12} strokeWidth={2} />
-              Вийти
+              {t('Вийти', locale)}
             </button>
           </form>
         </div>

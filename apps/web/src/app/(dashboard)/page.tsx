@@ -5,6 +5,8 @@ import { OrdersTable } from './orders-table';
 import { SmartAssignmentPanel } from '@/components/smart-assignment-panel';
 import { AlertCard } from './alert-card';
 import { CourierStatusPanel } from './courier-status-panel';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 async function fetchData() {
   const [orders, couriers, establishment] = await Promise.all([
@@ -100,6 +102,7 @@ function KpiCard({ value, label, sub }: KpiCardProps) {
 export default async function OrdersPage() {
   const { orders, couriers, establishment } = await fetchData();
   const fleet = computeFleetKpi(orders, couriers);
+  const locale = await getLocale();
 
   // Alert: not_responding couriers with an active in_progress delivery
   const notRespondingAlerts = couriers
@@ -128,17 +131,17 @@ export default async function OrdersPage() {
       >
         <KpiCard
           value={`${fleet.onShift}/${fleet.total}`}
-          label="На зміні"
+          label={t('На зміні', locale)}
           sub={
             fleet.onShift > 0
-              ? `${fleet.inProgress} в дорозі · ${fleet.free} вільних`
+              ? `${fleet.inProgress} ${t('в дорозі', locale)} · ${fleet.free} ${t('вільних', locale)}`
               : undefined
           }
         />
-        <KpiCard value={fleet.inProgress} label="У дорозі" />
-        <KpiCard value={fleet.free} label="Вільних" />
-        <KpiCard value={fleet.notStarted} label="Не вийшли" />
-        <KpiCard value={fleet.pending} label="Очікують" sub="без курʼєра" />
+        <KpiCard value={fleet.inProgress} label={t('У дорозі', locale)} />
+        <KpiCard value={fleet.free} label={t('Вільних', locale)} />
+        <KpiCard value={fleet.notStarted} label={t('Не вийшли', locale)} />
+        <KpiCard value={fleet.pending} label={t('Очікують', locale)} sub={t('без курʼєра', locale)} />
       </div>
 
       {/* Smart assignment panel — only in recommend mode */}
@@ -177,14 +180,14 @@ export default async function OrdersPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--t1)' }}>
               {noCoordOrders.length === 1
-                ? '1 замовлення без координат'
-                : `${noCoordOrders.length} замовлень без координат`}
+                ? t('1 замовлення без координат', locale)
+                : `${noCoordOrders.length} ${t('замовлень без координат', locale)}`}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--t3)', marginTop: '2px' }}>
               {noCoordOrders.map((o) => o.address).join(' · ')}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--t4)', marginTop: '4px' }}>
-              Натисніть «Карта» навпроти замовлення щоб встановити координати вручну
+              {t('Натисніть «Карта» навпроти замовлення щоб встановити координати вручну', locale)}
             </div>
           </div>
         </div>
@@ -206,7 +209,7 @@ export default async function OrdersPage() {
                   color: 'var(--t4)',
                 }}
               >
-                Завантаження…
+                {t('Завантаження…', locale)}
               </div>
             }
           >

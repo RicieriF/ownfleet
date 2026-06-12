@@ -5,6 +5,7 @@ import { Plus, RefreshCw, Copy, Check, ChevronRight } from 'lucide-react';
 import { apiPost, apiPatch } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { TenantRow } from './page';
+import { useT } from '@/lib/i18n/client';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -28,10 +29,11 @@ const STATUS_CONFIG = {
 } as const;
 
 function StatusBadge({ status }: { status: TenantRow['access_status'] }) {
+  const tr = useT();
   const { label, color } = STATUS_CONFIG[status];
   return (
     <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-[0.05em] border', color)}>
-      {label}
+      {tr(label)}
     </span>
   );
 }
@@ -39,6 +41,7 @@ function StatusBadge({ status }: { status: TenantRow['access_status'] }) {
 // ── Copy button ───────────────────────────────────────────────────────────
 
 function CopyButton({ value }: { value: string }) {
+  const tr = useT();
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -58,7 +61,7 @@ function CopyButton({ value }: { value: string }) {
     <button
       onClick={handleCopy}
       className="ml-1.5 p-1 rounded text-[var(--t3)] hover:text-[var(--t2)] hover:bg-[var(--s2)] transition-colors"
-      title={failed ? 'Не вдалось скопіювати' : 'Копіювати'}
+      title={failed ? tr('Не вдалось скопіювати') : tr('Копіювати')}
     >
       {copied ? <Check size={12} className="text-[var(--ok)]" /> : <Copy size={12} className={failed ? 'text-[var(--bad)]' : ''} />}
     </button>
@@ -68,10 +71,11 @@ function CopyButton({ value }: { value: string }) {
 // ── Credentials display (shown once after creation) ───────────────────────
 
 function CredentialsCard({ creds }: { creds: Credentials }) {
+  const tr = useT();
   return (
     <div className="mt-4 rounded-md border border-[var(--acm-b)] bg-[var(--acm-m)] p-4 space-y-3">
       <p className="text-xs font-semibold text-[var(--t3)] uppercase tracking-[0.05em]">
-        Credentials — скопіюйте зараз, більше не будуть показані
+        {tr('Credentials — скопіюйте зараз, більше не будуть показані')}
       </p>
       {(['owner', 'manager'] as const).map((role) => (
         <div key={role} className="space-y-1">
@@ -93,6 +97,7 @@ function CredentialsCard({ creds }: { creds: Credentials }) {
 // ── Create modal ──────────────────────────────────────────────────────────
 
 function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (t: TenantRow) => void }) {
+  const tr = useT();
   const [name, setName]         = useState('');
   const [slug, setSlug]         = useState('');
   const [trialDays, setTrialDays] = useState('14');
@@ -144,8 +149,8 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           overdue_days: null,
         });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Помилка';
-        setError(msg.includes('409') ? `Slug "${slug}" вже зайнятий` : msg);
+        const msg = e instanceof Error ? e.message : tr('Помилка');
+        setError(msg.includes('409') ? `Slug "${slug}" ${tr('вже зайнятий')}` : msg);
       }
     });
   }
@@ -157,14 +162,14 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
         <div className="w-full max-w-md bg-[var(--sf)] rounded-lg border border-[var(--br2)] shadow-[var(--shadow-lg)] p-6">
           <div className="flex items-center gap-2 mb-1">
             <Check size={16} className="text-[var(--ok)]" />
-            <h2 className="text-base font-semibold text-[var(--t1)]">{createdName} створено</h2>
+            <h2 className="text-base font-semibold text-[var(--t1)]">{createdName} {tr('створено')}</h2>
           </div>
           <CredentialsCard creds={credentials} />
           <button
             onClick={onClose}
             className="mt-5 w-full py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--t1)] text-sm font-semibold transition-colors"
           >
-            Готово
+            {tr('Готово')}
           </button>
         </div>
       </div>
@@ -174,11 +179,11 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md bg-[var(--sf)] rounded-lg border border-[var(--br2)] shadow-[var(--shadow-lg)] p-6">
-        <h2 className="text-base font-semibold text-[var(--t1)] mb-5">Новий заклад</h2>
+        <h2 className="text-base font-semibold text-[var(--t1)] mb-5">{tr('Новий заклад')}</h2>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">Назва</label>
+            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">{tr('Назва')}</label>
             <input
               autoFocus
               value={name}
@@ -202,17 +207,17 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
               />
             </div>
             <p className="mt-1 text-[11px] text-[var(--t3)]">
-              Логін: owner-{slug || '…'}@ownfleet.app
+              {tr('Логін:')} owner-{slug || '…'}@ownfleet.app
             </p>
             {slugIsAutoEmpty && (
               <p className="mt-1 text-[11px] text-[var(--warn)]">
-                Назва містить тільки кирилицю — введіть slug вручну (латиниця, цифри, дефіс)
+                {tr('Назва містить тільки кирилицю — введіть slug вручну (латиниця, цифри, дефіс)')}
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">Тріал (днів)</label>
+            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">{tr('Тріал (днів)')}</label>
             <input
               type="number"
               min={1}
@@ -235,14 +240,14 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
             onClick={onClose}
             className="flex-1 py-2.5 rounded-md border border-[var(--br2)] text-sm text-[var(--t3)] hover:bg-[var(--s2)] transition-colors"
           >
-            Скасувати
+            {tr('Скасувати')}
           </button>
           <button
             onClick={handleSubmit}
             disabled={isPending || !name.trim() || !slug.trim()}
             className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--t1)] text-sm font-semibold transition-colors"
           >
-            {isPending ? 'Створення…' : 'Створити'}
+            {isPending ? tr('Створення…') : tr('Створити')}
           </button>
         </div>
       </div>
@@ -257,6 +262,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
   onClose: () => void;
   onExtended: (paid_until: string, access_status: TenantRow['access_status']) => void;
 }) {
+  const tr = useT();
   const [days, setDays]     = useState('30');
   const [error, setError]   = useState('');
   const [isPending, startTransition] = useTransition();
@@ -269,7 +275,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
 
   function handleExtend() {
     const d = parseInt(days, 10);
-    if (!d || d < 1 || d > 365) { setError('Введіть від 1 до 365 днів'); return; }
+    if (!d || d < 1 || d > 365) { setError(tr('Введіть від 1 до 365 днів')); return; }
     setError('');
     startTransition(async () => {
       try {
@@ -280,7 +286,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
         onExtended(result.paid_until, result.access_status);
         onClose();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка');
+        setError(e instanceof Error ? e.message : tr('Помилка'));
       }
     });
   }
@@ -288,18 +294,18 @@ function ExtendModal({ tenant, onClose, onExtended }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm bg-[var(--sf)] rounded-lg border border-[var(--br2)] shadow-[var(--shadow-lg)] p-6">
-        <h2 className="text-base font-semibold text-[var(--t1)] mb-1">Продовжити підписку</h2>
+        <h2 className="text-base font-semibold text-[var(--t1)] mb-1">{tr('Продовжити підписку')}</h2>
         <p className="text-sm text-[var(--t3)] mb-5">{tenant.name}</p>
 
         {tenant.overdue_days !== null && tenant.overdue_days > 0 && (
           <div className="mb-4 px-3 py-2 rounded border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.08)] text-xs text-[var(--bad)]">
-            Прострочено {tenant.overdue_days} {pluralDays(tenant.overdue_days)}
+            {tr('Прострочено')} {tenant.overdue_days} {pluralDays(tenant.overdue_days, tr)}
           </div>
         )}
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">Кількість днів</label>
+            <label className="block text-xs font-medium text-[var(--t3)] mb-1.5 uppercase tracking-[0.05em]">{tr('Кількість днів')}</label>
             <div className="flex items-center gap-2">
               {[30, 60, 90].map((d) => (
                 <button
@@ -327,7 +333,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
           </div>
 
           <div className="px-3 py-2.5 rounded bg-[var(--s2)] border border-[var(--br)]">
-            <p className="text-xs text-[var(--t3)] mb-0.5">Підписка до</p>
+            <p className="text-xs text-[var(--t3)] mb-0.5">{tr('Підписка до')}</p>
             <p className="text-sm font-mono text-[var(--t1)]">
               {preview.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
@@ -340,14 +346,14 @@ function ExtendModal({ tenant, onClose, onExtended }: {
 
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-md border border-[var(--br2)] text-sm text-[var(--t3)] hover:bg-[var(--s2)] transition-colors">
-            Скасувати
+            {tr('Скасувати')}
           </button>
           <button
             onClick={handleExtend}
             disabled={isPending}
             className="flex-1 py-2.5 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--t1)] text-sm font-semibold transition-colors"
           >
-            {isPending ? 'Збереження…' : 'Продовжити'}
+            {isPending ? tr('Збереження…') : tr('Продовжити')}
           </button>
         </div>
       </div>
@@ -358,6 +364,7 @@ function ExtendModal({ tenant, onClose, onExtended }: {
 // ── Main panel ─────────────────────────────────────────────────────────────
 
 export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] }) {
+  const tr = useT();
   const [tenants, setTenants]         = useState<TenantRow[]>(initialTenants);
   const [showCreate, setShowCreate]   = useState(false);
   const [extending, setExtending]     = useState<TenantRow | null>(null);
@@ -384,9 +391,9 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-[var(--t1)] tracking-tight">Заклади</h1>
+          <h1 className="text-xl font-bold text-[var(--t1)] tracking-tight">{tr('Заклади')}</h1>
           <p className="mt-1 text-sm text-[var(--t3)] font-mono">
-            {tenants.length} всього · {active} активних · {trial} тріал{grace > 0 ? ` · ${grace} grace` : ''} · {expired} прострочених
+            {tenants.length} {tr('всього')} · {active} {tr('активних')} · {trial} {tr('тріал')}{grace > 0 ? ` · ${grace} grace` : ''} · {expired} {tr('прострочених')}
           </p>
         </div>
         <button
@@ -394,7 +401,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
           className="flex items-center gap-2 px-4 py-2 rounded-md bg-[var(--acm)] hover:bg-[var(--acm-h)] text-[var(--t1)] text-sm font-semibold transition-colors"
         >
           <Plus size={15} strokeWidth={2.5} />
-          Новий заклад
+          {tr('Новий заклад')}
         </button>
       </div>
 
@@ -403,19 +410,19 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--br)] bg-[var(--sf)]">
-              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Заклад</th>
-              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Статус</th>
-              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Діє до</th>
-              <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Курʼєри</th>
-              <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Замовлення</th>
-              <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Дія</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Заклад')}</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Статус')}</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Діє до')}</th>
+              <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Курʼєри')}</th>
+              <th className="px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Замовлення')}</th>
+              <th className="px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{tr('Дія')}</th>
             </tr>
           </thead>
           <tbody>
             {tenants.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-sm text-[var(--t3)]">
-                  Закладів ще немає — створіть перший
+                  {tr('Закладів ще немає — створіть перший')}
                 </td>
               </tr>
             )}
@@ -441,7 +448,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
                     <StatusBadge status={t.access_status} />
                     {t.overdue_days !== null && t.overdue_days > 0 && (
                       <span className="text-[11px] text-[var(--bad)] font-mono">
-                        -{t.overdue_days} {pluralDays(t.overdue_days)}
+                        -{t.overdue_days} {pluralDays(t.overdue_days, tr)}
                       </span>
                     )}
                   </div>
@@ -455,7 +462,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
                     </span>
                   ) : t.trial_ends_at ? (
                     <span className="text-sm font-mono text-[var(--t3)]">
-                      тріал до {new Date(t.trial_ends_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' })}
+                      {tr('тріал до')} {new Date(t.trial_ends_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' })}
                     </span>
                   ) : (
                     <span className="text-sm text-[var(--t4)]">—</span>
@@ -480,7 +487,7 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[var(--br2)] text-xs text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--t1)] transition-colors"
                   >
                     <RefreshCw size={11} strokeWidth={2} />
-                    Підписка
+                    {tr('Підписка')}
                     <ChevronRight size={11} strokeWidth={2} />
                   </button>
                 </td>
@@ -510,8 +517,8 @@ export function PlatformPanel({ initialTenants }: { initialTenants: TenantRow[] 
 
 // ── Utils ─────────────────────────────────────────────────────────────────
 
-function pluralDays(n: number): string {
-  if (n % 10 === 1 && n % 100 !== 11) return 'день';
-  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'дні';
-  return 'днів';
+function pluralDays(n: number, tr: (s: string) => string): string {
+  if (n % 10 === 1 && n % 100 !== 11) return tr('день');
+  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return tr('дні');
+  return tr('днів');
 }

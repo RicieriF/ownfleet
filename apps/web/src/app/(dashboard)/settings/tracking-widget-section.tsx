@@ -13,6 +13,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { apiGet, apiPost, apiPatch } from '@/lib/api-client';
 import { ApiKeyMeta } from '@/types';
+import { useT } from '@/lib/i18n/client';
 
 interface Props {
   initialApiKey: ApiKeyMeta | null;
@@ -23,8 +24,8 @@ function copyToClipboard(text: string, onDone: () => void): void {
   navigator.clipboard.writeText(text).then(onDone).catch(() => {});
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return 'ніколи';
+function formatDate(iso: string | null, t: (s: string) => string): string {
+  if (!iso) return t('ніколи');
   return new Date(iso).toLocaleString('uk-UA', {
     day: 'numeric',
     month: 'short',
@@ -65,6 +66,7 @@ function StepHeader({ n, title, done }: { n: number; title: string; done?: boole
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ownfleet.app';
 
 export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: Props) {
+  const t = useT();
   const [apiKey, setApiKey] = useState<ApiKeyMeta | null>(initialApiKey);
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
   const [domain, setDomain] = useState<string>(() =>
@@ -108,7 +110,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
       const meta = await apiGet<ApiKeyMeta>('/api/v1/establishments/api-key');
       setApiKey(meta);
     } catch {
-      setError('Не вдалось згенерувати ключ');
+      setError(t('Не вдалось згенерувати ключ'));
     } finally {
       setIsGenerating(false);
     }
@@ -138,7 +140,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
         setDomainSaved(true);
         setTimeout(() => setDomainSaved(false), 2000);
       } catch {
-        setError('Не вдалось зберегти домен');
+        setError(t('Не вдалось зберегти домен'));
       } finally {
         setIsSavingDomain(false);
       }
@@ -159,7 +161,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
       await apiPatch(`/api/v1/establishments/api-key/${apiKey.id}/toggle`, {});
       setApiKey((prev) => (prev ? { ...prev, is_active: !prev.is_active } : prev));
     } catch {
-      setError('Не вдалось змінити статус ключа');
+      setError(t('Не вдалось змінити статус ключа'));
     } finally {
       setIsTogglingActive(false);
     }
@@ -180,10 +182,10 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
       {/* Header */}
       <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--br)' }}>
         <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>
-          Підключення трекінгу на сайт
+          {t('Підключення трекінгу на сайт')}
         </p>
         <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>
-          Вставте код на ваш сайт — клієнти бачитимуть статус і місце знаходження курʼєра в реальному часі
+          {t('Вставте код на ваш сайт — клієнти бачитимуть статус і місце знаходження курʼєра в реальному часі')}
         </p>
       </div>
 
@@ -191,7 +193,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
 
         {/* ── Step 1: Domain ── */}
         <div>
-          <StepHeader n={1} title="Адреса вашого сайту" done={domainDone} />
+          <StepHeader n={1} title={t('Адреса вашого сайту')} done={domainDone} />
 
           {/* Before key generation */}
           {!apiKey && (
@@ -210,7 +212,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                 onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
               />
               <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                Запити тільки з цього домену будуть прийняті
+                {t('Запити тільки з цього домену будуть прийняті')}
               </p>
             </div>
           )}
@@ -236,15 +238,15 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                   }}
                 />
                 {isSavingDomain && (
-                  <span className="text-xs" style={{ color: 'var(--t4)' }}>Збереження…</span>
+                  <span className="text-xs" style={{ color: 'var(--t4)' }}>{t('Збереження…')}</span>
                 )}
                 {domainSaved && !isSavingDomain && (
-                  <span className="text-xs" style={{ color: 'var(--ok)' }}>Збережено</span>
+                  <span className="text-xs" style={{ color: 'var(--ok)' }}>{t('Збережено')}</span>
                 )}
               </div>
               {apiKey.allowed_domains.length > 0 && (
                 <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                  Дозволені домени: {apiKey.allowed_domains.join(', ')}
+                  {t('Дозволені домени:')} {apiKey.allowed_domains.join(', ')}
                 </p>
               )}
             </div>
@@ -253,7 +255,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
 
         {/* ── Step 2: API key ── */}
         <div>
-          <StepHeader n={2} title="API-ключ" done={keyDone} />
+          <StepHeader n={2} title={t('API-ключ')} done={keyDone} />
 
           {/* No key yet — generate button */}
           {!apiKey && (
@@ -263,7 +265,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
               className="self-start text-sm font-medium rounded transition-opacity disabled:opacity-50"
               style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
             >
-              {isGenerating ? 'Генерується…' : 'Згенерувати API ключ'}
+              {isGenerating ? t('Генерується…') : t('Згенерувати API ключ')}
             </button>
           )}
 
@@ -274,7 +276,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
               style={{ background: 'var(--s1)', border: '1px solid var(--br2)' }}
             >
               <p className="text-xs font-medium" style={{ color: 'var(--t2)' }}>
-                Збережіть ключ — він більше не буде показаний
+                {t('Збережіть ключ — він більше не буде показаний')}
               </p>
               <div className="flex items-center gap-2">
                 <code
@@ -298,7 +300,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                     border: '1px solid var(--br)',
                   }}
                 >
-                  {copiedKey ? 'Скопійовано' : 'Копіювати'}
+                  {copiedKey ? t('Скопійовано') : t('Копіювати')}
                 </button>
               </div>
             </div>
@@ -324,18 +326,18 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                         border: `1px solid ${apiKey.is_active ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
                       }}
                     >
-                      {apiKey.is_active ? 'Активний' : 'Вимкнено'}
+                      {apiKey.is_active ? t('Активний') : t('Вимкнено')}
                     </span>
                   </div>
                   {apiKey.last_used_at ? (
                     <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>
-                      Остання активність: {formatDate(apiKey.last_used_at)}
+                      {t('Остання активність:')} {formatDate(apiKey.last_used_at, t)}
                       {apiKey.last_used_domain && (
-                        <> з <span style={{ color: 'var(--t3)' }}>{apiKey.last_used_domain}</span></>
+                        <> {t('з')} <span style={{ color: 'var(--t3)' }}>{apiKey.last_used_domain}</span></>
                       )}
                     </p>
                   ) : (
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>Ще не використовувався</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{t('Ще не використовувався')}</p>
                   )}
                 </div>
                 <button
@@ -349,7 +351,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                     border: `1px solid ${apiKey.is_active ? 'rgba(239,68,68,0.25)' : 'var(--br)'}`,
                   }}
                 >
-                  {apiKey.is_active ? 'Вимкнути API-ключ' : 'Увімкнути API-ключ'}
+                  {apiKey.is_active ? t('Вимкнути API-ключ') : t('Увімкнути API-ключ')}
                 </button>
               </div>
 
@@ -360,7 +362,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                   style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}
                 >
                   <p className="text-xs" style={{ color: 'var(--t2)' }}>
-                    Віджет трекінгу перестане працювати для всіх нових запитів. Підтвердити?
+                    {t('Віджет трекінгу перестане працювати для всіх нових запитів. Підтвердити?')}
                   </p>
                   <div className="flex gap-2 shrink-0">
                     <button
@@ -368,7 +370,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                       className="text-xs font-medium rounded"
                       style={{ padding: '3px 10px', borderRadius: '6px', background: 'var(--s3)', color: 'var(--t3)', border: '1px solid var(--br)' }}
                     >
-                      Скасувати
+                      {t('Скасувати')}
                     </button>
                     <button
                       onClick={handleToggleActive}
@@ -376,7 +378,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                       className="text-xs font-medium rounded disabled:opacity-40"
                       style={{ padding: '3px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.15)', color: 'var(--bad)', border: '1px solid rgba(239,68,68,0.3)' }}
                     >
-                      Вимкнути
+                      {t('Вимкнути')}
                     </button>
                   </div>
                 </div>
@@ -388,7 +390,7 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
         {/* ── Step 3: Embed code — shown only when key exists ── */}
         {apiKey && (
           <div>
-            <StepHeader n={3} title="Код для вставки" />
+            <StepHeader n={3} title={t('Код для вставки')} />
             <div className="flex flex-col gap-1.5">
               <div
                 className="rounded-md p-3 relative"
@@ -410,20 +412,20 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
                     border: '1px solid var(--br)',
                   }}
                 >
-                  {copiedCode ? '✓' : 'Копіювати'}
+                  {copiedCode ? '✓' : t('Копіювати')}
                 </button>
               </div>
               {newKeyValue ? (
                 <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                  Вставте перед {'</body>'} на сторінках з замовленнями. Замініть{' '}
-                  <code style={{ fontFamily: 'var(--font-mono)' }}>ORDER_ID</code> на номер замовлення з вашої CRM.
+                  {t('Вставте перед')} {'</body>'} {t('на сторінках з замовленнями. Замініть')}{' '}
+                  <code style={{ fontFamily: 'var(--font-mono)' }}>ORDER_ID</code> {t('на номер замовлення з вашої CRM.')}
                 </p>
               ) : (
                 <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                  Вставте перед {'</body>'} на сторінках з замовленнями. Замініть{' '}
-                  <code style={{ fontFamily: 'var(--font-mono)' }}>YOUR_FULL_API_KEY</code> на повний ключ
-                  (показується лише раз при генерації) та{' '}
-                  <code style={{ fontFamily: 'var(--font-mono)' }}>ORDER_ID</code> на номер замовлення з вашої CRM.
+                  {t('Вставте перед')} {'</body>'} {t('на сторінках з замовленнями. Замініть')}{' '}
+                  <code style={{ fontFamily: 'var(--font-mono)' }}>YOUR_FULL_API_KEY</code> {t('на повний ключ')}
+                  {t('(показується лише раз при генерації) та')}{' '}
+                  <code style={{ fontFamily: 'var(--font-mono)' }}>ORDER_ID</code> {t('на номер замовлення з вашої CRM.')}
                 </p>
               )}
             </div>
@@ -433,21 +435,20 @@ export function TrackingWidgetSection({ initialApiKey, hostedTrackingEnabled }: 
         {/* ── Step 4: Hosted tracking — only when hosted_tracking_enabled ── */}
         {apiKey && hostedTrackingEnabled && (
           <div>
-            <StepHeader n={4} title="Hosted-сторінка трекінгу" />
+            <StepHeader n={4} title={t('Hosted-сторінка трекінгу')} />
             <div
               className="rounded-md p-3 flex flex-col gap-1.5"
               style={{ background: 'var(--s1)', border: '1px solid var(--br)' }}
             >
               <p className="text-xs" style={{ color: 'var(--t3)' }}>
-                Альтернатива embed-коду — не потребує вставки на ваш сайт. Клієнт отримує пряме посилання
-                на сторінку трекінгу.
+                {t('Альтернатива embed-коду — не потребує вставки на ваш сайт. Клієнт отримує пряме посилання на сторінку трекінгу.')}
               </p>
               <a
                 href="/orders"
                 className="self-start text-xs font-medium"
                 style={{ color: 'var(--t2)', textDecoration: 'underline', textUnderlineOffset: '3px' }}
               >
-                Перейти до замовлень →
+                {t('Перейти до замовлень →')}
               </a>
             </div>
           </div>

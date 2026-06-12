@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { uk } from 'date-fns/locale';
+import { uk, enUS } from 'date-fns/locale';
 import { apiPost } from '@/lib/api-client';
 import type { CourierWithStatus, Order } from '@/types';
+import { useT, useLocale } from '@/lib/i18n/client';
 
 interface AlertCardProps {
   courier: Pick<CourierWithStatus, 'id' | 'name' | 'last_ping_at'>;
@@ -13,6 +14,8 @@ interface AlertCardProps {
 }
 
 export function AlertCard({ courier, order }: AlertCardProps) {
+  const t = useT();
+  const dateLocale = useLocale() === 'uk' ? uk : enUS;
   const [reminding, setReminding] = useState(false);
   const [reminded, setReminded] = useState(false);
 
@@ -55,16 +58,16 @@ export function AlertCard({ courier, order }: AlertCardProps) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--t1)' }}>
-          {courier.name} не відповідає
+          {courier.name} {t('не відповідає')}
         </div>
         <div style={{ fontSize: '12px', color: 'var(--t3)', marginTop: '2px' }}>
-          Активна доставка · {order.address}
+          {t('Активна доставка')} · {order.address}
           {courier.last_ping_at && (
             <>
-              {' · пінг '}
+              {' · ' + t('пінг') + ' '}
               {formatDistanceToNow(new Date(courier.last_ping_at), {
                 addSuffix: true,
-                locale: uk,
+                locale: dateLocale,
               })}
             </>
           )}
@@ -101,7 +104,7 @@ export function AlertCard({ courier, order }: AlertCardProps) {
             }
           }}
         >
-          {reminding ? '…' : reminded ? '✓ Надіслано' : 'Нагадати'}
+          {reminding ? '…' : reminded ? t('✓ Надіслано') : t('Нагадати')}
         </button>
 
         <Link
@@ -123,7 +126,7 @@ export function AlertCard({ courier, order }: AlertCardProps) {
             (e.currentTarget as HTMLAnchorElement).style.color = 'var(--t3)';
           }}
         >
-          На карті →
+          {t('На карті →')}
         </Link>
       </div>
     </div>

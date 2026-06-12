@@ -1,8 +1,11 @@
 import { apiFetch } from '@/lib/api';
 import { CourierWithStatus, Establishment } from '@/types';
 import { LiveMap } from './live-map';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 export default async function MapPage() {
+  const locale = await getLocale();
   const [couriers, establishment] = await Promise.all([
     apiFetch<CourierWithStatus[]>('/api/v1/couriers/status'),
     apiFetch<Establishment>('/api/v1/establishments/me'),
@@ -15,7 +18,7 @@ export default async function MapPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[var(--t1)] mb-6">Карта</h1>
+      <h1 className="text-2xl font-bold text-[var(--t1)] mb-6">{t('Карта', locale)}</h1>
       <div
         className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden"
         style={{ height: 'calc(100vh - 160px)' }}

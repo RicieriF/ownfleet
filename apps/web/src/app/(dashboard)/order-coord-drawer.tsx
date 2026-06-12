@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Order } from '@/types';
 import { apiPatch } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { useT } from '@/lib/i18n/client';
 
 // ── Geo helpers ───────────────────────────────────────────────────────────────
 
@@ -19,10 +20,10 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function formatDist(m: number): string {
-  if (m < 50) return 'менше 50 м';
-  if (m < 1000) return `~${Math.round(m / 50) * 50} м`;
-  return `~${(m / 1000).toFixed(1)} км`;
+function formatDist(m: number, t: (s: string) => string): string {
+  if (m < 50) return t('менше 50 м');
+  if (m < 1000) return `~${Math.round(m / 50) * 50} ${t('м')}`;
+  return `~${(m / 1000).toFixed(1)} ${t('км')}`;
 }
 
 // Dynamic import: Leaflet requires browser APIs (window, document)
@@ -42,6 +43,7 @@ const DEFAULT_LAT = 50.45; // Kyiv fallback when order has no coords yet
 const DEFAULT_LNG = 30.52;
 
 export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
+  const t = useT();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [lat, setLat] = useState(order?.lat ?? DEFAULT_LAT);
@@ -73,7 +75,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
       onSaved?.(order.id, lat, lng);
       startTransition(() => router.refresh());
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : 'Помилка збереження');
+      setSaveError(e instanceof Error ? e.message : t('Помилка збереження'));
     }
   }
 
@@ -92,35 +94,35 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
       // Order had no auto-geocoded coordinates — this is a fresh manual placement
       if (!hasCoords) {
         return {
-          text: `Координати встановлюються вручну. Переконайтесь, що шпилька стоїть точно на адресі доставки.`,
+          text: t('Координати встановлюються вручну. Переконайтесь, що шпилька стоїть точно на адресі доставки.'),
           level: 'info',
         };
       }
 
       // Order already had coordinates — show how far the new pin is from the original
       const dist = haversineM(order.lat!, order.lng!, lat, lng);
-      const distText = formatDist(dist);
+      const distText = formatDist(dist, t);
 
       if (dist < 50) {
         return {
-          text: `Невелике уточнення позиції (${distText} від розрахованої точки).`,
+          text: `${t('Невелике уточнення позиції')} (${distText} ${t('від розрахованої точки')}).`,
           level: 'info',
         };
       }
       if (dist < 500) {
         return {
-          text: `Зміщення від розрахованої точки: ${distText}. Переконайтесь, що шпилька стоїть на правильній будівлі.`,
+          text: `${t('Зміщення від розрахованої точки:')} ${distText}. ${t('Переконайтесь, що шпилька стоїть на правильній будівлі.')}`,
           level: 'info',
         };
       }
       if (dist < 5000) {
         return {
-          text: `Нова точка на ${distText} від розрахованої. Впевнені, що це правильна адреса?`,
+          text: `${t('Нова точка на')} ${distText} ${t('від розрахованої. Впевнені, що це правильна адреса?')}`,
           level: 'warn',
         };
       }
       return {
-        text: `Нова точка на ${distText} від розрахованої — значне відхилення. Ще раз перевірте адресу «${order.address}» перед збереженням.`,
+        text: `${t('Нова точка на')} ${distText} ${t('від розрахованої — значне відхилення. Ще раз перевірте адресу')} «${order.address}» ${t('перед збереженням.')}`,
         level: 'danger',
       };
     })();
@@ -153,7 +155,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
         >
           <div>
             <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t1)', letterSpacing: '-0.01em' }}>
-              Координати замовлення
+              {t('Координати замовлення')}
             </p>
             <p
               className="truncate mt-0.5"
@@ -179,7 +181,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--t1)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--t3)'; }}
-            aria-label="Закрити"
+            aria-label={t('Закрити')}
           >
             ×
           </button>
@@ -199,7 +201,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
                 fontSize: '13px',
               }}
             >
-              Координати ще не визначені — геокодування в процесі. Ви можете поставити шпильку вручну.
+              {t('Координати ще не визначені — геокодування в процесі. Ви можете поставити шпильку вручну.')}
             </div>
           )}
 
@@ -218,7 +220,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
           >
             <div className="flex-1">
               <p style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Широта
+                {t('Широта')}
               </p>
               <p style={{ fontFamily: 'var(--font-mono)', color: 'var(--t2)' }}>
                 {lat.toFixed(6)}
@@ -226,7 +228,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
             </div>
             <div className="flex-1">
               <p style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Довгота
+                {t('Довгота')}
               </p>
               <p style={{ fontFamily: 'var(--font-mono)', color: 'var(--t2)' }}>
                 {lng.toFixed(6)}
@@ -260,7 +262,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
           })()}
 
           <p style={{ fontSize: '12px', color: 'var(--t4)' }}>
-            Перетягніть шпильку на карті, щоб скоригувати точку доставки.
+            {t('Перетягніть шпильку на карті, щоб скоригувати точку доставки.')}
           </p>
         </div>
 
@@ -296,7 +298,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
                 el.style.color = 'var(--t3)';
               }}
             >
-              Закрити
+              {t('Закрити')}
             </button>
             <button
               onClick={handleSave}
@@ -322,7 +324,7 @@ export function OrderCoordDrawer({ order, onClose, onSaved }: Props) {
                 (e.currentTarget as HTMLButtonElement).style.background = saved ? 'var(--acm-m)' : 'var(--acm)';
               }}
             >
-              {isPending ? 'Збереження…' : saved ? '✓ Збережено' : 'Зберегти'}
+              {isPending ? t('Збереження…') : saved ? t('✓ Збережено') : t('Зберегти')}
             </button>
           </div>
         </div>

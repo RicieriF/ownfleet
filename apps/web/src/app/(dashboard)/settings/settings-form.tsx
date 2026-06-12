@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { apiPatch } from '@/lib/api-client';
+import { useT } from '@/lib/i18n/client';
 
 type DispatchMode = 'manual' | 'recommend' | 'auto';
 
@@ -157,6 +158,7 @@ export function SettingsForm({
   initialCity,
   initialDispatchMode,
 }: Props) {
+  const t = useT();
   const [retentionOrders, setRetentionOrders] = useState(initialSettings?.retention_orders_days ?? 14);
   const [retentionPings, setRetentionPings] = useState(initialSettings?.retention_pings_days ?? 3);
   const [courierNotRespondingMin, setCourierNotRespondingMin] = useState(initialSettings?.courier_not_responding_min ?? 15);
@@ -205,7 +207,7 @@ export function SettingsForm({
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка збереження');
+        setError(e instanceof Error ? e.message : t('Помилка збереження'));
       }
     });
   }
@@ -219,7 +221,7 @@ export function SettingsForm({
   return (
     <>
       {/* Timezone */}
-      <SectionCard title="Часовий пояс" description="Використовується для відображення часу в Telegram-сповіщеннях">
+      <SectionCard title={t('Часовий пояс')} description={t('Використовується для відображення часу в Telegram-сповіщеннях')}>
         <select
           value={timezone} onChange={(e) => setTimezone(e.target.value)}
           className="w-full text-sm rounded outline-none transition-all"
@@ -228,26 +230,26 @@ export function SettingsForm({
           onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
         >
           {TIMEZONE_OPTIONS.map((tz) => (
-            <option key={tz.value} value={tz.value}>{tz.label}</option>
+            <option key={tz.value} value={tz.value}>{t(tz.label)}</option>
           ))}
         </select>
       </SectionCard>
 
       {/* Location — city + establishment coordinates for geocoding accuracy */}
       <SectionCard
-        title="Локація закладу"
-        description="Використовується для геокодування адрес та розрахунку маршрутів"
+        title={t('Локація закладу')}
+        description={t('Використовується для геокодування адрес та розрахунку маршрутів')}
       >
         <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
           <FieldRow
-            label="Місто / населений пункт"
-            hint="Додається до адрес при геокодуванні — запобігає плутанині однойменних вулиць"
+            label={t('Місто / населений пункт')}
+            hint={t('Додається до адрес при геокодуванні — запобігає плутанині однойменних вулиць')}
           >
             <input
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="Харків"
+              placeholder={t('Харків')}
               maxLength={100}
               className="w-36 text-sm rounded outline-none transition-all"
               style={{
@@ -259,8 +261,8 @@ export function SettingsForm({
             />
           </FieldRow>
           <FieldRow
-            label="Координати закладу"
-            hint="Використовуються для перевірки геокодування (результати далі 25 км відхиляються)"
+            label={t('Координати закладу')}
+            hint={t('Використовуються для перевірки геокодування (результати далі 25 км відхиляються)')}
           >
             <div className="flex items-center gap-2">
               <CoordInput value={latStr} onChange={setLatStr} placeholder="50.4501" />
@@ -272,26 +274,26 @@ export function SettingsForm({
 
       {/* ETA & SLA */}
       <SectionCard
-        title="ETA та SLA доставок"
-        description="Автоматичний розрахунок часу доставки та налаштування стандарту"
+        title={t('ETA та SLA доставок')}
+        description={t('Автоматичний розрахунок часу доставки та налаштування стандарту')}
       >
         <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
           <FieldRow
-            label="SLA доставки"
-            hint="Ваш публічний стандарт для клієнтів"
+            label={t('SLA доставки')}
+            hint={t('Ваш публічний стандарт для клієнтів')}
           >
             <div className="flex items-center gap-3">
               <Toggle value={slaEnabled} onChange={setSlaEnabled} />
               {slaEnabled && (
-                <NumberInput value={slaMinutes} onChange={setSlaMinutes} min={5} max={180} suffix="хв" />
+                <NumberInput value={slaMinutes} onChange={setSlaMinutes} min={5} max={180} suffix={t('хв')} />
               )}
             </div>
           </FieldRow>
 
           {slaEnabled && (
             <FieldRow
-              label="Показувати ETA на дашборді"
-              hint="Відображати ETA-таймер поруч з віком замовлення в таблиці"
+              label={t('Показувати ETA на дашборді')}
+              hint={t('Відображати ETA-таймер поруч з віком замовлення в таблиці')}
             >
               <Toggle value={showSlaOnDashboard} onChange={setShowSlaOnDashboard} />
             </FieldRow>
@@ -303,20 +305,20 @@ export function SettingsForm({
             className="mb-3"
             style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
-            Сповіщення про запізнення
+            {t('Сповіщення про запізнення')}
           </p>
           <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
             <FieldRow
-              label="Сповіщати про запізнення ETA"
-              hint="Telegram-повідомлення менеджеру"
+              label={t('Сповіщати про запізнення ETA')}
+              hint={t('Telegram-повідомлення менеджеру')}
             >
               <Toggle value={etaAlertEnabled} onChange={setEtaAlertEnabled} />
             </FieldRow>
 
             {etaAlertEnabled && (
               <FieldRow
-                label="Через скільки хвилин після виходу ETA"
-                hint="Щоб не спрацьовувати на незначні запізнення"
+                label={t('Через скільки хвилин після виходу ETA')}
+                hint={t('Щоб не спрацьовувати на незначні запізнення')}
               >
                 <div className="flex items-center gap-1">
                   {ETA_ALERT_DELAY_OPTIONS.map((opt) => (
@@ -333,7 +335,7 @@ export function SettingsForm({
                         border: `1px solid ${etaAlertDelay === opt ? 'var(--acm)' : 'var(--br)'}`,
                       }}
                     >
-                      {opt} хв
+                      {opt} {t('хв')}
                     </button>
                   ))}
                 </div>
@@ -345,26 +347,26 @@ export function SettingsForm({
 
       {/* Dispatch mode */}
       <SectionCard
-        title="Режим призначення"
-        description="Керуйте тим, як замовлення потрапляють до курʼєрів"
+        title={t('Режим призначення')}
+        description={t('Керуйте тим, як замовлення потрапляють до курʼєрів')}
       >
         <div className="flex flex-col gap-2">
           {(
             [
               {
                 value: 'manual' as DispatchMode,
-                label: 'Ручне призначення',
-                hint: 'Менеджер призначає кожне замовлення вручну',
+                label: t('Ручне призначення'),
+                hint: t('Менеджер призначає кожне замовлення вручну'),
               },
               {
                 value: 'recommend' as DispatchMode,
-                label: 'Рекомендація',
-                hint: 'Система пропонує курʼєра — менеджер підтверджує одним кліком',
+                label: t('Рекомендація'),
+                hint: t('Система пропонує курʼєра — менеджер підтверджує одним кліком'),
               },
               {
                 value: 'auto' as DispatchMode,
-                label: 'Автопризначення',
-                hint: 'Система автоматично призначає найкращого курʼєра без участі менеджера',
+                label: t('Автопризначення'),
+                hint: t('Система автоматично призначає найкращого курʼєра без участі менеджера'),
               },
             ] as const
           ).map((opt) => {
@@ -407,15 +409,15 @@ export function SettingsForm({
 
       {/* Retention */}
       <SectionCard
-        title="Зберігання даних"
-        description="Старі записи автоматично видаляються. Докази доставки зберігаються назавжди."
+        title={t('Зберігання даних')}
+        description={t('Старі записи автоматично видаляються. Докази доставки зберігаються назавжди.')}
       >
         <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
-          <FieldRow label="Замовлення" hint="Завершені, скасовані та провалені замовлення">
-            <NumberInput value={retentionOrders} onChange={setRetentionOrders} min={1} max={30} suffix="днів" />
+          <FieldRow label={t('Замовлення')} hint={t('Завершені, скасовані та провалені замовлення')}>
+            <NumberInput value={retentionOrders} onChange={setRetentionOrders} min={1} max={30} suffix={t('днів')} />
           </FieldRow>
-          <FieldRow label="GPS-пінги" hint="Точки маршруту курʼєрів">
-            <NumberInput value={retentionPings} onChange={setRetentionPings} min={1} max={3} suffix="днів" />
+          <FieldRow label={t('GPS-пінги')} hint={t('Точки маршруту курʼєрів')}>
+            <NumberInput value={retentionPings} onChange={setRetentionPings} min={1} max={3} suffix={t('днів')} />
           </FieldRow>
         </div>
 
@@ -424,9 +426,9 @@ export function SettingsForm({
             className="mb-3"
             style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}
           >
-            Сповіщення
+            {t('Сповіщення')}
           </p>
-          <FieldRow label="Курʼєр не відповідає" hint="Поріг мовчання під час активної доставки">
+          <FieldRow label={t('Курʼєр не відповідає')} hint={t('Поріг мовчання під час активної доставки')}>
             <div className="flex items-center gap-1">
               {NOT_RESPONDING_OPTIONS.map((opt) => (
                 <button
@@ -442,7 +444,7 @@ export function SettingsForm({
                     border: `1px solid ${courierNotRespondingMin === opt ? 'var(--acm)' : 'var(--br)'}`,
                   }}
                 >
-                  {opt} хв
+                  {opt} {t('хв')}
                 </button>
               ))}
             </div>
@@ -452,7 +454,7 @@ export function SettingsForm({
         <div className="flex items-center justify-between mt-4 pt-4 border-t" style={{ borderColor: 'var(--br)' }}>
           <div className="text-sm h-5">
             {error && <span style={{ color: 'var(--bad)' }}>{error}</span>}
-            {saved && <span style={{ color: 'var(--t3)' }}>Збережено</span>}
+            {saved && <span style={{ color: 'var(--t3)' }}>{t('Збережено')}</span>}
           </div>
           <button
             onClick={handleSave}
@@ -460,7 +462,7 @@ export function SettingsForm({
             className="text-sm font-medium rounded transition-opacity disabled:opacity-50"
             style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
           >
-            {isPending ? 'Зберігаємо…' : 'Зберегти'}
+            {isPending ? t('Зберігаємо…') : t('Зберегти')}
           </button>
         </div>
       </SectionCard>

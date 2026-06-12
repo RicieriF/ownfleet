@@ -178,6 +178,7 @@ active (ended_at IS NULL) → ended (ended_at SET, ended_by = courier|manager|au
 - **Idempotency** — `INSERT ... ON CONFLICT (external_id, establishment_id) DO NOTHING` для POS замовлень
 - Жодних `console.log` — тільки NestJS `Logger`
 - **Timezone** — час у Telegram-повідомленнях завжди форматується з `establishment.timezone` (IANA). Список дозволених зон: `ALLOWED_TIMEZONES` в `establishments/dto/update-settings.dto.ts`. Фронтенд-константа `TIMEZONE_OPTIONS` в `settings-form.tsx` має залишатись синхронізованою з нею.
+- **i18n (apps/web)** — усі видимі рядки дашборда обгортаються: server components — `t('Рядок', locale)` з `@/lib/i18n` + `getLocale()` з `@/lib/i18n/server`; client components — `const t = useT()` з `@/lib/i18n/client`. Українські рядки Є ключами; англійський переклад додається в `src/lib/i18n/dict.ts` (відсутній ключ → fallback на українську). Локаль живе в cookie `of_locale`, у client components читається ТІЛЬКИ через `LocaleProvider`-контекст (читання `document.cookie` в рендері ламає SSR-гідрацію). Перемикач — `LocaleSwitcher` у сайдбарі. Embed-віджет має власний i18n (`src/embed/i18n/translations.ts`) — не змішувати.
 
 ---
 

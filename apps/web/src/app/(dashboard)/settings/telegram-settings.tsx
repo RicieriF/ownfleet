@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { apiPost, apiPatch, clientFetch } from '@/lib/api-client';
+import { useT } from '@/lib/i18n/client';
 
 interface ManagerPrefs {
   order_created?: boolean;
@@ -37,6 +38,7 @@ const PREF_LABELS: { key: keyof ManagerPrefs; label: string; group: string }[] =
 ];
 
 export function TelegramSettings({ initialStatus }: Props) {
+  const t = useT();
   const [connected, setConnected] = useState(initialStatus.connected);
   const [prefs, setPrefs] = useState<ManagerPrefs>(initialStatus.prefs);
   const [connectCode, setConnectCode] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export function TelegramSettings({ initialStatus }: Props) {
         const res = await apiPost<{ code: string; expires_in: number }>('/api/v1/telegram/connect');
         setConnectCode(res.code);
       } catch {
-        setError('Не вдалось згенерувати код. Спробуйте ще раз.');
+        setError(t('Не вдалось згенерувати код. Спробуйте ще раз.'));
       }
     });
   }
@@ -70,7 +72,7 @@ export function TelegramSettings({ initialStatus }: Props) {
         setConnectCode(null);
         setPrefs({});
       } catch {
-        setError('Не вдалось відключити. Спробуйте ще раз.');
+        setError(t('Не вдалось відключити. Спробуйте ще раз.'));
       }
     });
   }
@@ -84,7 +86,7 @@ export function TelegramSettings({ initialStatus }: Props) {
         setPrefsSaved(true);
         setTimeout(() => setPrefsSaved(false), 3000);
       } catch {
-        setError('Не вдалось зберегти налаштування.');
+        setError(t('Не вдалось зберегти налаштування.'));
       }
     });
   }
@@ -104,11 +106,11 @@ export function TelegramSettings({ initialStatus }: Props) {
       {/* Header */}
       <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--br)' }}>
         <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>Telegram сповіщення</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{t('Telegram сповіщення')}</p>
           {connected && (
             <p className="text-xs mt-0.5 flex items-center gap-1.5">
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--ok)', flexShrink: 0 }} />
-              <span style={{ color: 'var(--t3)' }}>Підключено</span>
+              <span style={{ color: 'var(--t3)' }}>{t('Підключено')}</span>
             </p>
           )}
         </div>
@@ -119,7 +121,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             className="text-xs disabled:opacity-40"
             style={{ color: 'var(--bad)' }}
           >
-            Відключити
+            {t('Відключити')}
           </button>
         ) : (
           <button
@@ -128,7 +130,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             className="text-sm font-medium rounded disabled:opacity-40"
             style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '5px 14px', borderRadius: '6px' }}
           >
-            {isPending ? 'Генеруємо…' : 'Підключити'}
+            {isPending ? t('Генеруємо…') : t('Підключити')}
           </button>
         )}
       </div>
@@ -140,7 +142,7 @@ export function TelegramSettings({ initialStatus }: Props) {
           style={{ background: 'var(--s2)', border: '1px solid var(--br2)' }}
         >
           <p className="text-xs font-semibold mb-1" style={{ color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Код для підключення · діє 10 хв
+            {t('Код для підключення · діє 10 хв')}
           </p>
           <p
             className="text-2xl font-bold tracking-widest my-2"
@@ -149,7 +151,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             {connectCode}
           </p>
           <p className="text-xs" style={{ color: 'var(--t3)' }}>
-            Відкрийте бота <span style={{ color: 'var(--t2)' }}>@ownfleet_bot</span> і надішліть:
+            {t('Відкрийте бота')} <span style={{ color: 'var(--t2)' }}>@ownfleet_bot</span> {t('і надішліть:')}
           </p>
           <p
             className="text-sm mt-1"
@@ -158,7 +160,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             /start {connectCode}
           </p>
           <p className="text-xs mt-2" style={{ color: 'var(--t3)' }}>
-            Після підключення оновіть сторінку.
+            {t('Після підключення оновіть сторінку.')}
           </p>
         </div>
       )}
@@ -166,7 +168,7 @@ export function TelegramSettings({ initialStatus }: Props) {
       {/* Not connected placeholder */}
       {!connected && !connectCode && (
         <div className="px-5 py-5 text-sm" style={{ color: 'var(--t3)' }}>
-          Отримуйте сповіщення про замовлення та курʼєрів прямо в Telegram. Підключення займає 30 секунд.
+          {t('Отримуйте сповіщення про замовлення та курʼєрів прямо в Telegram. Підключення займає 30 секунд.')}
         </div>
       )}
 
@@ -176,7 +178,7 @@ export function TelegramSettings({ initialStatus }: Props) {
           {groups.map((group) => (
             <div key={group} className="mb-4">
               <p className="mb-2" style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {group}
+                {t(group)}
               </p>
               <div className="space-y-2">
                 {PREF_LABELS.filter((p) => p.group === group).map(({ key, label }) => (
@@ -190,7 +192,7 @@ export function TelegramSettings({ initialStatus }: Props) {
                       onChange={() => handleTogglePref(key)}
                       className="w-4 h-4 rounded accent-[var(--t1)]"
                     />
-                    <span className="text-sm" style={{ color: 'var(--t2)' }}>{label}</span>
+                    <span className="text-sm" style={{ color: 'var(--t2)' }}>{t(label)}</span>
                   </label>
                 ))}
               </div>
@@ -206,10 +208,10 @@ export function TelegramSettings({ initialStatus }: Props) {
               className="text-sm font-medium rounded disabled:opacity-40"
               style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
             >
-              {isPending ? 'Зберігаємо…' : 'Зберегти налаштування'}
+              {isPending ? t('Зберігаємо…') : t('Зберегти налаштування')}
             </button>
             {prefsSaved && (
-              <span className="text-sm" style={{ color: 'var(--t3)' }}>Збережено</span>
+              <span className="text-sm" style={{ color: 'var(--t3)' }}>{t('Збережено')}</span>
             )}
           </div>
         </div>

@@ -5,9 +5,10 @@ import { Order, OrderStatus, CourierWithStatus } from '@/types';
 import { apiPost, apiPatch } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { uk } from 'date-fns/locale';
+import { uk, enUS } from 'date-fns/locale';
 import { OrderCoordDrawer } from './order-coord-drawer';
 import { getSocket } from '@/lib/socket';
+import { useT, useLocale } from '@/lib/i18n/client';
 
 function EtaTimer({ etaSeconds, etaStartedAt }: { etaSeconds: number; etaStartedAt: string }) {
   const [remaining, setRemaining] = useState<number>(() => {
@@ -75,6 +76,8 @@ interface Props {
 
 export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOnDashboard, stuckThresholdMinutes = 5 }: Props) {
   const router = useRouter();
+  const t = useT();
+  const dateLocale = useLocale() === 'uk' ? uk : enUS;
   const [isPending, startTransition] = useTransition();
   const [assignModalOrder, setAssignModalOrder] = useState<Order | null>(null);
   const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -110,7 +113,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
       setAssignModalOrder(null);
       startTransition(() => router.refresh());
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Помилка призначення');
+      setActionError(e instanceof Error ? e.message : t('Помилка призначення'));
     }
   }
 
@@ -120,7 +123,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
       await apiPatch(`/api/v1/orders/${orderId}/cancel`);
       startTransition(() => router.refresh());
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Помилка скасування');
+      setActionError(e instanceof Error ? e.message : t('Помилка скасування'));
     }
   }
 
@@ -136,7 +139,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
         token = res.token;
         setTrackingTokens((prev) => ({ ...prev, [orderId]: token! }));
       } catch {
-        setActionError('Не вдалось отримати посилання');
+        setActionError(t('Не вдалось отримати посилання'));
         setTokenLoadingId(null);
         return;
       }
@@ -148,7 +151,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
       setCopiedTrackingId(orderId);
       setTimeout(() => setCopiedTrackingId(null), 2000);
     }).catch(() => {
-      setActionError('Не вдалось скопіювати посилання');
+      setActionError(t('Не вдалось скопіювати посилання'));
     });
   }
 
@@ -234,7 +237,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                 color: 'var(--t4)',
               }}
             >
-              Очікують призначення
+              {t('Очікують призначення')}
             </span>
             <span className="mono" style={{ fontSize: '12px', color: 'var(--t3)' }}>
               {pendingOrders.length}
@@ -286,7 +289,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                     </span>
                     {(localCoords[order.id] == null && order.lat == null) && (
                       <button
-                        title="Координати не визначені — натисніть щоб виправити"
+                        title={t('Координати не визначені — натисніть щоб виправити')}
                         onClick={(e) => openCoordDrawer(order, e)}
                         style={{
                           flexShrink: 0,
@@ -301,7 +304,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                           lineHeight: '16px',
                         }}
                       >
-                        ! Гео
+                        {t('! Гео')}
                       </button>
                     )}
                   </div>
@@ -317,7 +320,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                 >
                   {formatDistanceToNow(new Date(order.ready_at ?? order.created_at), {
                     addSuffix: false,
-                    locale: uk,
+                    locale: dateLocale,
                   })}
                 </span>
 
@@ -344,7 +347,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                       (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm)';
                     }}
                   >
-                    Призначити
+                    {t('Призначити')}
                   </button>
                   <button
                     onClick={() => handleCancel(order.id)}
@@ -370,7 +373,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                       el.style.color = 'var(--t3)';
                     }}
                   >
-                    Скасувати
+                    {t('Скасувати')}
                   </button>
                 </div>
               </div>
@@ -390,7 +393,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
             color: 'var(--t4)',
           }}
         >
-          Активні доставки
+          {t('Активні доставки')}
         </span>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--t3)' }}>
           {activeOrders.length}
@@ -408,7 +411,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
         <table className="w-full text-sm">
           <thead style={{ borderBottom: '1px solid var(--br)' }}>
             <tr>
-              {['Адреса', 'Статус', 'Курʼєр', showSlaOnDashboard ? 'Вік · ETA' : 'Вік', ...(hostedTrackingEnabled ? ['Клієнт'] : []), 'Дії'].map((h) => (
+              {[t('Адреса'), t('Статус'), t('Курʼєр'), showSlaOnDashboard ? t('Вік · ETA') : t('Вік'), ...(hostedTrackingEnabled ? [t('Клієнт')] : []), t('Дії')].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2.5 text-left"
@@ -433,7 +436,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                   className="px-4 py-10 text-center text-sm"
                   style={{ color: 'var(--t3)' }}
                 >
-                  Активних доставок немає
+                  {t('Активних доставок немає')}
                 </td>
               </tr>
             )}
@@ -464,7 +467,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                     )}
                     {(localCoords[order.id] == null && order.lat == null) && (
                       <button
-                        title="Координати не визначені — натисніть щоб виправити"
+                        title={t('Координати не визначені — натисніть щоб виправити')}
                         onClick={(e) => openCoordDrawer(order, e)}
                         style={{
                           flexShrink: 0,
@@ -479,7 +482,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                           lineHeight: '16px',
                         }}
                       >
-                        ! Гео
+                        {t('! Гео')}
                       </button>
                     )}
                   </div>
@@ -497,7 +500,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                       }}
                     />
                     <span style={{ color: 'var(--t3)', fontSize: '13px' }}>
-                      {STATUS_LABELS[order.status]}
+                      {t(STATUS_LABELS[order.status])}
                     </span>
                   </div>
                 </td>
@@ -515,7 +518,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                     <span className="mono" style={{ fontSize: '12px', color: 'var(--t4)' }}>
                       {formatDistanceToNow(new Date(order.created_at), {
                         addSuffix: true,
-                        locale: uk,
+                        locale: dateLocale,
                       })}
                     </span>
                     {showSlaOnDashboard && order.delivery?.eta_seconds && order.delivery?.eta_started_at && (
@@ -534,7 +537,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                       <button
                         onClick={() => handleCopyTrackingLink(order.id)}
                         disabled={tokenLoadingId === order.id || isPending}
-                        title="Копіювати посилання клієнту"
+                        title={t('Копіювати посилання клієнту')}
                         className="px-2 py-1 rounded transition-colors disabled:opacity-40"
                         style={{
                           fontSize: '12px',
@@ -547,8 +550,8 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                         {tokenLoadingId === order.id
                           ? '…'
                           : copiedTrackingId === order.id
-                            ? '✓ Скопійовано'
-                            : 'Посилання'}
+                            ? t('✓ Скопійовано')
+                            : t('Посилання')}
                       </button>
                     )}
                   </td>
@@ -560,7 +563,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                     <button
                       onClick={(e) => openCoordDrawer(order, e)}
                       className="transition-colors"
-                      title="Переглянути / виправити координати"
+                      title={t('Переглянути / виправити координати')}
                       style={{
                         padding: '4px 10px',
                         fontSize: '12px',
@@ -581,7 +584,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                         el.style.color = 'var(--t3)';
                       }}
                     >
-                      Карта
+                      {t('Карта')}
                     </button>
                     {(order.status === 'assigned') && (
                       <button
@@ -607,7 +610,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                         }}
                         disabled={isPending}
                       >
-                        Скасувати
+                        {t('Скасувати')}
                       </button>
                     )}
                   </div>
@@ -638,7 +641,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
               className="mb-1"
               style={{ fontSize: '15px', fontWeight: 600, color: 'var(--t1)', letterSpacing: '-0.01em' }}
             >
-              Призначити курʼєра
+              {t('Призначити курʼєра')}
             </h2>
             <p
               className="mb-4 truncate"
@@ -649,7 +652,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
 
             {activeCouriers.length === 0 ? (
               <p className="text-sm mb-4" style={{ color: 'var(--t3)' }}>
-                Немає курʼєрів на зміні
+                {t('Немає курʼєрів на зміні')}
               </p>
             ) : (
               <select
@@ -664,10 +667,10 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                   outline: 'none',
                 }}
               >
-                <option value="">Оберіть курʼєра</option>
+                <option value="">{t('Оберіть курʼєра')}</option>
                 {activeCouriers.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name} — {c.status === 'online' ? 'Онлайн' : 'Фон'}
+                    {c.name} — {c.status === 'online' ? t('Онлайн') : t('Фон')}
                   </option>
                 ))}
               </select>
@@ -691,7 +694,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                   (e.currentTarget as HTMLButtonElement).style.color = 'var(--t3)';
                 }}
               >
-                Відмінити
+                {t('Відмінити')}
               </button>
               <button
                 onClick={handleAssign}
@@ -713,7 +716,7 @@ export function OrdersTable({ orders, couriers, hostedTrackingEnabled, showSlaOn
                   (e.currentTarget as HTMLButtonElement).style.background = 'var(--acm)';
                 }}
               >
-                Призначити
+                {t('Призначити')}
               </button>
             </div>
           </div>

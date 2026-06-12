@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Order } from '@/types';
+import { useT } from '@/lib/i18n/client';
 
 const PAGE_TITLES: Record<string, string> = {
   '/':             'Дашборд',
@@ -72,7 +73,8 @@ function LivePill() {
 
 export function Topbar() {
   const pathname = usePathname();
-  const title = PAGE_TITLES[pathname] ?? 'OwnFleet';
+  const t = useT();
+  const title = t(PAGE_TITLES[pathname] ?? 'OwnFleet');
   const isMainDashboard = pathname === '/';
 
   return (

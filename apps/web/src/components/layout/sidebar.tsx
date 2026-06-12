@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useT, LocaleSwitcher } from '@/lib/i18n/client';
 import {
   ClipboardList,
   Users,
@@ -37,6 +38,7 @@ interface SidebarProps {
 export function Sidebar({ establishmentName }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -65,19 +67,22 @@ export function Sidebar({ establishmentName }: SidebarProps) {
             )}
           >
             <Icon size={16} strokeWidth={1.75} />
-            {label}
+            {t(label)}
           </Link>
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-[var(--br)]">
+      <div className="flex items-center justify-between px-3 py-4 border-t border-[var(--br)]">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--bad)] transition-colors border border-transparent"
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-[var(--t3)] hover:bg-[var(--s2)] hover:text-[var(--bad)] transition-colors border border-transparent"
         >
           <LogOut size={16} strokeWidth={1.75} />
-          Вийти
+          {t('Вийти')}
         </button>
+        <div className="pr-2">
+          <LocaleSwitcher />
+        </div>
       </div>
     </aside>
   );

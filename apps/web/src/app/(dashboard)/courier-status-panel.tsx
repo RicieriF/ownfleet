@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { apiPost } from '@/lib/api-client';
 import type { CourierWithStatus } from '@/types';
+import { useT } from '@/lib/i18n/client';
 
 const STATUS_DOT: Record<string, string> = {
   online:         'var(--ok)',
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function CourierStatusPanel({ couriers }: Props) {
+  const t = useT();
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
 
@@ -69,16 +71,16 @@ export function CourierStatusPanel({ couriers }: Props) {
             color: 'var(--t4)',
           }}
         >
-          Курʼєри
+          {t('Курʼєри')}
         </span>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--t3)' }}>
-          {onShiftCount}/{activeCouriers.length} на зміні
+          {onShiftCount}/{activeCouriers.length} {t('на зміні')}
         </span>
       </div>
 
       {activeCouriers.length === 0 ? (
         <div style={{ padding: '16px 12px', fontSize: '13px', color: 'var(--t3)' }}>
-          Немає активних курʼєрів
+          {t('Немає активних курʼєрів')}
         </div>
       ) : (
         <div>
@@ -151,11 +153,11 @@ export function CourierStatusPanel({ couriers }: Props) {
                       }
                     }}
                   >
-                    {isReminding ? '…' : isReminded ? '✓' : 'Нагадати'}
+                    {isReminding ? '…' : isReminded ? '✓' : t('Нагадати')}
                   </button>
                 ) : (
                   <span style={{ fontSize: '11px', color: 'var(--t4)', flexShrink: 0 }}>
-                    {STATUS_LABEL[courier.status]}
+                    {t(STATUS_LABEL[courier.status])}
                   </span>
                 )}
               </div>

@@ -5,6 +5,7 @@ import { Courier, InviteToken } from '@/types';
 import { apiPost, apiDelete } from '@/lib/api-client';
 import { formatDistanceToNow, isPast } from 'date-fns';
 import { uk } from 'date-fns/locale';
+import { useT } from '@/lib/i18n/client';
 
 interface Props {
   couriers: Pick<Courier, 'id' | 'name'>[];
@@ -30,6 +31,7 @@ const STATUS_LABELS = {
 };
 
 export function InvitePanel({ couriers, initialInvites }: Props) {
+  const t = useT();
   const [invites, setInvites] = useState<InviteToken[]>(initialInvites);
   const [selectedCourierId, setSelectedCourierId] = useState('');
   const [newToken, setNewToken] = useState<{ token: string; expires_at: string } | null>(null);
@@ -59,7 +61,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
         setNewToken({ token: result.token, expires_at: result.expires_at });
         setSelectedCourierId('');
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка створення запрошення');
+        setError(e instanceof Error ? e.message : t('Помилка створення запрошення'));
       }
     });
   }
@@ -70,7 +72,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
         await apiDelete(`/api/v1/onboarding/invites/${id}`);
         setInvites((prev) => prev.filter((i) => i.id !== id));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка скасування');
+        setError(e instanceof Error ? e.message : t('Помилка скасування'));
       }
     });
   }
@@ -95,9 +97,9 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
       {/* Header */}
       <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--br)' }}>
         <div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>Запросити курʼєра</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{t('Запросити курʼєра')}</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>
-            Токен діє 24 години. Курʼєр вводить його при першому відкритті застосунку.
+            {t('Токен діє 24 години. Курʼєр вводить його при першому відкритті застосунку.')}
           </p>
         </div>
       </div>
@@ -106,7 +108,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
       <div className="px-5 py-4 border-b flex flex-wrap items-end gap-3" style={{ borderColor: 'var(--br)' }}>
         <div className="flex-1 min-w-[200px]">
           <label className="block mb-1" style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Курʼєр
+            {t('Курʼєр')}
           </label>
           <select
             value={selectedCourierId}
@@ -122,7 +124,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
             onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
             onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
           >
-            <option value="">Оберіть курʼєра...</option>
+            <option value="">{t('Оберіть курʼєра...')}</option>
             {couriers.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -134,7 +136,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
           className="text-sm font-medium rounded transition-opacity disabled:opacity-40"
           style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
         >
-          {isPending ? 'Створюємо…' : 'Створити токен'}
+          {isPending ? t('Створюємо…') : t('Створити токен')}
         </button>
         {error && <p className="w-full text-xs" style={{ color: 'var(--bad)' }}>{error}</p>}
       </div>
@@ -146,7 +148,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
           style={{ background: 'var(--s2)', border: '1px solid var(--br2)' }}
         >
           <div className="min-w-0">
-            <p className="text-xs font-medium mb-1" style={{ color: 'var(--t2)' }}>Токен створено</p>
+            <p className="text-xs font-medium mb-1" style={{ color: 'var(--t2)' }}>{t('Токен створено')}</p>
             <p
               className="text-sm break-all"
               style={{ fontFamily: 'var(--font-mono)', color: 'var(--t1)' }}
@@ -154,7 +156,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
               {newToken.token}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--t3)' }}>
-              Дійсний до{' '}
+              {t('Дійсний до')}{' '}
               <span style={{ fontFamily: 'var(--font-mono)' }}>
                 {new Date(newToken.expires_at).toLocaleString('uk-UA', {
                   day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -168,7 +170,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
               className="text-xs font-medium px-3 py-1.5 rounded"
               style={{ background: 'var(--s2)', border: '1px solid var(--br)', color: 'var(--t2)', borderRadius: '6px' }}
             >
-              {copied ? 'Скопійовано ✓' : 'Скопіювати'}
+              {copied ? t('Скопійовано ✓') : t('Скопіювати')}
             </button>
             <button
               onClick={() => setNewToken(null)}
@@ -184,7 +186,7 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
       {/* Invites list */}
       {activeInvites.length === 0 ? (
         <div className="px-5 py-6 text-center text-sm" style={{ color: 'var(--t3)' }}>
-          Немає активних запрошень
+          {t('Немає активних запрошень')}
         </div>
       ) : (
         <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
@@ -205,13 +207,13 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
                 {/* Expiry */}
                 <span className="text-xs hidden sm:block" style={{ color: 'var(--t3)' }}>
                   {st === 'used'
-                    ? 'Прийнято'
+                    ? t('Прийнято')
                     : `${formatDistanceToNow(new Date(invite.expires_at), { locale: uk, addSuffix: true })}`}
                 </span>
 
                 {/* Status badge */}
                 <span className={`text-xs px-2 py-0.5 rounded font-medium ${STATUS_STYLES[st]}`}>
-                  {STATUS_LABELS[st]}
+                  {t(STATUS_LABELS[st])}
                 </span>
 
                 {/* Actions */}
@@ -222,18 +224,18 @@ export function InvitePanel({ couriers, initialInvites }: Props) {
                         onClick={() => handleCopy(invite.token)}
                         className="text-xs px-2 py-1 rounded"
                         style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t3)', borderRadius: '6px' }}
-                        title="Скопіювати токен"
+                        title={t('Скопіювати токен')}
                       >
-                        Копія
+                        {t('Копія')}
                       </button>
                       <button
                         onClick={() => handleRevoke(invite.id)}
                         disabled={isPending}
                         className="text-xs px-2 py-1 rounded disabled:opacity-40"
                         style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
-                        title="Скасувати запрошення"
+                        title={t('Скасувати запрошення')}
                       >
-                        Скасувати
+                        {t('Скасувати')}
                       </button>
                     </>
                   )}

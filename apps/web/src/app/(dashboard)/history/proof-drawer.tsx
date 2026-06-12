@@ -4,14 +4,15 @@ import { useEffect, useState, useCallback } from 'react';
 import { DeliveryProof, GeoFlags } from '@/types';
 import { apiGet } from '@/lib/api-client';
 import { X, CheckCircle2, XCircle, MinusCircle, MapPin, Camera, AlertTriangle } from 'lucide-react';
+import { useT, useLocale } from '@/lib/i18n/client';
 
 interface Props {
   deliveryId: string | null;
   onClose: () => void;
 }
 
-function formatTs(iso: string): string {
-  return new Date(iso).toLocaleString('uk-UA', {
+function formatTs(iso: string, tag: string): string {
+  return new Date(iso).toLocaleString(tag, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -21,12 +22,12 @@ function formatTs(iso: string): string {
   });
 }
 
-function GeoMatchBadge({ match, flags }: { match: boolean; flags: GeoFlags }) {
+function GeoMatchBadge({ match, flags, t }: { match: boolean; flags: GeoFlags; t: (s: string) => string }) {
   if (flags.force_closed) {
     return (
       <div className="flex items-center gap-2" style={{ color: 'var(--warn)' }}>
         <AlertTriangle size={20} strokeWidth={1.75} />
-        <span className="text-sm font-medium">Закрито менеджером (без гео-підтвердження)</span>
+        <span className="text-sm font-medium">{t('Закрито менеджером (без гео-підтвердження)')}</span>
       </div>
     );
   }
@@ -34,27 +35,27 @@ function GeoMatchBadge({ match, flags }: { match: boolean; flags: GeoFlags }) {
     return (
       <div className="flex items-center gap-2" style={{ color: 'var(--t3)' }}>
         <MinusCircle size={20} strokeWidth={1.75} />
-        <span className="text-sm font-medium">Неможливо перевірити (адреса без координат)</span>
+        <span className="text-sm font-medium">{t('Неможливо перевірити (адреса без координат)')}</span>
       </div>
     );
   }
   return match ? (
     <div className="flex items-center gap-2" style={{ color: 'var(--ok)' }}>
       <CheckCircle2 size={20} strokeWidth={1.75} />
-      <span className="text-sm font-medium">Геопозиція підтверджена (≤ 300 м)</span>
+      <span className="text-sm font-medium">{t('Геопозиція підтверджена (≤ 300 м)')}</span>
     </div>
   ) : (
     <div className="flex items-center gap-2" style={{ color: 'var(--bad)' }}>
       <XCircle size={20} strokeWidth={1.75} />
-      <span className="text-sm font-medium">Геопозиція не співпала (&gt; 300 м)</span>
+      <span className="text-sm font-medium">{t('Геопозиція не співпала (> 300 м)')}</span>
     </div>
   );
 }
 
-function AnomalyFlags({ flags }: { flags: GeoFlags }) {
+function AnomalyFlags({ flags, t }: { flags: GeoFlags; t: (s: string) => string }) {
   const items: string[] = [];
-  if (flags.proof_after_close) items.push('Пруф отримано після закриття замовлення в POS');
-  if (flags.low_accuracy) items.push('Низька точність GPS (> 100 м)');
+  if (flags.proof_after_close) items.push(t('Пруф отримано після закриття замовлення в POS'));
+  if (flags.low_accuracy) items.push(t('Низька точність GPS (> 100 м)'));
 
   if (items.length === 0) return null;
 
@@ -70,7 +71,7 @@ function AnomalyFlags({ flags }: { flags: GeoFlags }) {
         className="text-xs font-semibold uppercase tracking-[0.05em] mb-1.5"
         style={{ color: 'var(--warn)' }}
       >
-        Аномалії
+        {t('Аномалії')}
       </p>
       <ul className="space-y-0.5">
         {items.map((item) => (
@@ -84,6 +85,8 @@ function AnomalyFlags({ flags }: { flags: GeoFlags }) {
 }
 
 export function ProofDrawer({ deliveryId, onClose }: Props) {
+  const t = useT();
+  const localeTag = useLocale() === 'uk' ? 'uk-UA' : 'en-GB';
   const [proof, setProof] = useState<DeliveryProof | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,7 +97,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
       const data = await apiGet<DeliveryProof | null>(`/api/v1/deliveries/${id}/proof`);
       setProof(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Помилка завантаження');
+      setError(err instanceof Error ? err.message : t('Помилка завантаження'));
       setProof(null);
     }
   }, []);
@@ -140,7 +143,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
           style={{ borderBottom: '1px solid var(--br)' }}
         >
           <h2 className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>
-            Доказ доставки
+            {t('Доказ доставки')}
           </h2>
           <button
             onClick={onClose}
@@ -165,7 +168,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
               className="flex items-center justify-center py-12 text-sm"
               style={{ color: 'var(--t4)' }}
             >
-              Завантаження…
+              {t('Завантаження…')}
             </div>
           )}
 
@@ -190,7 +193,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
               style={{ color: 'var(--t4)' }}
             >
               <MinusCircle size={24} strokeWidth={1.5} />
-              <span>Доказ доставки відсутній</span>
+              <span>{t('Доказ доставки відсутній')}</span>
             </div>
           )}
 
@@ -202,11 +205,11 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                 className="rounded-md px-4 py-3"
                 style={{ background: 'var(--s2)', border: '1px solid var(--br)' }}
               >
-                <GeoMatchBadge match={proof.geo_match} flags={proof.geo_flags} />
+                <GeoMatchBadge match={proof.geo_match} flags={proof.geo_flags} t={t} />
               </div>
 
               {/* Anomaly flags */}
-              <AnomalyFlags flags={proof.geo_flags} />
+              <AnomalyFlags flags={proof.geo_flags} t={t} />
 
               {/* Details grid */}
               <div
@@ -214,19 +217,19 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                 style={{ border: '1px solid var(--br)' }}
               >
                 <Row
-                  label="Зафіксовано"
-                  value={formatTs(proof.captured_at)}
+                  label={t('Зафіксовано')}
+                  value={formatTs(proof.captured_at, localeTag)}
                   mono
                 />
                 <Row
-                  label="Координати"
+                  label={t('Координати')}
                   value={`${proof.lat.toFixed(6)}, ${proof.lng.toFixed(6)}`}
                   mono
                 />
                 {proof.accuracy !== null && (
                   <Row
-                    label="Точність GPS"
-                    value={`±${Math.round(proof.accuracy)} м`}
+                    label={t('Точність GPS')}
+                    value={`±${Math.round(proof.accuracy)} ${t('м')}`}
                     mono
                   />
                 )}
@@ -244,7 +247,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                   onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--t3)')}
                 >
                   <MapPin size={14} strokeWidth={1.75} />
-                  Відкрити на карті
+                  {t('Відкрити на карті')}
                 </a>
               )}
 
@@ -256,7 +259,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                     style={{ color: 'var(--t4)' }}
                   >
                     <Camera size={12} strokeWidth={1.75} />
-                    Фото доставки
+                    {t('Фото доставки')}
                   </p>
                   <a
                     href={proof.photo_url}
@@ -268,13 +271,13 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={proof.photo_url}
-                      alt="Фото доставки"
+                      alt={t('Фото доставки')}
                       className="w-full object-cover"
                       style={{ maxHeight: '300px' }}
                     />
                   </a>
                   <p className="text-xs mt-1" style={{ color: 'var(--t4)' }}>
-                    Посилання дійсне 5 хвилин
+                    {t('Посилання дійсне 5 хвилин')}
                   </p>
                 </div>
               ) : (
@@ -287,7 +290,7 @@ export function ProofDrawer({ deliveryId, onClose }: Props) {
                   }}
                 >
                   <Camera size={14} strokeWidth={1.75} />
-                  Фото не надане
+                  {t('Фото не надане')}
                 </div>
               )}
             </>

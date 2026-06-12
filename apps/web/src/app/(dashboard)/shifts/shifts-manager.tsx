@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { apiPost, apiPatch } from '@/lib/api-client';
+import { useT } from '@/lib/i18n/client';
 
 interface ActiveShift {
   id: string;
@@ -37,24 +38,24 @@ interface ShiftEndedEvent {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, hUnit: string, mUnit: string): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
-  return h > 0 ? `${h}г ${String(m).padStart(2, '0')}хв` : `${m}хв`;
+  return h > 0 ? `${h}${hUnit} ${String(m).padStart(2, '0')}${mUnit}` : `${m}${mUnit}`;
 }
 
-function ShiftDuration({ startedAt }: { startedAt: string }) {
+function ShiftDuration({ startedAt, hUnit, mUnit }: { startedAt: string; hUnit: string; mUnit: string }) {
   const [label, setLabel] = useState('');
 
   useEffect(() => {
     function tick() {
-      setLabel(formatDuration(Date.now() - new Date(startedAt).getTime()));
+      setLabel(formatDuration(Date.now() - new Date(startedAt).getTime(), hUnit, mUnit));
     }
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, [startedAt]);
+  }, [startedAt, hUnit, mUnit]);
 
   return <span className="mono">{label}</span>;
 }
@@ -86,6 +87,7 @@ function PlannedEndCell({
   timezone: string;
   onUpdated: (val: string | null) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -130,7 +132,7 @@ function PlannedEndCell({
           onClick={() => setOpen((v) => !v)}
           className="text-[var(--t4)] text-sm hover:text-[var(--t3)] transition-colors"
         >
-          — встановити
+          {t('— встановити')}
         </button>
       )}
 
@@ -152,7 +154,7 @@ function PlannedEndCell({
               disabled={saving}
               className="px-2 py-1 text-[11px] rounded border border-[var(--br)] text-[var(--t3)] hover:border-[var(--bad)] hover:text-[var(--bad)] transition-colors disabled:opacity-40"
             >
-              Зняти
+              {t('Зняти')}
             </button>
           )}
         </div>
@@ -171,6 +173,7 @@ interface Props {
 }
 
 export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotOnShift, timezone }: Props) {
+  const t = useT();
   const [shifts, setShifts] = useState(initialShifts);
   const [notOnShift, setNotOnShift] = useState(initialNotOnShift);
   const [endingShift, setEndingShift] = useState<string | null>(null);
@@ -240,35 +243,35 @@ export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotO
       {/* Active shifts table */}
       <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden card-shine">
         <div className="px-5 py-3.5 border-b border-[var(--br)] flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--t1)]">Активні зміни</h2>
+          <h2 className="text-sm font-semibold text-[var(--t1)]">{t('Активні зміни')}</h2>
           <span className="mono text-xs text-[var(--t4)]">{shifts.length}</span>
         </div>
 
         {shifts.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-[var(--t3)]">
-            Немає активних змін
+            {t('Немає активних змін')}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--br)]">
               <tr>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Курʼєр
+                  {t('Курʼєр')}
                 </th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Початок
+                  {t('Початок')}
                 </th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Тривалість
+                  {t('Тривалість')}
                 </th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Кінець зміни
+                  {t('Кінець зміни')}
                 </th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Доставок
+                  {t('Доставок')}
                 </th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                  Км
+                  {t('Км')}
                 </th>
                 <th className="px-3 py-2.5" />
               </tr>
@@ -307,7 +310,7 @@ export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotO
 
                     {/* Duration */}
                     <td className="px-3 py-2.5 text-[var(--t2)]">
-                      <ShiftDuration startedAt={shift.started_at} />
+                      <ShiftDuration startedAt={shift.started_at} hUnit={t('г')} mUnit={t('хв')} />
                     </td>
 
                     {/* Planned end — editable */}
@@ -339,7 +342,7 @@ export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotO
                         disabled={isEnding}
                         className="px-2.5 py-1 text-xs rounded border border-[var(--br)] text-[var(--t3)] hover:border-[var(--bad)] hover:text-[var(--bad)] transition-colors disabled:opacity-40"
                       >
-                        {isEnding ? '…' : 'Завершити'}
+                        {isEnding ? '…' : t('Завершити')}
                       </button>
                     </td>
                   </tr>
@@ -354,7 +357,7 @@ export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotO
       {notOnShift.length > 0 && (
         <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden card-shine">
           <div className="px-5 py-3.5 border-b border-[var(--br)] flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[var(--t1)]">Не вийшли на зміну</h2>
+            <h2 className="text-sm font-semibold text-[var(--t1)]">{t('Не вийшли на зміну')}</h2>
             <span className="mono text-xs text-[var(--t4)]">{notOnShift.length}</span>
           </div>
           <div className="divide-y divide-[var(--br)]">
@@ -375,7 +378,7 @@ export function ShiftsManager({ initialShifts, couriers, notOnShift: initialNotO
                   disabled={remindLoading === courier.id}
                   className="px-3 py-1.5 text-xs rounded-[6px] border border-[var(--br)] text-[var(--t3)] hover:border-[var(--br2)] hover:text-[var(--t2)] transition-colors disabled:opacity-40"
                 >
-                  {remindLoading === courier.id ? 'Надсилання…' : 'Нагадати'}
+                  {remindLoading === courier.id ? t('Надсилання…') : t('Нагадати')}
                 </button>
               </div>
             ))}

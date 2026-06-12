@@ -1,5 +1,7 @@
 import { apiFetch } from '@/lib/api';
 import { AnalyticsSummary, CourierAnalytics } from '@/types';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 async function fetchAnalytics() {
   const [summary, perCourier] = await Promise.all([
@@ -20,60 +22,61 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 }
 
 export default async function AnalyticsPage() {
+  const locale = await getLocale();
   const { summary, perCourier } = await fetchAnalytics();
 
   const { totals, metrics } = summary;
   const completionPct = metrics.completion_rate != null ? `${metrics.completion_rate}%` : '—';
   const avgMin =
     metrics.avg_delivery_minutes != null
-      ? `${Math.round(metrics.avg_delivery_minutes)} хв`
+      ? `${Math.round(metrics.avg_delivery_minutes)} ${t('хв', locale)}`
       : '—';
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[var(--t1)] mb-6">Аналітика</h1>
+      <h1 className="text-2xl font-bold text-[var(--t1)] mb-6">{t('Аналітика', locale)}</h1>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Доставок за 30 днів" value={totals.total} />
+        <StatCard label={t('Доставок за 30 днів', locale)} value={totals.total} />
         <StatCard
-          label="Виконано"
+          label={t('Виконано', locale)}
           value={completionPct}
-          sub={`${totals.completed} з ${totals.total}`}
+          sub={`${totals.completed} ${t('з', locale)} ${totals.total}`}
         />
         <StatCard
-          label="Середній час"
+          label={t('Середній час', locale)}
           value={avgMin}
-          sub="від старту до завершення"
+          sub={t('від старту до завершення', locale)}
         />
         <StatCard
-          label="Провалено / Скасовано"
+          label={t('Провалено / Скасовано', locale)}
           value={totals.failed + totals.cancelled}
-          sub={`${totals.failed} провалено · ${totals.cancelled} скасовано`}
+          sub={`${totals.failed} ${t('провалено', locale)} · ${totals.cancelled} ${t('скасовано', locale)}`}
         />
       </div>
 
       {/* Per-courier table */}
       <div className="bg-[var(--sf)] rounded-lg border border-[var(--br)] overflow-hidden card-shine">
         <div className="px-5 py-3.5 border-b border-[var(--br)]">
-          <h2 className="text-sm font-semibold text-[var(--t1)]">По курʼєрах</h2>
+          <h2 className="text-sm font-semibold text-[var(--t1)]">{t('По курʼєрах', locale)}</h2>
         </div>
         <table className="w-full text-sm">
           <thead className="border-b border-[var(--br)]">
             <tr>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Курʼєр</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Всього</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Виконано</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Провалено</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">Сер. час</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">% успіху</th>
+              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('Курʼєр', locale)}</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('Всього', locale)}</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('Виконано', locale)}</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('Провалено', locale)}</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('Сер. час', locale)}</th>
+              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">{t('% успіху', locale)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--br)]">
             {perCourier.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-[var(--t3)] text-sm">
-                  Немає даних за обраний період
+                  {t('Немає даних за обраний період', locale)}
                 </td>
               </tr>
             )}
@@ -85,7 +88,7 @@ export default async function AnalyticsPage() {
                 <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">{row.failed}</td>
                 <td className="px-3 py-2.5 text-right text-[var(--t3)] mono">
                   {row.avg_delivery_minutes != null
-                    ? `${Math.round(row.avg_delivery_minutes)} хв`
+                    ? `${Math.round(row.avg_delivery_minutes)} ${t('хв', locale)}`
                     : '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-[var(--t2)] mono">

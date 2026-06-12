@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { getSocket } from '@/lib/socket';
 import { apiGet, apiPost } from '@/lib/api-client';
 import type { Order } from '@/types';
+import { useT } from '@/lib/i18n/client';
 
 type TransportMode = 'car' | 'moto_gas' | 'moto_electric' | 'bicycle' | 'walking';
 
@@ -59,27 +60,29 @@ function etaMinutes(etaSeconds: number): number {
 
 // Countdown to next retry attempt (60s cycle matching the dispatch processor)
 function RetryCountdown({ addedAt }: { addedAt: string }) {
+  const t = useT();
   const [secsLeft, setSecsLeft] = useState<number>(() => {
     const elapsed = (Date.now() - new Date(addedAt).getTime()) / 1000;
-    return Math.max(0, 60 - (elapsed % 60));
+    return Math.max(0, Math.ceil(60 - (elapsed % 60)));
   });
 
   useEffect(() => {
     const id = setInterval(() => {
       const elapsed = (Date.now() - new Date(addedAt).getTime()) / 1000;
-      setSecsLeft(Math.max(0, 60 - (elapsed % 60)));
+      setSecsLeft(Math.max(0, Math.ceil(60 - (elapsed % 60))));
     }, 1000);
     return () => clearInterval(id);
   }, [addedAt]);
 
   return (
     <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t3)', fontSize: '12px' }}>
-      {secsLeft}с
+      {secsLeft}{t('с')}
     </span>
   );
 }
 
 export function SmartAssignmentPanel() {
+  const t = useT();
   const router = useRouter();
   const [entries, setEntries] = useState<Map<string, PanelEntry>>(new Map());
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -182,7 +185,7 @@ export function SmartAssignmentPanel() {
       });
       router.refresh();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Помилка призначення';
+      const msg = e instanceof Error ? e.message : t('Помилка призначення');
       setErrors((prev) => {
         const next = new Map(prev);
         next.set(orderId, msg);
@@ -243,7 +246,7 @@ export function SmartAssignmentPanel() {
               letterSpacing: '0.05em',
             }}
           >
-            Призначення
+            {t('Призначення')}
           </p>
           <span
             className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-[0.05em]"
@@ -253,11 +256,11 @@ export function SmartAssignmentPanel() {
               border: '1px solid var(--br)',
             }}
           >
-            Рекомендація
+            {t('Рекомендація')}
           </span>
         </div>
         <p className="text-sm" style={{ color: 'var(--t3)' }}>
-          Немає замовлень на призначення
+          {t('Немає замовлень на призначення')}
         </p>
       </div>
     );
@@ -284,7 +287,7 @@ export function SmartAssignmentPanel() {
               letterSpacing: '0.05em',
             }}
           >
-            Призначення
+            {t('Призначення')}
           </p>
           <span
             className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
@@ -305,7 +308,7 @@ export function SmartAssignmentPanel() {
             border: '1px solid var(--br)',
           }}
         >
-          Рекомендація
+          {t('Рекомендація')}
         </span>
       </div>
 
@@ -337,7 +340,7 @@ export function SmartAssignmentPanel() {
                         border: '1px solid var(--br)',
                       }}
                     >
-                      Готово
+                      {t('Готово')}
                     </span>
                   )}
                 </div>
@@ -355,18 +358,18 @@ export function SmartAssignmentPanel() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm" style={{ color: 'var(--t2)' }}>
-                        Рекомендовано:{' '}
+                        {t('Рекомендовано:')}{' '}
                         <span className="font-medium" style={{ color: 'var(--t1)' }}>
                           {recommendation.courier_name}
                         </span>
                       </span>
                       <span className="text-xs" style={{ color: 'var(--t3)' }}>
-                        ETA ~{etaMinutes(recommendation.eta_seconds)} хв
+                        ETA ~{etaMinutes(recommendation.eta_seconds)} {t('хв')}
                         {' · '}
                         {zoneLabel(recommendation.distance_meters)}{' '}
-                        ({Math.round(recommendation.distance_meters)}м)
+                        ({Math.round(recommendation.distance_meters)}{t('м')})
                         {' '}
-                        {TRANSPORT_LABELS[recommendation.transport_mode]}
+                        {t(TRANSPORT_LABELS[recommendation.transport_mode])}
                       </span>
                     </div>
                   </div>
@@ -385,7 +388,7 @@ export function SmartAssignmentPanel() {
                         color: 'var(--t1)',
                       }}
                     >
-                      {isConfirming ? 'Призначаємо…' : 'Призначити'}
+                      {isConfirming ? t('Призначаємо…') : t('Призначити')}
                     </button>
                     <button
                       onClick={() => handleDismiss(order.id)}
@@ -396,17 +399,17 @@ export function SmartAssignmentPanel() {
                         color: 'var(--t3)',
                       }}
                     >
-                      Ігнорувати
+                      {t('Ігнорувати')}
                     </button>
                   </div>
                 </>
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="text-xs" style={{ color: 'var(--t3)' }}>
-                    Очікування курʼєра…
+                    {t('Очікування курʼєра…')}
                   </span>
                   <span className="text-xs" style={{ color: 'var(--t3)' }}>
-                    Наступна спроба через <RetryCountdown addedAt={addedAt} />
+                    {t('Наступна спроба через')} <RetryCountdown addedAt={addedAt} />
                   </span>
                 </div>
               )}

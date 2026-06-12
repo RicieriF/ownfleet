@@ -6,11 +6,12 @@ import { cn } from '@/lib/utils';
 import { isAfter, subDays } from 'date-fns';
 import { ProofDrawer } from './proof-drawer';
 import { CheckCircle2, MinusCircle } from 'lucide-react';
+import { useT, useLocale } from '@/lib/i18n/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('uk-UA', {
+function formatTime(iso: string, tag: string): string {
+  return new Date(iso).toLocaleString(tag, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -18,13 +19,13 @@ function formatTime(iso: string): string {
   });
 }
 
-function formatDuration(startIso: string, endIso: string): string {
+function formatDuration(startIso: string, endIso: string, hUnit: string, mUnit: string): string {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
   if (ms <= 0) return '—';
   const totalSec = Math.floor(ms / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
-  return h > 0 ? `${h}г ${String(m).padStart(2, '0')}хв` : `${m}хв`;
+  return h > 0 ? `${h}${hUnit} ${String(m).padStart(2, '0')}${mUnit}` : `${m}${mUnit}`;
 }
 
 type StatusFilter = 'all' | 'completed' | 'failed' | 'cancelled';
@@ -45,7 +46,7 @@ const SOURCE_LABELS: Record<OrderSource, string> = {
   iiko: 'iiko',
 };
 
-function StatusBadge({ status }: { status: OrderStatus }) {
+function StatusBadge({ status, label }: { status: OrderStatus; label: string }) {
   const styles: Record<string, { bg: string; color: string; border: string }> = {
     completed: {
       bg: 'rgba(34,197,94,0.1)',
@@ -78,7 +79,7 @@ function StatusBadge({ status }: { status: OrderStatus }) {
         fontFamily: 'var(--font-sans)',
       }}
     >
-      {STATUS_LABELS[status] ?? status}
+      {label}
     </span>
   );
 }
@@ -108,7 +109,7 @@ interface Props {
   orders: Order[];
 }
 
-function ProofCell({ order }: { order: Order }) {
+function ProofCell({ order, t }: { order: Order; t: (s: string) => string }) {
   if (order.status !== 'completed') {
     return <span style={{ color: 'var(--t4)' }}>—</span>;
   }
@@ -120,15 +121,17 @@ function ProofCell({ order }: { order: Order }) {
     <span
       className="inline-flex items-center gap-1 text-xs"
       style={{ color: 'var(--t3)' }}
-      title="Натисніть рядок для перегляду пруфу"
+      title={t('Натисніть рядок для перегляду пруфу')}
     >
       <CheckCircle2 size={14} strokeWidth={1.75} />
-      Переглянути
+      {t('Переглянути')}
     </span>
   );
 }
 
 export function HistoryTable({ orders }: Props) {
+  const t = useT();
+  const localeTag = useLocale() === 'uk' ? 'uk-UA' : 'en-GB';
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [dateFilter, setDateFilter] = useState<DateFilter>('7d');
   const [proofDeliveryId, setProofDeliveryId] = useState<string | null>(null);
@@ -168,16 +171,16 @@ export function HistoryTable({ orders }: Props) {
   }, [orders, dateFilter]);
 
   const STATUS_TABS: { key: StatusFilter; label: string }[] = [
-    { key: 'all', label: `Всі (${counts.all})` },
-    { key: 'completed', label: `Виконані (${counts.completed})` },
-    { key: 'failed', label: `Провалені (${counts.failed})` },
-    { key: 'cancelled', label: `Скасовані (${counts.cancelled})` },
+    { key: 'all', label: `${t('Всі')} (${counts.all})` },
+    { key: 'completed', label: `${t('Виконані')} (${counts.completed})` },
+    { key: 'failed', label: `${t('Провалені')} (${counts.failed})` },
+    { key: 'cancelled', label: `${t('Скасовані')} (${counts.cancelled})` },
   ];
 
   const DATE_TABS: { key: DateFilter; label: string }[] = [
-    { key: 'today', label: 'Сьогодні' },
-    { key: '7d', label: '7 днів' },
-    { key: '30d', label: '30 днів' },
+    { key: 'today', label: t('Сьогодні') },
+    { key: '7d', label: t('7 днів') },
+    { key: '30d', label: t('30 днів') },
   ];
 
   return (
@@ -236,28 +239,28 @@ export function HistoryTable({ orders }: Props) {
           <thead style={{ borderBottom: '1px solid var(--br)' }}>
             <tr>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Замовлення
+                {t('Замовлення')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Адреса
+                {t('Адреса')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Статус
+                {t('Статус')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Курʼєр
+                {t('Курʼєр')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Прийнято
+                {t('Прийнято')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Завершено
+                {t('Завершено')}
               </th>
               <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Тривалість
+                {t('Тривалість')}
               </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--t4)]">
-                Пруф
+                {t('Пруф')}
               </th>
             </tr>
           </thead>
@@ -268,7 +271,7 @@ export function HistoryTable({ orders }: Props) {
                   colSpan={8}
                   className="px-4 py-10 text-center text-sm text-[var(--t3)]"
                 >
-                  Замовлень за обраний період немає
+                  {t('Замовлень за обраний період немає')}
                 </td>
               </tr>
             )}
@@ -277,7 +280,7 @@ export function HistoryTable({ orders }: Props) {
               const startedAt = order.delivery?.started_at;
               const duration =
                 startedAt && completedAt && order.status === 'completed'
-                  ? formatDuration(startedAt, completedAt)
+                  ? formatDuration(startedAt, completedAt, t('г'), t('хв'))
                   : '—';
               const isClickable = order.status === 'completed' && !!order.delivery;
 
@@ -311,7 +314,7 @@ export function HistoryTable({ orders }: Props) {
 
                   {/* Status */}
                   <td className="px-3 py-2.5">
-                    <StatusBadge status={order.status} />
+                    <StatusBadge status={order.status} label={t(STATUS_LABELS[order.status] ?? order.status)} />
                   </td>
 
                   {/* Courier */}
@@ -323,12 +326,12 @@ export function HistoryTable({ orders }: Props) {
 
                   {/* Created at */}
                   <td className="px-3 py-2.5 mono text-xs text-[var(--t4)]">
-                    {formatTime(order.created_at)}
+                    {formatTime(order.created_at, localeTag)}
                   </td>
 
                   {/* Completed at */}
                   <td className="px-3 py-2.5 mono text-xs text-[var(--t4)]">
-                    {completedAt ? formatTime(completedAt) : '—'}
+                    {completedAt ? formatTime(completedAt, localeTag) : '—'}
                   </td>
 
                   {/* Duration */}
@@ -338,7 +341,7 @@ export function HistoryTable({ orders }: Props) {
 
                   {/* Proof */}
                   <td className="px-3 py-2.5">
-                    <ProofCell order={order} />
+                    <ProofCell order={order} t={t} />
                   </td>
                 </tr>
               );
@@ -349,7 +352,7 @@ export function HistoryTable({ orders }: Props) {
 
       {filtered.length > 0 && (
         <p className="text-xs text-[var(--t4)] mt-3 text-right mono">
-          {filtered.length} замовлень
+          {filtered.length} {t('замовлень')}
         </p>
       )}
 

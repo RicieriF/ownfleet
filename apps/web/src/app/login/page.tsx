@@ -2,9 +2,11 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { useT } from '@/lib/i18n/client';
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,14 +26,14 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? 'Невірний email або пароль');
+        setError(data.error ?? t('Невірний email або пароль'));
         return;
       }
 
       router.push('/');
       router.refresh();
     } catch {
-      setError('Помилка мережі. Спробуйте ще раз.');
+      setError(t('Помилка мережі. Спробуйте ще раз.'));
     } finally {
       setLoading(false);
     }
@@ -42,7 +44,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm bg-[var(--sf)] rounded-lg border border-[var(--br)] p-8 card-shine">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-[var(--t1)]">OwnFleet</h1>
-          <p className="text-sm text-[var(--t3)] mt-1">Увійдіть до свого облікового запису</p>
+          <p className="text-sm text-[var(--t3)] mt-1">{t('Увійдіть до свого облікового запису')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -64,7 +66,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-[var(--t2)] mb-1">
-              Пароль
+              {t('Пароль')}
             </label>
             <input
               id="password"
@@ -89,7 +91,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-2 px-4 bg-[var(--acm)] hover:bg-[var(--acm-h)] disabled:opacity-50 text-[var(--t1)] text-sm font-semibold rounded-[6px] transition-colors"
           >
-            {loading ? 'Вхід...' : 'Увійти'}
+            {loading ? t('Вхід...') : t('Увійти')}
           </button>
         </form>
       </div>

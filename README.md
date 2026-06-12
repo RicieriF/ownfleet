@@ -30,6 +30,7 @@ Open-source courier management platform for restaurants, cafés and pizzerias th
 - **Explicit state machines** — orders, deliveries and shifts move only through guarded transitions; invalid transitions are tested as thoroughly as valid ones.
 - **Async everywhere it matters** — Bull queues for geocoding (Nominatim rate limit 1 req/s), webhook retries with HMAC signatures, dispatch timeouts; Telegram/FCM notifications are strictly fire-and-forget.
 - **Operations built in** — Prometheus metrics (`/metrics` + Grafana Cloud via Alloy sidecar), 9 retention/anomaly cron jobs, weekly S3 backups, structured logging.
+- **Bilingual dashboard (EN/UK)** — zero-dependency i18n layer (~120 lines): cookie-based locale, server & client components share one dictionary, Ukrainian strings as keys with identity fallback.
 - **555 tests** across API (Jest) and web (Vitest), green in CI.
 
 ## Features

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { Manrope, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
+import { LocaleProvider } from '@/lib/i18n/client';
 
 const manrope = Manrope({
   subsets: ['latin', 'cyrillic'],
@@ -16,15 +19,21 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  title: 'OwnFleet — Управління доставкою',
-  description: 'Платформа управління курʼєрами для закладів доставки',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  return {
+    title: t('OwnFleet — Управління доставкою', locale),
+    description: t('Платформа управління курʼєрами для закладів доставки', locale),
+  };
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="uk" className={`${manrope.variable} ${jetbrainsMono.variable}`}>
-      <body>{children}</body>
+    <html lang={locale} className={`${manrope.variable} ${jetbrainsMono.variable}`}>
+      <body>
+        <LocaleProvider locale={locale}>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

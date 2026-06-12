@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { apiPost, apiPatch, apiDelete } from '@/lib/api-client';
+import { useT } from '@/lib/i18n/client';
 
 interface Integration {
   id: string;
@@ -50,6 +51,7 @@ function IntegrationCard({
   onSaved: (i: Integration) => void;
   onDeleted: (id: string) => void;
 }) {
+  const t = useT();
   const meta = INTEGRATION_META[type];
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<Record<string, string>>(
@@ -77,7 +79,7 @@ function IntegrationCard({
         setTimeout(() => setSaved(false), 3000);
         setOpen(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка збереження');
+        setError(e instanceof Error ? e.message : t('Помилка збереження'));
       }
     });
   }
@@ -91,7 +93,7 @@ function IntegrationCard({
         });
         onSaved(result);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка');
+        setError(e instanceof Error ? e.message : t('Помилка'));
       }
     });
   }
@@ -105,7 +107,7 @@ function IntegrationCard({
         setFields({});
         setOpen(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка видалення');
+        setError(e instanceof Error ? e.message : t('Помилка видалення'));
       }
     });
   }
@@ -131,7 +133,7 @@ function IntegrationCard({
           />
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{meta.label}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{meta.description}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--t3)' }}>{t(meta.description)}</p>
           </div>
         </div>
 
@@ -148,7 +150,7 @@ function IntegrationCard({
                 borderRadius: '6px',
               }}
             >
-              {existing.active ? 'Активна' : 'Вимкнено'}
+              {existing.active ? t('Активна') : t('Вимкнено')}
             </button>
           )}
           <button
@@ -161,7 +163,7 @@ function IntegrationCard({
               borderRadius: '6px',
             }}
           >
-            {existing ? 'Налаштувати' : 'Підключити'}
+            {existing ? t('Налаштувати') : t('Підключити')}
           </button>
         </div>
       </div>
@@ -175,7 +177,7 @@ function IntegrationCard({
                 className="block mb-1"
                 style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}
               >
-                {f.label}
+                {t(f.label)}
               </label>
               <input
                 type={f.secret ? 'password' : 'text'}
@@ -200,7 +202,7 @@ function IntegrationCard({
           ))}
 
           {error && <p className="text-xs" style={{ color: 'var(--bad)' }}>{error}</p>}
-          {saved && <p className="text-xs" style={{ color: 'var(--t3)' }}>Збережено</p>}
+          {saved && <p className="text-xs" style={{ color: 'var(--t3)' }}>{t('Збережено')}</p>}
 
           <div className="flex items-center justify-between pt-1">
             <div className="flex gap-3">
@@ -210,10 +212,10 @@ function IntegrationCard({
                 className="text-sm font-medium rounded disabled:opacity-40"
                 style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
               >
-                {isPending ? 'Зберігаємо…' : 'Зберегти'}
+                {isPending ? t('Зберігаємо…') : t('Зберегти')}
               </button>
               <button onClick={() => setOpen(false)} className="text-sm" style={{ color: 'var(--t3)' }}>
-                Скасувати
+                {t('Скасувати')}
               </button>
             </div>
             {existing && (
@@ -223,7 +225,7 @@ function IntegrationCard({
                 className="text-xs px-2.5 py-1 rounded disabled:opacity-40"
                 style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
               >
-                Відключити
+                {t('Відключити')}
               </button>
             )}
           </div>

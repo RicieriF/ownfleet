@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { TeamMember } from '@/types';
 import { apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 import { UserPlus, Trash2, RefreshCw } from 'lucide-react';
+import { useT } from '@/lib/i18n/client';
 
 interface Props {
   initialMembers: TeamMember[];
@@ -13,6 +14,7 @@ interface Props {
 const emptyForm = { email: '', password: '' };
 
 export function TeamManager({ initialMembers, isOwner }: Props) {
+  const t = useT();
   const [members, setMembers] = useState<TeamMember[]>(initialMembers);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -31,7 +33,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
         setForm(emptyForm);
         setFormOpen(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка створення');
+        setError(e instanceof Error ? e.message : t('Помилка створення'));
       }
     });
   }
@@ -45,13 +47,13 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
         setEditId(null);
         setNewPassword('');
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка оновлення');
+        setError(e instanceof Error ? e.message : t('Помилка оновлення'));
       }
     });
   }
 
   function handleDelete(id: string, email: string) {
-    if (!confirm(`Видалити ${email}?`)) return;
+    if (!confirm(`${t('Видалити')} ${email}?`)) return;
     setError('');
     startTransition(async () => {
       try {
@@ -59,7 +61,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
         setMembers((prev) => prev.filter((m) => m.id !== id));
         if (editId === id) setEditId(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка видалення');
+        setError(e instanceof Error ? e.message : t('Помилка видалення'));
       }
     });
   }
@@ -70,11 +72,11 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">Команда</h1>
+          <h1 className="text-2xl font-bold text-[var(--t1)]">{t('Команда')}</h1>
           <p className="text-sm text-[var(--t3)] mt-0.5">
             {members.length === 0
-              ? 'Немає учасників'
-              : `${members.length} ${members.length === 1 ? 'менеджер' : 'менеджерів'}`}
+              ? t('Немає учасників')
+              : `${members.length} ${members.length === 1 ? t('менеджер') : t('менеджерів')}`}
           </p>
         </div>
         {isOwner && (
@@ -89,7 +91,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
             }}
           >
             <UserPlus size={15} strokeWidth={1.75} />
-            Додати менеджера
+            {t('Додати менеджера')}
           </button>
         )}
       </div>
@@ -105,8 +107,8 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
           }}
         >
           <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--br)' }}>
-            <p className="text-sm font-semibold text-[var(--t1)]">Новий менеджер</p>
-            <p className="text-xs mt-0.5 text-[var(--t3)]">Менеджер матиме повний доступ до дашборду вашого закладу.</p>
+            <p className="text-sm font-semibold text-[var(--t1)]">{t('Новий менеджер')}</p>
+            <p className="text-xs mt-0.5 text-[var(--t3)]">{t('Менеджер матиме повний доступ до дашборду вашого закладу.')}</p>
           </div>
 
           <div className="px-5 py-4 flex flex-wrap gap-4">
@@ -127,13 +129,13 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
             </div>
             <div className="flex-1 min-w-[180px]">
               <label className="block mb-1" style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Пароль
+                {t('Пароль')}
               </label>
               <input
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Мінімум 6 символів"
+                placeholder={t('Мінімум 6 символів')}
                 className="w-full text-sm rounded outline-none"
                 style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '6px 10px', borderRadius: '6px' }}
                 onFocus={(e) => (e.currentTarget.style.boxShadow = '0 0 0 1px var(--bg), 0 0 0 2px rgba(250,249,246,0.25)')}
@@ -149,13 +151,13 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
               className="text-sm font-medium px-4 py-2 rounded-md transition-opacity disabled:opacity-40"
               style={{ background: 'var(--acm)', color: 'var(--t1)', borderRadius: '6px' }}
             >
-              {isPending ? 'Створюємо…' : 'Створити акаунт'}
+              {isPending ? t('Створюємо…') : t('Створити акаунт')}
             </button>
             <button
               onClick={() => { setFormOpen(false); setForm(emptyForm); setError(''); }}
               className="text-sm text-[var(--t3)] hover:text-[var(--t1)] transition-colors"
             >
-              Скасувати
+              {t('Скасувати')}
             </button>
             {error && <p className="text-xs text-[var(--bad)]">{error}</p>}
           </div>
@@ -169,7 +171,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
           style={{ background: 'var(--s2)', border: '1px solid var(--br)' }}
         >
           <p className="text-sm text-[var(--t3)]">
-            {isOwner ? 'Натисніть «Додати менеджера», щоб надати доступ до дашборду.' : 'Менеджерів ще немає.'}
+            {isOwner ? t('Натисніть «Додати менеджера», щоб надати доступ до дашборду.') : t('Менеджерів ще немає.')}
           </p>
         </div>
       ) : (
@@ -195,7 +197,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
             }}
           >
             <span>Email</span>
-            <span>Додано</span>
+            <span>{t('Додано')}</span>
           </div>
 
           <div className="divide-y" style={{ borderColor: 'var(--br)' }}>
@@ -208,7 +210,7 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Новий пароль (мін. 6)"
+                      placeholder={t('Новий пароль (мін. 6)')}
                       className="text-sm rounded outline-none w-48"
                       style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t1)', padding: '4px 8px', borderRadius: '6px' }}
                       autoFocus
@@ -220,13 +222,13 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
                       style={{ background: 'var(--acm)', color: 'var(--t1)', borderRadius: '6px' }}
                     >
                       <RefreshCw size={12} />
-                      Зберегти
+                      {t('Зберегти')}
                     </button>
                     <button
                       onClick={() => { setEditId(null); setError(''); }}
                       className="text-xs text-[var(--t3)] hover:text-[var(--t1)]"
                     >
-                      Скасувати
+                      {t('Скасувати')}
                     </button>
                     {error && <p className="w-full text-xs text-[var(--bad)]">{error}</p>}
                   </div>
@@ -250,14 +252,14 @@ export function TeamManager({ initialMembers, isOwner }: Props) {
                           className="text-xs px-2 py-1 rounded"
                           style={{ background: 'var(--s1)', border: '1px solid var(--br)', color: 'var(--t3)', borderRadius: '6px' }}
                         >
-                          Пароль
+                          {t('Пароль')}
                         </button>
                         <button
                           onClick={() => handleDelete(m.id, m.email)}
                           disabled={isPending}
                           className="p-1 rounded disabled:opacity-40"
                           style={{ color: 'var(--bad)' }}
-                          title="Видалити"
+                          title={t('Видалити')}
                         >
                           <Trash2 size={14} strokeWidth={1.75} />
                         </button>

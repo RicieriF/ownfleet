@@ -3,6 +3,8 @@ import { Establishment, ApiKeyMeta } from '@/types';
 import { SettingsForm } from './settings-form';
 import { TelegramSettings } from './telegram-settings';
 import { TrackingWidgetSection } from './tracking-widget-section';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 const PLAN_LABELS: Record<string, string> = {
   pilot:    'Pilot',
@@ -31,20 +33,23 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function formatDate(iso: string | null) {
+import type { Locale } from '@/lib/i18n';
+
+function formatDate(iso: string | null, tag: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(tag, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function billingStatus(est: Establishment): React.ReactNode {
+function billingStatus(est: Establishment, locale: Locale): React.ReactNode {
+  const tag = locale === 'uk' ? 'uk-UA' : 'en-GB';
   const now = Date.now();
 
   if (est.paid_until && new Date(est.paid_until).getTime() > now) {
     return (
       <span>
-        Оплачено до{' '}
+        {t('Оплачено до', locale)}{' '}
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t1)' }}>
-          {formatDate(est.paid_until)}
+          {formatDate(est.paid_until, tag)}
         </span>
       </span>
     );
@@ -53,15 +58,15 @@ function billingStatus(est: Establishment): React.ReactNode {
   if (est.trial_ends_at && new Date(est.trial_ends_at).getTime() > now) {
     return (
       <span>
-        Trial до{' '}
+        {t('Trial до', locale)}{' '}
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--warn)' }}>
-          {formatDate(est.trial_ends_at)}
+          {formatDate(est.trial_ends_at, tag)}
         </span>
       </span>
     );
   }
 
-  return <span style={{ color: 'var(--bad)' }}>Підписка закінчилась</span>;
+  return <span style={{ color: 'var(--bad)' }}>{t('Підписка закінчилась', locale)}</span>;
 }
 
 interface TelegramStatus {
@@ -70,6 +75,7 @@ interface TelegramStatus {
 }
 
 export default async function SettingsPage() {
+  const locale = await getLocale();
   const [establishment, telegramStatus, apiKey] = await Promise.all([
     apiFetch<Establishment>('/api/v1/establishments/me'),
     apiFetch<TelegramStatus>('/api/v1/telegram/status').catch(() => ({ connected: false, prefs: {} })),
@@ -79,7 +85,7 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>Налаштування</h1>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>{t('Налаштування', locale)}</h1>
       </div>
 
       {/* Establishment info */}
@@ -92,19 +98,19 @@ export default async function SettingsPage() {
         }}
       >
         <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--br)' }}>
-          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>Заклад</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--t1)' }}>{t('Заклад', locale)}</p>
         </div>
         <div className="px-5 divide-y" style={{ borderColor: 'var(--br)' }}>
-          <InfoRow label="Назва">
+          <InfoRow label={t('Назва', locale)}>
             <span style={{ color: 'var(--t1)', fontWeight: 500 }}>{establishment.name}</span>
           </InfoRow>
-          <InfoRow label="Тариф">
+          <InfoRow label={t('Тариф', locale)}>
             <span className={`text-xs font-medium px-2 py-0.5 rounded ${PLAN_COLORS[establishment.plan] ?? PLAN_COLORS.starter}`}>
               {PLAN_LABELS[establishment.plan] ?? establishment.plan}
             </span>
           </InfoRow>
-          <InfoRow label="Статус">
-            {billingStatus(establishment)}
+          <InfoRow label={t('Статус', locale)}>
+            {billingStatus(establishment, locale)}
           </InfoRow>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { apiFetch } from '@/lib/api';
 import { CourierWithStatus, Establishment } from '@/types';
 import { ShiftsManager } from './shifts-manager';
+import { t } from '@/lib/i18n';
+import { getLocale } from '@/lib/i18n/server';
 
 interface ActiveShift {
   id: string;
@@ -25,6 +27,7 @@ async function fetchData() {
 }
 
 export default async function ShiftsPage() {
+  const locale = await getLocale();
   const { shifts, couriers, establishment } = await fetchData();
 
   const activeCouriers = couriers.filter((c) => c.active);
@@ -33,9 +36,9 @@ export default async function ShiftsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--t1)]">Зміни</h1>
+        <h1 className="text-2xl font-bold text-[var(--t1)]">{t('Зміни', locale)}</h1>
         <p className="text-sm text-[var(--t3)] mt-1">
-          Активні зміни курʼєрів · оновлюється в реальному часі
+          {t('Активні зміни курʼєрів · оновлюється в реальному часі', locale)}
         </p>
       </div>
 

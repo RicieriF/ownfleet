@@ -5,6 +5,7 @@ import { Webhook } from '@/types';
 import { apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
+import { useT } from '@/lib/i18n/client';
 
 const ALL_EVENTS = [
   'order.created',
@@ -18,6 +19,7 @@ const ALL_EVENTS = [
 // ── Create form ─────────────────────────────────────────────────────────────
 
 function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
+  const t = useT();
   const [url, setUrl] = useState('');
   const [secret, setSecret] = useState('');
   const [events, setEvents] = useState<string[]>([]);
@@ -31,7 +33,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
 
   function handleSubmit() {
     if (!url || !secret || events.length === 0) {
-      setError('URL, секрет та хоча б одна подія обовʼязкові');
+      setError(t('URL, секрет та хоча б одна подія обовʼязкові'));
       return;
     }
     setError('');
@@ -41,7 +43,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
         onCreated(webhook);
         setUrl(''); setSecret(''); setEvents([]); setOpen(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Помилка створення');
+        setError(e instanceof Error ? e.message : t('Помилка створення'));
       }
     });
   }
@@ -53,7 +55,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
         className="text-sm font-medium rounded"
         style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
       >
-        + Додати webhook
+        {t('+ Додати webhook')}
       </button>
     );
   }
@@ -63,7 +65,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
       className="rounded-lg mb-4 p-5"
       style={{ background: 'var(--s2)', border: '1px solid var(--acm-b)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}
     >
-      <p className="text-sm font-semibold mb-4" style={{ color: 'var(--t1)' }}>Новий webhook</p>
+      <p className="text-sm font-semibold mb-4" style={{ color: 'var(--t1)' }}>{t('Новий webhook')}</p>
 
       <div className="space-y-3">
         {/* URL */}
@@ -103,7 +105,7 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
         {/* Events */}
         <div>
           <label className="block mb-2" style={{ color: 'var(--t4)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Події
+            {t('Події')}
           </label>
           <div className="flex flex-wrap gap-2">
             {ALL_EVENTS.map((ev) => (
@@ -135,14 +137,14 @@ function CreateWebhookForm({ onCreated }: { onCreated: (w: Webhook) => void }) {
           className="text-sm font-medium rounded disabled:opacity-40"
           style={{ background: 'var(--acm)', color: 'var(--t1)', padding: '6px 16px', borderRadius: '6px' }}
         >
-          {isPending ? 'Зберігаємо…' : 'Зберегти'}
+          {isPending ? t('Зберігаємо…') : t('Зберегти')}
         </button>
         <button
           onClick={() => { setOpen(false); setError(''); }}
           className="text-sm"
           style={{ color: 'var(--t3)' }}
         >
-          Скасувати
+          {t('Скасувати')}
         </button>
       </div>
     </div>
@@ -156,6 +158,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
   onToggle: (id: string, active: boolean) => void;
   onDelete: (id: string) => void;
 }) {
+  const t = useT();
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -178,7 +181,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
         </div>
         {webhook.consecutive_failures > 0 && (
           <p className="text-xs mt-1" style={{ color: 'var(--bad)' }}>
-            {webhook.consecutive_failures} невдалих спроб
+            {webhook.consecutive_failures} {t('невдалих спроб')}
             {webhook.last_error && ` · ${webhook.last_error}`}
           </p>
         )}
@@ -206,7 +209,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
           borderRadius: '6px',
         }}
       >
-        {webhook.active ? 'Активний' : 'Вимкнено'}
+        {webhook.active ? t('Активний') : t('Вимкнено')}
       </button>
 
       {/* Delete */}
@@ -219,7 +222,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
         className="shrink-0 text-xs px-2 py-1 rounded disabled:opacity-40"
         style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--bad)', borderRadius: '6px' }}
       >
-        Видалити
+        {t('Видалити')}
       </button>
     </div>
   );
@@ -228,6 +231,7 @@ function WebhookRow({ webhook, onToggle, onDelete }: {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function WebhooksManager({ initialWebhooks }: { initialWebhooks: Webhook[] }) {
+  const t = useT();
   const [webhooks, setWebhooks] = useState<Webhook[]>(initialWebhooks);
 
   function handleCreated(w: Webhook) {
@@ -253,7 +257,7 @@ export function WebhooksManager({ initialWebhooks }: { initialWebhooks: Webhook[
           className="rounded-lg px-5 py-8 text-center text-sm"
           style={{ background: 'var(--s2)', border: '1px solid var(--br)', color: 'var(--t3)' }}
         >
-          Немає налаштованих webhooks
+          {t('Немає налаштованих webhooks')}
         </div>
       ) : (
         <div

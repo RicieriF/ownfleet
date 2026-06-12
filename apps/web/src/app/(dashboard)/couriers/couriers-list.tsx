@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import { apiPost, apiPatch } from '@/lib/api-client';
+import { useT } from '@/lib/i18n/client';
 
 const STATUS_CONFIG: Record<CourierStatus, { dot: string; label: string; labelColor: string }> = {
   online:         { dot: 'bg-[var(--ok)]',   label: 'На зміні',      labelColor: 'text-[var(--t3)]' },
@@ -17,14 +18,15 @@ const STATUS_CONFIG: Record<CourierStatus, { dot: string; label: string; labelCo
 
 // ── Shift timer helpers ─────────────────────────────────────────────────────
 
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, hUnit: string, mUnit: string): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
-  return h > 0 ? `${h}г ${String(m).padStart(2, '0')}хв` : `${m}хв`;
+  return h > 0 ? `${h}${hUnit} ${String(m).padStart(2, '0')}${mUnit}` : `${m}${mUnit}`;
 }
 
 function ShiftTimer({ startedAt, plannedEndAt }: { startedAt: string; plannedEndAt: string | null }) {
+  const t = useT();
   const [label, setLabel] = useState('');
 
   useEffect(() => {
@@ -32,9 +34,9 @@ function ShiftTimer({ startedAt, plannedEndAt }: { startedAt: string; plannedEnd
       const now = Date.now();
       if (plannedEndAt) {
         const remaining = new Date(plannedEndAt).getTime() - now;
-        setLabel(remaining <= 0 ? 'завершується' : `ще ${formatDuration(remaining)}`);
+        setLabel(remaining <= 0 ? t('завершується') : `${t('ще')} ${formatDuration(remaining, t('г'), t('хв'))}`);
       } else {
-        setLabel(formatDuration(now - new Date(startedAt).getTime()));
+        setLabel(formatDuration(now - new Date(startedAt).getTime(), t('г'), t('хв')));
       }
     }
     tick();
@@ -125,6 +127,7 @@ interface Props {
 }
 
 export function CouriersList({ couriers: initial, establishmentTimezone }: Props) {
+  const t = useT();
   const [couriers, setCouriers] = useState(initial);
   const [remindLoading, setRemindLoading] = useState<string | null>(null);
   const [editingShift, setEditingShift] = useState<string | null>(null); // courier id
@@ -204,7 +207,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={cn('text-xs font-medium', config.labelColor)}>
-                    {config.label}
+                    {t(config.label)}
                   </span>
                   {courier.last_ping_at && (
                     <span className="text-xs text-[var(--t4)] mono">
@@ -215,7 +218,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                     </span>
                   )}
                   {!courier.active && (
-                    <span className="text-xs text-[var(--t4)] italic">неактивний</span>
+                    <span className="text-xs text-[var(--t4)] italic">{t('неактивний')}</span>
                   )}
                 </div>
 
@@ -228,14 +231,14 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                     />
                     {courier.active_shift.planned_end_at && (
                       <span className="text-[11px] text-[var(--t4)]">
-                        · до {new Date(courier.active_shift.planned_end_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: establishmentTimezone })}
+                        · {t('до')} {new Date(courier.active_shift.planned_end_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: establishmentTimezone })}
                       </span>
                     )}
                     <button
                       onClick={() => setEditingShift(isEditingThis ? null : courier.id)}
                       className="text-[11px] text-[var(--t3)] hover:text-[var(--t2)] transition-colors underline underline-offset-2"
                     >
-                      {isEditingThis ? 'Закрити' : 'Змінити час'}
+                      {isEditingThis ? t('Закрити') : t('Змінити час')}
                     </button>
                   </div>
                 )}
@@ -257,7 +260,7 @@ export function CouriersList({ couriers: initial, establishmentTimezone }: Props
                   disabled={remindLoading === courier.id}
                   className="px-3 py-1.5 text-xs bg-[rgba(239,68,68,0.1)] text-[var(--bad)] border border-[rgba(239,68,68,0.25)] rounded-[6px] hover:bg-[rgba(239,68,68,0.2)] transition-colors disabled:opacity-50"
                 >
-                  {remindLoading === courier.id ? 'Надсилання...' : 'Нагадати'}
+                  {remindLoading === courier.id ? t('Надсилання...') : t('Нагадати')}
                 </button>
               )}
             </div>

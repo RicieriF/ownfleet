@@ -15,11 +15,11 @@ Open-source платформа управління курʼєрами для р
 
 | Дашборд менеджера — живі KPI, черга призначень, панель курʼєрів | Жива мапа — позиції курʼєрів у реальному часі (Leaflet + CARTO dark) |
 |---|---|
-| ![Дашборд](docs/screenshots/dashboard.png) | ![Жива мапа](docs/screenshots/map.png) |
+| ![Дашборд](docs/screenshots/uk/dashboard.png) | ![Жива мапа](docs/screenshots/uk/map.png) |
 
 | Історія замовлень із фільтрами за статусом і датою | Пруф доставки — гео-верифікація, точність GPS, фото |
 |---|---|
-| ![Історія](docs/screenshots/history.png) | ![Пруф доставки](docs/screenshots/history-proof.png) |
+| ![Історія](docs/screenshots/uk/history.png) | ![Пруф доставки](docs/screenshots/uk/history-proof.png) |
 
 ## Інженерні рішення
 
@@ -30,6 +30,7 @@ Open-source платформа управління курʼєрами для р
 - **Явні state machines** — замовлення, доставки і зміни переходять тільки через guarded-переходи; невалідні переходи тестуються так само ретельно, як валідні.
 - **Асинхронність там, де треба** — Bull-черги для геокодування (rate limit Nominatim 1 req/s), retry вебхуків із HMAC-підписами, dispatch-таймаути; Telegram/FCM — строго fire-and-forget.
 - **Операційка вбудована** — Prometheus метрики (`/metrics` + Grafana Cloud через Alloy sidecar), 9 retention/anomaly cron jobs, щотижневі S3-бекапи, структуроване логування.
+- **Двомовний дашборд (EN/UK)** — i18n-шар без бібліотек (~120 рядків): локаль у cookie, server і client компоненти ділять один словник, українські рядки як ключі з identity-fallback.
 - **555 тестів** — API (Jest) і web (Vitest), зелені в CI.
 
 ## Можливості
