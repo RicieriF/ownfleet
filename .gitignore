@@ -45,10 +45,16 @@ coverage/
 *.pem
 .gstack/
 
-# Claude Code
-.claude/worktrees/
-.claude/settings.local.json
+# Claude Code / AI session artifacts (machine-local)
+.claude/
+.context/
 
-# Preview / dev tools
+# Preview / dev tools / design inspiration archives
 preview-*.html
 preview-*.js
+design-preview*.html
+DESIGN/Apple_DESIGN.md
+DESIGN/Elevenlabs_DESIGN.md
+DESIGN/Ollama_DESIGN.md
+DESIGN/Warp_DESIGN.md
+apps/mobile/package-lock.json

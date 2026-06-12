@@ -149,7 +149,7 @@ export function TelegramSettings({ initialStatus }: Props) {
             {connectCode}
           </p>
           <p className="text-xs" style={{ color: 'var(--t3)' }}>
-            Відкрийте бота <span style={{ color: 'var(--t2)' }}>@weego_notify_bot</span> і надішліть:
+            Відкрийте бота <span style={{ color: 'var(--t2)' }}>@ownfleet_bot</span> і надішліть:
           </p>
           <p
             className="text-sm mt-1"

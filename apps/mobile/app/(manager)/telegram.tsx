@@ -293,7 +293,7 @@ export default function ManagerTelegramScreen() {
                   <Text style={styles.code}>{connectCode}</Text>
                   <Text style={styles.codeInstruction}>
                     Відкрийте{' '}
-                    <Text style={styles.botName}>@weego_notify_bot</Text>
+                    <Text style={styles.botName}>@ownfleet_bot</Text>
                     {' '}і надішліть:
                   </Text>
                   <Text style={styles.codeCommand}>/start {connectCode}</Text>
