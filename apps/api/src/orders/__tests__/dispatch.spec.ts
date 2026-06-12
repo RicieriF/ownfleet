@@ -16,6 +16,7 @@ import { TrackingService } from '../../tracking/tracking.service.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
 import { CouriersService } from '../../couriers/couriers.service.js';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
+import { GeocodingService } from '../../geocoding/geocoding.service.js';
 
 const EST_A = 'est-a';
 
@@ -138,6 +139,9 @@ const mockNotificationsService = {
 const mockCouriersService = {
   invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined),
 };
+const mockGeocodingService = {
+  enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
 
 // ── OrdersService dispatch tests ─────────────────────────────────────────────
 
@@ -162,6 +166,7 @@ describe('OrdersService — dispatch algorithm', () => {
         },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
+        { provide: GeocodingService, useValue: mockGeocodingService },
         { provide: getQueueToken('dispatch'), useValue: mockDispatchQueue },
         {
           provide: REDIS_CLIENT,
@@ -289,14 +294,21 @@ describe('OrdersService — dispatch algorithm', () => {
     });
 
     it('two couriers, OSRM throws on first but succeeds for second → assigns second courier', async () => {
-      // Both couriers in zone1 (< 150m) so both end up in candidates
+      // Both couriers in zone1 (< 150m) so both end up in candidates.
+      // ETA is deduplicated by transport_mode, so couriers need distinct modes
+      // to exercise per-courier OSRM divergence (one call per unique mode).
       const row1 = makeWorkloadRow(100);
-      const row2 = { ...makeWorkloadRow(120), courier_id: 'c2', name: 'Petro' };
+      const row2 = {
+        ...makeWorkloadRow(120),
+        courier_id: 'c2',
+        name: 'Petro',
+        transport_mode: 'bicycle',
+      };
 
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
       mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
       mockPrisma.$queryRaw.mockResolvedValue([row1, row2]);
-      // Promise.allSettled: first fails, second succeeds → second courier wins
+      // Promise.allSettled: first mode fails, second succeeds → second courier wins
       mockEtaService.calculateEta
         .mockRejectedValueOnce(new Error('OSRM timeout'))
         .mockResolvedValueOnce(400);
@@ -327,9 +339,10 @@ describe('OrdersService — dispatch algorithm', () => {
       mockPrisma.order.findUnique.mockResolvedValue(pendingOrder);
       mockPrisma.establishment.findUnique.mockResolvedValue(estWithAuto);
       mockPrisma.$queryRaw.mockResolvedValue([row1, row2]);
-      mockEtaService.calculateEta
-        .mockRejectedValueOnce(new Error('OSRM timeout'))
-        .mockRejectedValueOnce(new Error('OSRM timeout'));
+      // Both couriers share one transport_mode → ETA dedup makes a single OSRM call
+      mockEtaService.calculateEta.mockRejectedValueOnce(
+        new Error('OSRM timeout'),
+      );
 
       const result = await service.runDispatchAlgorithm('order-1', EST_A);
 

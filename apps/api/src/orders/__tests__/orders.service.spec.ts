@@ -16,6 +16,7 @@ import { TrackingService } from '../../tracking/tracking.service.js';
 import { NotificationsService } from '../../notifications/notifications.service.js';
 import { CouriersService } from '../../couriers/couriers.service.js';
 import { REDIS_CLIENT } from '../../shared/redis/redis.constants.js';
+import { GeocodingService } from '../../geocoding/geocoding.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -117,6 +118,9 @@ const mockNotificationsService = {
 const mockCouriersService = {
   invalidateWorkloadCache: jest.fn().mockResolvedValue(undefined),
 };
+const mockGeocodingService = {
+  enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -139,6 +143,7 @@ describe('OrdersService', () => {
         },
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: CouriersService, useValue: mockCouriersService },
+        { provide: GeocodingService, useValue: mockGeocodingService },
         {
           provide: getQueueToken('dispatch'),
           useValue: { add: jest.fn().mockResolvedValue(undefined) },

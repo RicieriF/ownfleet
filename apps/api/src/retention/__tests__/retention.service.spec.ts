@@ -7,6 +7,7 @@ import { ShiftsService } from '../../shifts/shifts.service.js';
 import { EtaService } from '../../eta/eta.service.js';
 import { TelegramService } from '../../telegram/telegram.service.js';
 import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
+import { GeocodingService } from '../../geocoding/geocoding.service.js';
 import {
   parseEstablishmentSettings,
   ESTABLISHMENT_SETTINGS_DEFAULTS,
@@ -47,6 +48,10 @@ const mockDispatchQueue = {
   add: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockGeocodingService = {
+  enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
+
 // Call-through mock: lock is always acquired and fn is executed immediately.
 // This keeps existing tests working unchanged while allowing lock-key assertions
 // in the dedicated "distributed lock" suite below.
@@ -71,6 +76,7 @@ describe('RetentionService', () => {
         { provide: ShiftsService, useValue: mockShiftsService },
         { provide: EtaService, useValue: mockEtaService },
         { provide: TelegramService, useValue: mockTelegramService },
+        { provide: GeocodingService, useValue: mockGeocodingService },
         { provide: DistributedLockService, useValue: mockLockService },
         {
           provide: ConfigService,
@@ -186,6 +192,7 @@ describe('RetentionService', () => {
           establishment_id: 'est-4',
           deleted_orders: 2,
           deleted_pings: 7,
+          deleted_order_ids: [],
         },
       });
     });

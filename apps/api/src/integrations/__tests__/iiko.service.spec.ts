@@ -3,6 +3,7 @@ import { IikoService } from '../iiko.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { GeocodingService } from '../../geocoding/geocoding.service.js';
 import { DistributedLockService } from '../../shared/redis/distributed-lock.service.js';
+import { TelegramService } from '../../telegram/telegram.service.js';
 
 // ── fetch mock ─────────────────────────────────────────────────────────────
 const mockFetch = jest.fn();
@@ -16,6 +17,9 @@ const mockIntegration = { findMany: jest.fn() };
 const mockPrisma = { integration: mockIntegration, order: mockOrder };
 const mockGeocodingService = {
   enqueueGeocode: jest.fn().mockResolvedValue(undefined),
+};
+const mockTelegramService = {
+  notifyEstablishmentManagers: jest.fn().mockResolvedValue(undefined),
 };
 
 // Call-through lock mock: lock is always acquired and fn executes immediately
@@ -52,6 +56,7 @@ describe('IikoService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: GeocodingService, useValue: mockGeocodingService },
         { provide: DistributedLockService, useValue: mockLock },
+        { provide: TelegramService, useValue: mockTelegramService },
       ],
     }).compile();
     service = module.get<IikoService>(IikoService);
@@ -241,7 +246,7 @@ describe('IikoService', () => {
   // ── Geocoding integration ──────────────────────────────────────────────────
 
   describe('geocoding', () => {
-    it('does NOT query for geocoding when no orders need it', async () => {
+    it('does NOT enqueue geocoding when all orders already have coords in DB', async () => {
       mockFetch
         .mockReset()
         .mockResolvedValueOnce(makeResponse(200))
@@ -257,10 +262,20 @@ describe('IikoService', () => {
             ],
           }),
         );
+      // POS coords are ignored — service checks DB for lat=null orders;
+      // none found means nothing to geocode
+      mockOrder.findMany.mockResolvedValue([]);
 
       await service.pollEstablishment(EST_ID, VALID_CONFIG);
 
-      expect(mockOrder.findMany).not.toHaveBeenCalled();
+      expect(mockOrder.findMany).toHaveBeenCalledWith({
+        where: {
+          establishment_id: EST_ID,
+          external_id: { in: ['iiko-with-coords'] },
+          lat: null,
+        },
+        select: { id: true, address: true },
+      });
       expect(mockGeocodingService.enqueueGeocode).not.toHaveBeenCalled();
     });
 
@@ -292,6 +307,7 @@ describe('IikoService', () => {
       expect(mockGeocodingService.enqueueGeocode).toHaveBeenCalledWith(
         'db-order-id',
         'вул. Хрещатик 10',
+        EST_ID,
       );
     });
 
