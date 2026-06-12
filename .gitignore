@@ -47,6 +47,7 @@ coverage/
 
 # Claude Code
 .claude/worktrees/
+.claude/settings.local.json
 
 # Preview / dev tools
 preview-*.html
