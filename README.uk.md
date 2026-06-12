@@ -1,5 +1,8 @@
 # Weego CMI — Courier Management Infrastructure
 
+[![CI](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml/badge.svg)](https://github.com/Volodymyr4K/Weego_CMI/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 [English](README.md) | **Українська**
 
 B2B SaaS платформа для ресторанів, кафе і піцерій, які працюють із **власними** курʼєрами. Одна система замість дзвінків і таблиць: live GPS-трекінг, розумний диспатч, ETA доставки, гео-верифікований пруф доставки, інтеграції з POS і трекінг-віджет для клієнтів.
