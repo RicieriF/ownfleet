@@ -11,6 +11,16 @@ Open-source courier management platform for restaurants, cafés and pizzerias th
 
 ---
 
+## Screenshots
+
+| Manager dashboard — live KPIs, dispatch queue, courier panel | Live map — courier positions in real time (Leaflet + CARTO dark) |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Live map](docs/screenshots/map.png) |
+
+| Order history with status & date filters | Proof of delivery — geo verification, GPS accuracy, photo |
+|---|---|
+| ![History](docs/screenshots/history.png) | ![Proof of delivery](docs/screenshots/history-proof.png) |
+
 ## Engineering highlights
 
 - **Multi-tenant by construction** — every table carries `establishment_id`, tenant isolation enforced on every request via JWT payload + guards; covered by dedicated isolation tests.
