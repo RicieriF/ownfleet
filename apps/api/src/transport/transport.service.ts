@@ -74,6 +74,28 @@ export class TransportService {
       input.validation_status,
     );
 
+    if (input.type === CheckEventType.guardian_handoff) {
+      if (!input.guardian_id) {
+        throw new ConflictException('Guardian handoff requires a guardian');
+      }
+      const now = new Date();
+      const authorized = await this.prisma.authorizedPickup.findFirst({
+        where: {
+          establishment_id: user.establishment_id,
+          passenger_id: tripPassenger.passenger_id,
+          guardian_id: input.guardian_id,
+          active: true,
+          AND: [
+            { OR: [{ valid_from: null }, { valid_from: { lte: now } }] },
+            { OR: [{ valid_until: null }, { valid_until: { gte: now } }] },
+          ],
+        },
+      });
+      if (!authorized) {
+        throw new ForbiddenException('Guardian is not authorized for pickup');
+      }
+    }
+
     if (grantsConfirmedState && nextState) {
       assertPassengerTransition(tripPassenger.status, nextState);
     }
