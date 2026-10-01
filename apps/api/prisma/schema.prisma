@@ -221,6 +221,7 @@ model Courier {
   establishment_id            String
   name                        String
   phone                       String?
+  photo_url                   String?
   device_token                String?
   device_platform             DevicePlatform?
   active                      Boolean         @default(true)
@@ -528,6 +529,9 @@ model Vehicle {
   establishment_id String
   name             String
   plate            String?
+  model            String?
+  color            String?
+  photo_url        String?
   capacity         Int
   active           Boolean  @default(true)
   metadata         Json     @default("{}")
