@@ -42,5 +42,15 @@ describe('Transport Base V1 passenger safety state machine', () => {
     expect(eventGrantsConfirmedPassengerState('provisional_offline')).toBe(false);
     expect(eventGrantsConfirmedPassengerState('validated_online')).toBe(true);
     expect(eventGrantsConfirmedPassengerState('reconciled')).toBe(true);
+    expect(eventGrantsConfirmedPassengerState('rejected')).toBe(false);
+  });
+
+  it('allows incident resolution only through explicit dropoff', () => {
+    expect(canTransitionPassenger('incident', 'dropped_off')).toBe(true);
+    expect(canTransitionPassenger('incident', 'boarded')).toBe(false);
+  });
+
+  it('does not apply the school onboard completion guard to non-school trips', () => {
+    expect(() => assertTripCanComplete(false, ['boarded', 'in_transit'])).not.toThrow();
   });
 });
