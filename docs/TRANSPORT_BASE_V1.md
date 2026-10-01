@@ -81,7 +81,9 @@ Reuse existing plan/trial/billing infrastructure. Do not create a second subscri
 ## Family Safety surface
 Free guardian-facing surface:
 - vehicle position and freshness
-- confirmed driver/vehicle
+- confirmed driver identity (name + photo when available)
+- confirmed vehicle identity (plate + model/color when available)
+- explicit alert when the assigned driver or vehicle changes
 - ETA
 - passenger state
 - event history
@@ -89,6 +91,11 @@ Free guardian-facing surface:
 - authorized guardian management
 
 No public child location.
+
+### Driver/vehicle identity invariant
+A family must be able to identify the assigned driver and vehicle before handoff. The trip is the authority for the assigned driver and vehicle; live GPS alone is not identity proof.
+
+A driver or vehicle reassignment during an active trip is a security-significant event. It must be explicit, tenant-scoped, auditable, and trigger a guardian-facing notification before the new assignment is treated as normal. The family surface must visibly show the current driver identity and vehicle plate, with model/color/photo when available.
 
 ## Future-ready but hidden
 Prepare schema seams/capabilities only; do not build these V1 interfaces:
