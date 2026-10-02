@@ -7,34 +7,45 @@
  * The background task calls the tracking API directly using the stored token.
  * The foreground ping interval is started/stopped by the delivery screen.
  */
-import * as Location from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
-import * as Battery from 'expo-battery';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import * as Location from "expo-location";
+import * as TaskManager from "expo-task-manager";
+import * as Battery from "expo-battery";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+import { enqueueLocation, flushTransportOutbox } from "./transport-outbox";
 
-export const LOCATION_TASK_NAME = 'OWNFLEET_BACKGROUND_LOCATION';
+export const LOCATION_TASK_NAME = "OWNFLEET_BACKGROUND_LOCATION";
 const PING_INTERVAL_MS = 15_000; // 15 seconds
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 // ── Background task definition ────────────────────────────────────────────────
 // Must be defined at module top-level (TaskManager requirement)
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) {
-    console.warn('[location-task] error:', error.message);
+    console.warn("[location-task] error:", error.message);
     return;
   }
 
-  const locations = (data as { locations: Location.LocationObject[] })?.locations;
+  const locations = (data as { locations: Location.LocationObject[] })
+    ?.locations;
   if (!locations?.length) return;
 
   const { coords } = locations[locations.length - 1];
-  await sendPing(coords.latitude, coords.longitude, coords.accuracy ?? null);
+  await sendPing(
+    coords.latitude,
+    coords.longitude,
+    coords.accuracy ?? null,
+    locations[locations.length - 1].timestamp,
+  );
 });
 
 // ── Shared ping sender ────────────────────────────────────────────────────────
-async function sendPing(lat: number, lng: number, accuracy: number | null): Promise<void> {
-  const token = await AsyncStorage.getItem('access_token');
+async function sendPing(
+  lat: number,
+  lng: number,
+  accuracy: number | null,
+  capturedAtMs: number,
+): Promise<void> {
+  const token = await AsyncStorage.getItem("access_token");
   if (!token) return;
 
   let battery: number | null = null;
@@ -45,33 +56,30 @@ async function sendPing(lat: number, lng: number, accuracy: number | null): Prom
     // Battery API unavailable on some simulators
   }
 
-  try {
-    await fetch(`${API_URL}/api/v1/tracking/ping`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ lat, lng, battery }),
-    });
-  } catch {
-    // Fire-and-forget — ignore network errors
-  }
+  await enqueueLocation({
+    lat,
+    lng,
+    accuracy,
+    battery,
+    captured_at: new Date(capturedAtMs).toISOString(),
+  });
+  await flushTransportOutbox(token);
 }
 
 // ── Permissions ────────────────────────────────────────────────────────────────
 export async function requestLocationPermissions(): Promise<boolean> {
   const { status: fg } = await Location.requestForegroundPermissionsAsync();
-  if (fg !== 'granted') return false;
+  if (fg !== "granted") return false;
 
   // Background location required for GPS tracking while app is minimized
   const { status: bg } = await Location.requestBackgroundPermissionsAsync();
-  return bg === 'granted';
+  return bg === "granted";
 }
 
 // ── Background task (iOS + Android) ──────────────────────────────────────────
 export async function startBackgroundLocationTask(): Promise<void> {
-  const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
+  const isRegistered =
+    await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
   if (isRegistered) return;
 
   await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
@@ -79,18 +87,20 @@ export async function startBackgroundLocationTask(): Promise<void> {
     timeInterval: PING_INTERVAL_MS,
     distanceInterval: 0, // always ping on time interval
     showsBackgroundLocationIndicator: true, // iOS blue bar
-    foregroundService: Platform.OS === 'android'
-      ? {
-          notificationTitle: 'OwnFleet — доставка активна',
-          notificationBody: 'GPS відстеження увімкнено',
-          notificationColor: '#6aaa84',
-        }
-      : undefined,
+    foregroundService:
+      Platform.OS === "android"
+        ? {
+            notificationTitle: "OwnFleet — доставка активна",
+            notificationBody: "GPS відстеження увімкнено",
+            notificationColor: "#6aaa84",
+          }
+        : undefined,
   });
 }
 
 export async function stopBackgroundLocationTask(): Promise<void> {
-  const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
+  const isRegistered =
+    await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
   if (isRegistered) {
     await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
   }
@@ -110,7 +120,7 @@ export function startForegroundPingInterval(
         accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude, accuracy } = loc.coords;
-      await sendPing(latitude, longitude, accuracy);
+      await sendPing(latitude, longitude, accuracy, loc.timestamp);
       onPing?.(latitude, longitude);
     } catch {
       // Ignore — background task covers gaps
