@@ -6,6 +6,7 @@ import {
 import {
   PassengerQrAction,
   PassengerTripStatus,
+  DevicePlatform,
   TripStatus,
   UserRole,
 } from '@prisma/client';
@@ -27,7 +28,7 @@ const sha256 = (value: string) =>
 
 function createMocks() {
   const prisma = {
-    guardian: { findFirst: jest.fn() },
+    guardian: { findFirst: jest.fn(), update: jest.fn() },
     familyAccessToken: {
       create: jest.fn(),
       findUnique: jest.fn(),
@@ -306,5 +307,42 @@ describe('FamilyTransportService QR exceptions', () => {
       },
     });
     expect(prisma.passengerQrException.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('FamilyTransportService device registration', () => {
+  it('registers a device only for the guardian resolved from the access token', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+    prisma.guardian.update.mockResolvedValue({});
+
+    await expect(
+      service.registerDevice(
+        'fcm-token-with-sufficient-length',
+        DevicePlatform.android,
+        'family-secret',
+      ),
+    ).resolves.toEqual({ registered: true });
+    expect(prisma.guardian.update).toHaveBeenCalledWith({
+      where: { id: 'guardian-1' },
+      data: {
+        device_token: 'fcm-token-with-sufficient-length',
+        device_platform: DevicePlatform.android,
+      },
+    });
+  });
+
+  it('clears the authenticated guardian device without accepting a client ID', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+    prisma.guardian.update.mockResolvedValue({});
+
+    await expect(service.unregisterDevice('family-secret')).resolves.toEqual({
+      registered: false,
+    });
+    expect(prisma.guardian.update).toHaveBeenCalledWith({
+      where: { id: 'guardian-1' },
+      data: { device_token: null, device_platform: null },
+    });
   });
 });

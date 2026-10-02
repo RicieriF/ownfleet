@@ -10,7 +10,11 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import type IORedis from 'ioredis';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
-import { PassengerQrAction, PassengerTripStatus } from '@prisma/client';
+import {
+  DevicePlatform,
+  PassengerQrAction,
+  PassengerTripStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
 
@@ -309,6 +313,28 @@ export class FamilyTransportService {
       where: { id: exception.id },
       data: { revoked_at: new Date() },
     });
+  }
+
+  async registerDevice(
+    deviceToken: string,
+    platform: DevicePlatform,
+    rawToken: string | undefined,
+  ) {
+    const access = await this.resolveAccess(rawToken);
+    await this.prisma.guardian.update({
+      where: { id: access.guardian_id },
+      data: { device_token: deviceToken, device_platform: platform },
+    });
+    return { registered: true };
+  }
+
+  async unregisterDevice(rawToken: string | undefined) {
+    const access = await this.resolveAccess(rawToken);
+    await this.prisma.guardian.update({
+      where: { id: access.guardian_id },
+      data: { device_token: null, device_platform: null },
+    });
+    return { registered: false };
   }
 
   private async resolveAccess(rawToken: string | undefined) {

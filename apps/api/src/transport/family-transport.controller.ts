@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { FamilyTransportService } from './family-transport.service.js';
 import { CreateQrExceptionDto } from './dto/create-qr-exception.dto.js';
+import { RegisterFamilyDeviceDto } from './dto/register-family-device.dto.js';
 
 @Controller('transport/family')
 export class FamilyTransportController {
@@ -59,5 +60,20 @@ export class FamilyTransportController {
     @Headers('x-family-token') token?: string,
   ) {
     return this.service.revokeQrException(id, token);
+  }
+
+  @Post('device')
+  @HttpCode(HttpStatus.OK)
+  registerDevice(
+    @Body() dto: RegisterFamilyDeviceDto,
+    @Headers('x-family-token') token?: string,
+  ) {
+    return this.service.registerDevice(dto.device_token, dto.platform, token);
+  }
+
+  @Delete('device')
+  @HttpCode(HttpStatus.OK)
+  unregisterDevice(@Headers('x-family-token') token?: string) {
+    return this.service.unregisterDevice(token);
   }
 }
