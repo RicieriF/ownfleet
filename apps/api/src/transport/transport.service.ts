@@ -1,14 +1,17 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   CheckEvent,
   CheckEventType,
   CheckValidationStatus,
   PassengerTripStatus,
+  PassengerQrAction,
   Prisma,
   TripStatus,
 } from '@prisma/client';
@@ -31,13 +34,64 @@ export interface RecordCheckEventInput {
   lng?: number;
   accuracy?: number;
   guardian_id?: string;
-  qr_nonce_hash?: string;
+  qr_token?: string;
+  override_reason?: string;
   metadata?: Prisma.InputJsonValue;
 }
 
 @Injectable()
 export class TransportService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async issuePassengerQrToken(
+    tripPassengerId: string,
+    action: PassengerQrAction,
+    ttlSeconds: number,
+    user: AuthenticatedUser,
+  ) {
+    if (user.courier_id) {
+      throw new ForbiddenException('Drivers cannot issue passenger QR tokens');
+    }
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds < 30 || ttlSeconds > 600) {
+      throw new BadRequestException(
+        'QR token TTL must be between 30 and 600 seconds',
+      );
+    }
+    const tripPassenger = await this.prisma.tripPassenger.findFirst({
+      where: {
+        id: tripPassengerId,
+        establishment_id: user.establishment_id,
+      },
+      include: { trip: true },
+    });
+    if (!tripPassenger) throw new NotFoundException('Trip passenger not found');
+    if (
+      tripPassenger.trip.status !== TripStatus.planned &&
+      tripPassenger.trip.status !== TripStatus.active
+    ) {
+      throw new ConflictException('QR tokens require a planned or active trip');
+    }
+
+    const secret = randomBytes(24).toString('base64url');
+    const nonce = randomBytes(16).toString('base64url');
+    const token = `${secret}.${nonce}`;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+    await this.prisma.passengerQrToken.create({
+      data: {
+        establishment_id: user.establishment_id,
+        passenger_id: tripPassenger.passenger_id,
+        trip_id: tripPassenger.trip_id,
+        courier_id: tripPassenger.trip.courier_id,
+        vehicle_id: tripPassenger.trip.vehicle_id,
+        action,
+        token_hash: this.hashQrValue(secret),
+        nonce_hash: this.hashQrValue(nonce),
+        expires_at: expiresAt,
+      },
+    });
+
+    return { token, action, expires_at: expiresAt };
+  }
 
   async recordCheckEvent(
     input: RecordCheckEventInput,
@@ -66,7 +120,7 @@ export class TransportService {
         trip_id: input.trip_id,
         establishment_id: user.establishment_id,
       },
-      include: { trip: true },
+      include: { trip: true, passenger: true },
     });
     if (!tripPassenger) throw new NotFoundException('Trip passenger not found');
     if (tripPassenger.trip.courier_id !== user.courier_id) {
@@ -80,12 +134,84 @@ export class TransportService {
     const grantsConfirmedState = eventGrantsConfirmedPassengerState(
       input.validation_status,
     );
+    const qrAction = this.qrActionForEvent(input.type);
+    const qrRequired =
+      qrAction === PassengerQrAction.board
+        ? tripPassenger.passenger.pickup_qr_required
+        : qrAction === PassengerQrAction.guardian_handoff
+          ? tripPassenger.passenger.handoff_qr_required
+          : false;
+    const now = new Date();
+    let qrToken: Awaited<
+      ReturnType<typeof this.prisma.passengerQrToken.findUnique>
+    > = null;
+    let qrException: { id: string; used_count: number } | null = null;
+
+    if (input.override_reason?.trim() && (!qrRequired || !qrAction)) {
+      throw new ConflictException(
+        'QR override is not applicable to this event',
+      );
+    }
+
+    if (grantsConfirmedState && qrRequired && qrAction) {
+      if (input.override_reason?.trim()) {
+        // The reason is persisted below in server-controlled audit metadata.
+      } else {
+        const exceptions = await this.prisma.passengerQrException.findMany({
+          where: {
+            establishment_id: user.establishment_id,
+            passenger_id: tripPassenger.passenger_id,
+            action: qrAction,
+            revoked_at: null,
+            valid_from: { lte: now },
+            valid_until: { gte: now },
+            OR: [{ trip_id: null }, { trip_id: input.trip_id }],
+          },
+          select: { id: true, used_count: true, max_uses: true },
+          orderBy: { created_at: 'asc' },
+        });
+        const availableException = exceptions.find(
+          (exception) => exception.used_count < exception.max_uses,
+        );
+        if (availableException) {
+          qrException = availableException;
+        } else {
+          if (!input.qr_token) {
+            throw new ForbiddenException('Passenger QR is required');
+          }
+          const parsedQr = this.parseQrToken(input.qr_token);
+          qrToken = await this.prisma.passengerQrToken.findUnique({
+            where: { token_hash: this.hashQrValue(parsedQr.secret) },
+          });
+          if (!qrToken || qrToken.establishment_id !== user.establishment_id) {
+            throw new ForbiddenException('Invalid passenger QR');
+          }
+          if (qrToken.used_at) {
+            throw new ConflictException('Passenger QR was already used');
+          }
+          if (qrToken.expires_at <= now) {
+            throw new ForbiddenException('Passenger QR has expired');
+          }
+          if (!this.hashesMatch(qrToken.nonce_hash, parsedQr.nonce)) {
+            throw new ForbiddenException('Invalid passenger QR');
+          }
+          if (
+            qrToken.passenger_id !== tripPassenger.passenger_id ||
+            qrToken.trip_id !== input.trip_id ||
+            qrToken.action !== qrAction ||
+            qrToken.courier_id !== user.courier_id ||
+            qrToken.vehicle_id !== tripPassenger.trip.vehicle_id
+          ) {
+            throw new ForbiddenException('Passenger QR context does not match');
+          }
+        }
+      }
+    }
 
     if (input.type === CheckEventType.guardian_handoff) {
       if (!input.guardian_id) {
         throw new ConflictException('Guardian handoff requires a guardian');
       }
-      const now = new Date();
       const authorized = await this.prisma.authorizedPickup.findFirst({
         where: {
           establishment_id: user.establishment_id,
@@ -124,10 +250,29 @@ export class TransportService {
             lat: input.lat,
             lng: input.lng,
             accuracy: input.accuracy,
-            qr_nonce_hash: input.qr_nonce_hash,
-            metadata: input.metadata ?? {},
+            qr_nonce_hash: qrToken?.nonce_hash,
+            metadata: this.auditMetadata(input, qrToken?.id, qrException?.id),
           },
         });
+
+        if (qrToken) {
+          const consumed = await tx.passengerQrToken.updateMany({
+            where: { id: qrToken.id, used_at: null, expires_at: { gt: now } },
+            data: { used_at: now },
+          });
+          if (consumed.count === 0) {
+            throw new ConflictException('Passenger QR was already used');
+          }
+        }
+        if (qrException) {
+          const consumed = await tx.passengerQrException.updateMany({
+            where: { id: qrException.id, used_count: qrException.used_count },
+            data: { used_count: { increment: 1 } },
+          });
+          if (consumed.count === 0) {
+            throw new ConflictException('QR exception was already consumed');
+          }
+        }
 
         if (grantsConfirmedState && nextState) {
           const update = await tx.tripPassenger.updateMany({
@@ -239,12 +384,69 @@ export class TransportService {
       event.lat === (input.lat ?? null) &&
       event.lng === (input.lng ?? null) &&
       event.accuracy === (input.accuracy ?? null) &&
-      event.qr_nonce_hash === (input.qr_nonce_hash ?? null);
+      (input.qr_token
+        ? event.qr_nonce_hash ===
+          this.hashQrValue(this.parseQrToken(input.qr_token).nonce)
+        : true);
 
     if (!matches) {
       throw new ConflictException(
         'event_uid already belongs to a different passenger event',
       );
     }
+  }
+
+  private qrActionForEvent(type: CheckEventType): PassengerQrAction | null {
+    if (type === CheckEventType.board) return PassengerQrAction.board;
+    if (type === CheckEventType.guardian_handoff) {
+      return PassengerQrAction.guardian_handoff;
+    }
+    return null;
+  }
+
+  private hashQrValue(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+
+  private parseQrToken(token: string): { secret: string; nonce: string } {
+    const [secret, nonce, extra] = token.split('.');
+    if (!secret || !nonce || extra) {
+      throw new ForbiddenException('Invalid passenger QR');
+    }
+    return { secret, nonce };
+  }
+
+  private hashesMatch(expectedHash: string, rawValue: string): boolean {
+    const actualHash = this.hashQrValue(rawValue);
+    return timingSafeEqual(
+      Buffer.from(expectedHash, 'hex'),
+      Buffer.from(actualHash, 'hex'),
+    );
+  }
+
+  private auditMetadata(
+    input: RecordCheckEventInput,
+    qrTokenId?: string,
+    qrExceptionId?: string,
+  ): Prisma.InputJsonObject {
+    const metadata: Prisma.InputJsonObject = this.isJsonObject(input.metadata)
+      ? input.metadata
+      : {};
+    return {
+      ...metadata,
+      transport_verification: input.override_reason?.trim()
+        ? { mode: 'driver_override', reason: input.override_reason.trim() }
+        : qrExceptionId
+          ? { mode: 'guardian_exception', exception_id: qrExceptionId }
+          : qrTokenId
+            ? { mode: 'qr', token_id: qrTokenId }
+            : { mode: 'not_required' },
+    };
+  }
+
+  private isJsonObject(
+    value: Prisma.InputJsonValue | undefined,
+  ): value is Prisma.InputJsonObject {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }
