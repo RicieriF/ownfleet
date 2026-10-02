@@ -77,6 +77,10 @@ function createPrismaMock() {
       findUnique: jest.fn(),
     },
     passengerQrException: { findMany: jest.fn().mockResolvedValue([]) },
+    passengerGuardian: { findMany: jest.fn().mockResolvedValue([]) },
+    establishment: {
+      findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }),
+    },
     trip: {
       findFirst: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -99,6 +103,49 @@ describe('TransportService check-event idempotency', () => {
     );
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(tx.tripPassenger.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('notifies related guardians once after a confirmed boarding', async () => {
+    const { prisma } = createPrismaMock();
+    prisma.checkEvent.findUnique.mockResolvedValue(null);
+    prisma.tripPassenger.findFirst.mockResolvedValue({
+      id: 'tp-1',
+      trip_id: 'trip-1',
+      passenger_id: 'passenger-1',
+      status: PassengerTripStatus.waiting,
+      trip: {
+        courier_id: 'driver-1',
+        vehicle_id: 'vehicle-1',
+        status: TripStatus.active,
+        school_safety: false,
+      },
+      passenger: {
+        pickup_qr_required: false,
+        handoff_qr_required: false,
+      },
+      dropoff_stop: null,
+    });
+    prisma.passengerGuardian.findMany.mockResolvedValue([
+      { guardian_id: 'guardian-1' },
+    ]);
+    const notifications = {
+      sendGuardianPush: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new TransportService(
+      prisma as unknown as PrismaService,
+      notifications as never,
+    );
+
+    await service.recordCheckEvent(input, user);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifications.sendGuardianPush).toHaveBeenCalledWith(
+      'guardian-1',
+      expect.objectContaining({
+        body: 'Embarcou às 08:00',
+        data: expect.objectContaining({ event_uid: 'evt-1' }),
+      }),
+    );
   });
 
   it('rejects reuse of an event UID with different event content', async () => {

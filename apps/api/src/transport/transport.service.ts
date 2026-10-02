@@ -3,7 +3,9 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
@@ -18,6 +20,7 @@ import {
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { haversineMeters } from '../shared/geo.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import {
   assertPassengerTransition,
   assertTripCanComplete,
@@ -45,7 +48,12 @@ export interface RecordCheckEventInput {
 
 @Injectable()
 export class TransportService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(TransportService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async createAuthorizedPickup(
     passengerId: string,
@@ -379,7 +387,7 @@ export class TransportService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const event = await this.prisma.$transaction(async (tx) => {
         const event = await tx.checkEvent.create({
           data: {
             establishment_id: user.establishment_id,
@@ -448,6 +456,19 @@ export class TransportService {
 
         return event;
       });
+      if (grantsConfirmedState) {
+        void this.notifyGuardians(
+          user.establishment_id,
+          tripPassenger.passenger_id,
+          input,
+        ).catch((error: unknown) =>
+          this.logger.warn(
+            `Guardian check-event notification failed for ${input.event_uid}`,
+            error,
+          ),
+        );
+      }
+      return event;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -463,6 +484,69 @@ export class TransportService {
       }
       throw error;
     }
+  }
+
+  private async notifyGuardians(
+    establishmentId: string,
+    passengerId: string,
+    input: RecordCheckEventInput,
+  ): Promise<void> {
+    if (!this.notifications) return;
+    const notification = this.notificationForEvent(input.type);
+    if (!notification) return;
+    const [links, establishment] = await Promise.all([
+      this.prisma.passengerGuardian.findMany({
+        where: {
+          passenger_id: passengerId,
+          guardian: { active: true },
+        },
+        distinct: ['guardian_id'],
+        select: { guardian_id: true },
+      }),
+      this.prisma.establishment.findUnique({
+        where: { id: establishmentId },
+        select: { timezone: true },
+      }),
+    ]);
+    const time = new Intl.DateTimeFormat('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: establishment?.timezone ?? 'UTC',
+    }).format(input.captured_at);
+    await Promise.allSettled(
+      links.map((link) =>
+        this.notifications!.sendGuardianPush(link.guardian_id, {
+          title: notification.title,
+          body: notification.withTime
+            ? `${notification.body} ${time}`
+            : notification.body,
+          data: {
+            trip_id: input.trip_id,
+            trip_passenger_id: input.trip_passenger_id,
+            event_uid: input.event_uid,
+            event_type: input.type,
+          },
+        }),
+      ),
+    );
+  }
+
+  private notificationForEvent(type: CheckEventType) {
+    if (type === CheckEventType.board) {
+      return { title: 'Transporte', body: 'Embarcou às', withTime: true };
+    }
+    if (type === CheckEventType.dropoff) {
+      return { title: 'Transporte', body: 'Chegou na escola', withTime: false };
+    }
+    if (type === CheckEventType.guardian_handoff) {
+      return {
+        title: 'Transporte',
+        body: 'Entrega confirmada às',
+        withTime: true,
+      };
+    }
+    return null;
   }
 
   async completeTrip(tripId: string, user: AuthenticatedUser) {
