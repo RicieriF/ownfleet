@@ -10,6 +10,7 @@ import { TransportMode } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { haversineMeters } from '../shared/geo.js';
 import { randomUUID } from 'node:crypto';
+import { TransportApproachService } from '../transport/transport-approach.service.js';
 
 const LOCATION_TTL_SEC = 5 * 60; // 5 min cache in Redis
 const PUBSUB_CHANNEL = 'courier_moved';
@@ -62,6 +63,7 @@ export class TrackingService {
     @InjectRedis() private readonly redis: Redis,
     @InjectQueue(PING_PERSIST_QUEUE) private readonly pingQueue: Queue<PingJob>,
     config: ConfigService,
+    private readonly transportApproach: TransportApproachService,
   ) {
     this.osrmUrl =
       config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
@@ -112,6 +114,11 @@ export class TrackingService {
     // ── Public tracking: location + route deviation ────────────────────────
     if (isLatestPosition) {
       void this.handlePublicTracking(courierId, dto.lat, dto.lng);
+      void this.transportApproach
+        .handlePosition(courierId, user.establishment_id, dto.lat, dto.lng)
+        .catch((err: unknown) =>
+          this.logger.warn('Transport approach check failed', err),
+        );
     }
 
     // ── Async DB persist ───────────────────────────────────────────────────

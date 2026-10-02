@@ -5,6 +5,7 @@ import { getQueueToken } from '@nestjs/bull';
 import { TrackingService, PING_PERSIST_QUEUE } from '../tracking.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../redis.provider.js';
+import { TransportApproachService } from '../../transport/transport-approach.service.js';
 
 const EST_A = 'est-a';
 const EST_B = 'est-b';
@@ -46,6 +47,10 @@ const mockPingQueue = {
   add: jest.fn().mockResolvedValue({}),
 };
 
+const mockTransportApproach = {
+  handlePosition: jest.fn().mockResolvedValue(undefined),
+};
+
 describe('TrackingService', () => {
   let service: TrackingService;
 
@@ -56,6 +61,7 @@ describe('TrackingService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: REDIS_CLIENT, useValue: mockRedis },
         { provide: getQueueToken(PING_PERSIST_QUEUE), useValue: mockPingQueue },
+        { provide: TransportApproachService, useValue: mockTransportApproach },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue(undefined) },
@@ -69,6 +75,7 @@ describe('TrackingService', () => {
     mockRedis.publish.mockResolvedValue(1);
     mockRedis.eval.mockResolvedValue(1);
     mockPingQueue.add.mockResolvedValue({});
+    mockTransportApproach.handlePosition.mockResolvedValue(undefined);
   });
 
   describe('handlePing', () => {
@@ -125,6 +132,7 @@ describe('TrackingService', () => {
 
       expect(mockPingQueue.add).toHaveBeenCalled();
       expect(mockRedis.publish).not.toHaveBeenCalled();
+      expect(mockTransportApproach.handlePosition).not.toHaveBeenCalled();
     });
 
     it('syncs offline pings in captured order with stable job IDs', async () => {
