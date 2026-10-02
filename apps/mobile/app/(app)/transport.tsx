@@ -30,6 +30,7 @@ import {
   type ConnectivityState,
 } from "@/services/transport-outbox";
 import { useAuthStore } from "@/store/auth";
+import { cacheOfflineRouteManifest } from "@/services/offline-route-pack";
 
 type Passenger = DriverTransportTrip["passengers"][number];
 
@@ -80,6 +81,7 @@ export default function TransportScreen() {
       if (!(await requestLocationPermissions())) {
         throw new Error("Autorize a localização para iniciar a viagem.");
       }
+      await cacheOfflineRouteManifest(trip.id);
       await apiPost(`/api/v1/transport/trips/${trip.id}/start`);
       await startBackgroundLocationTask();
       await refresh();

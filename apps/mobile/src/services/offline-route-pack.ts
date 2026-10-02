@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiGet } from "../api/client";
 
 const ROUTE_PACK_STATE_KEY = "transport_offline_route_packs_v1";
+const ROUTE_PACK_MANIFEST_KEY = "transport_offline_route_manifests_v1";
 
 export interface OfflineRoutePackManifest {
   manifest_version: number;
@@ -103,6 +104,29 @@ export async function prepareOfflineRoutePack(
   }
 }
 
+export async function cacheOfflineRouteManifest(
+  tripId: string,
+): Promise<OfflineRoutePackManifest> {
+  const manifest = await apiGet<OfflineRoutePackManifest>(
+    `/api/v1/transport/trips/${tripId}/offline-route-pack`,
+  );
+  const raw = await AsyncStorage.getItem(ROUTE_PACK_MANIFEST_KEY);
+  let manifests: Record<string, OfflineRoutePackManifest> = {};
+  if (raw) {
+    try {
+      manifests = JSON.parse(raw) as Record<string, OfflineRoutePackManifest>;
+    } catch {
+      manifests = {};
+    }
+  }
+  manifests[tripId] = manifest;
+  await AsyncStorage.setItem(
+    ROUTE_PACK_MANIFEST_KEY,
+    JSON.stringify(manifests),
+  );
+  return manifest;
+}
+
 export async function getOfflineRoutePackState(
   tripId: string,
 ): Promise<OfflineRoutePackState | null> {
@@ -117,4 +141,20 @@ export async function removeOfflineRoutePack(
   const states = await readStates();
   delete states[tripId];
   await AsyncStorage.setItem(ROUTE_PACK_STATE_KEY, JSON.stringify(states));
+  const raw = await AsyncStorage.getItem(ROUTE_PACK_MANIFEST_KEY);
+  if (raw) {
+    try {
+      const manifests = JSON.parse(raw) as Record<
+        string,
+        OfflineRoutePackManifest
+      >;
+      delete manifests[tripId];
+      await AsyncStorage.setItem(
+        ROUTE_PACK_MANIFEST_KEY,
+        JSON.stringify(manifests),
+      );
+    } catch {
+      await AsyncStorage.removeItem(ROUTE_PACK_MANIFEST_KEY);
+    }
+  }
 }
