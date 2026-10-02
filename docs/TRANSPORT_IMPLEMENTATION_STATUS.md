@@ -13,15 +13,17 @@
 - Tenant-scoped AuthorizedPickup creation, history, and revocation.
 - Idempotent location ingestion with monotonic live-position cache.
 - Persistent mobile outbox with ordered retry and authoritative reconciliation.
+- Guardian-managed, bounded QR exception issuance and revocation.
+- Family device registration and safety-event push notifications.
 
 ## Validated
 - Prisma generate and schema validation.
-- API typecheck, lint, build, and 591 unit tests.
+- API typecheck, lint, build, and 598 unit tests.
 - Web typecheck, production build, and 22 unit tests.
 - Mobile typecheck.
 
 ## In progress
-- Guardian-managed QR exception lifecycle.
+- Vehicle-approach notification trigger.
 - Automatic offline route-pack provider abstraction.
 - Transport-specific family and driver user interfaces.
 
@@ -30,13 +32,12 @@
 - Mobile lint has no ESLint configuration in the current baseline.
 
 ## Next
-- Add guardian-managed QR exception issuance and revocation endpoints.
-- Add approach, boarding, arrival, and assignment-change notification triggers.
+- Add the deduplicated vehicle-approach notification trigger.
 - Add offline route-pack orchestration without selecting a commercial provider.
 
 ## Last validation
 - Command: `npm test -- --runInBand` in `apps/api`.
-- Result: PASS, 37 suites and 591 tests.
+- Result: PASS, 37 suites and 598 tests.
 - Command: `npm test` and `npm run build` in `apps/web`.
 - Result: PASS, 22 tests and production build.
 - Command: `npx tsc --noEmit -p tsconfig.json` in `apps/mobile`.
