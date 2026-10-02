@@ -15,16 +15,17 @@
 - Persistent mobile outbox with ordered retry and authoritative reconciliation.
 - Guardian-managed, bounded QR exception issuance and revocation.
 - Family device registration and safety-event push notifications.
+- Deduplicated vehicle-approach notifications for waiting passengers.
+- Provider-neutral offline route-pack manifest and mobile preparation seam.
 
 ## Validated
 - Prisma generate and schema validation.
-- API typecheck, lint, build, and 598 unit tests.
+- API typecheck, lint, build, and 604 unit tests.
 - Web typecheck, production build, and 22 unit tests.
 - Mobile typecheck.
 
 ## In progress
-- Vehicle-approach notification trigger.
-- Automatic offline route-pack provider abstraction.
+- Automatic route-pack preparation trigger in the transport driver workflow.
 - Transport-specific family and driver user interfaces.
 
 ## Blocked
@@ -32,12 +33,13 @@
 - Mobile lint has no ESLint configuration in the current baseline.
 
 ## Next
-- Add the deduplicated vehicle-approach notification trigger.
-- Add offline route-pack orchestration without selecting a commercial provider.
+- Wire route-pack preparation to the future transport trip workflow.
+- Add transport driver workflow with large, state-aware controls.
+- Add family home UI backed by the protected aggregate endpoint.
 
 ## Last validation
 - Command: `npm test -- --runInBand` in `apps/api`.
-- Result: PASS, 37 suites and 598 tests.
+- Result: PASS, 39 suites and 604 tests.
 - Command: `npm test` and `npm run build` in `apps/web`.
 - Result: PASS, 22 tests and production build.
 - Command: `npx tsc --noEmit -p tsconfig.json` in `apps/mobile`.
