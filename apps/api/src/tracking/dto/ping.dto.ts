@@ -1,4 +1,12 @@
-import { IsNumber, IsOptional, IsInt, Min, Max } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class PingDto {
   @IsNumber()
@@ -16,4 +24,17 @@ export class PingDto {
   @Min(0)
   @Max(100)
   battery?: number;
+
+  @IsOptional()
+  @IsUUID()
+  event_uid?: string;
+
+  @IsOptional()
+  @IsDateString()
+  captured_at?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  accuracy?: number;
 }

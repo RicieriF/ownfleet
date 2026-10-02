@@ -29,6 +29,7 @@ import { PublicTrackingModule } from './public-tracking/public-tracking.module.j
 import { MetricsModule } from './metrics/metrics.module.js';
 import { TeamModule } from './team/team.module.js';
 import { HealthController } from './health/health.controller.js';
+import { TransportModule } from './transport/transport.module.js';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { HealthController } from './health/health.controller.js';
     PublicTrackingModule,
     MetricsModule,
     TeamModule,
+    TransportModule,
   ],
   controllers: [HealthController],
   providers: [

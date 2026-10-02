@@ -9,6 +9,8 @@ import { PingDto } from './dto/ping.dto.js';
 import { TransportMode } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { haversineMeters } from '../shared/geo.js';
+import { randomUUID } from 'node:crypto';
+import { TransportApproachService } from '../transport/transport-approach.service.js';
 
 const LOCATION_TTL_SEC = 5 * 60; // 5 min cache in Redis
 const PUBSUB_CHANNEL = 'courier_moved';
@@ -24,10 +26,13 @@ const OSRM_PROFILE: Record<TransportMode, string> = {
 export const PING_PERSIST_QUEUE = 'ping-persist';
 
 export interface PingJob {
+  event_uid: string;
   courier_id: string;
   lat: number;
   lng: number;
   battery: number | null;
+  accuracy: number | null;
+  captured_at: string;
 }
 
 export interface CourierMovedEvent {
@@ -58,6 +63,7 @@ export class TrackingService {
     @InjectRedis() private readonly redis: Redis,
     @InjectQueue(PING_PERSIST_QUEUE) private readonly pingQueue: Queue<PingJob>,
     config: ConfigService,
+    private readonly transportApproach: TransportApproachService,
   ) {
     this.osrmUrl =
       config.get<string>('OSRM_URL') ?? 'https://router.project-osrm.org';
@@ -69,52 +75,65 @@ export class TrackingService {
     }
 
     const courierId = user.courier_id;
+    const eventUid = dto.event_uid ?? randomUUID();
+    const capturedAt = dto.captured_at ? new Date(dto.captured_at) : new Date();
+    const capturedAtMs = capturedAt.getTime();
 
     // ── Cache last known location ──────────────────────────────────────────
     const redisKey = `courier:location:${courierId}`;
+    let isLatestPosition = false;
     try {
-      await this.redis.setex(
-        redisKey,
-        LOCATION_TTL_SEC,
-        JSON.stringify({
-          lat: dto.lat,
-          lng: dto.lng,
-          battery: dto.battery ?? null,
-          ts: Date.now(),
-        }),
-      );
+      isLatestPosition = await this.cachePositionIfNewer(redisKey, {
+        lat: dto.lat,
+        lng: dto.lng,
+        battery: dto.battery ?? null,
+        accuracy: dto.accuracy ?? null,
+        ts: capturedAtMs,
+      });
     } catch (err) {
       this.logger.warn('Redis setex failed for ping cache — continuing', err);
     }
 
     // ── Pub/Sub to manager dashboard ───────────────────────────────────────
-    const event: CourierMovedEvent = {
-      courier_id: courierId,
-      establishment_id: user.establishment_id,
-      lat: dto.lat,
-      lng: dto.lng,
-      battery: dto.battery ?? null,
-      ts: Date.now(),
-    };
-    this.redis
-      .publish(PUBSUB_CHANNEL, JSON.stringify(event))
-      .catch((err) =>
-        this.logger.warn('Redis publish failed for courier_moved event', err),
-      );
+    if (isLatestPosition) {
+      const event: CourierMovedEvent = {
+        courier_id: courierId,
+        establishment_id: user.establishment_id,
+        lat: dto.lat,
+        lng: dto.lng,
+        battery: dto.battery ?? null,
+        ts: capturedAtMs,
+      };
+      this.redis
+        .publish(PUBSUB_CHANNEL, JSON.stringify(event))
+        .catch((err) =>
+          this.logger.warn('Redis publish failed for courier_moved event', err),
+        );
+    }
 
     // ── Public tracking: location + route deviation ────────────────────────
-    void this.handlePublicTracking(courierId, dto.lat, dto.lng);
+    if (isLatestPosition) {
+      void this.handlePublicTracking(courierId, dto.lat, dto.lng);
+      void this.transportApproach
+        .handlePosition(courierId, user.establishment_id, dto.lat, dto.lng)
+        .catch((err: unknown) =>
+          this.logger.warn('Transport approach check failed', err),
+        );
+    }
 
     // ── Async DB persist ───────────────────────────────────────────────────
     try {
       await this.pingQueue.add(
         {
+          event_uid: eventUid,
           courier_id: courierId,
           lat: dto.lat,
           lng: dto.lng,
           battery: dto.battery ?? null,
+          accuracy: dto.accuracy ?? null,
+          captured_at: capturedAt.toISOString(),
         },
-        {},
+        { jobId: eventUid },
       );
     } catch (err) {
       this.logger.warn(
@@ -122,6 +141,48 @@ export class TrackingService {
         err,
       );
     }
+  }
+
+  async syncPings(dtos: PingDto[], user: AuthenticatedUser) {
+    const ordered = [...dtos].sort((a, b) =>
+      (a.captured_at ?? '').localeCompare(b.captured_at ?? ''),
+    );
+    for (const dto of ordered) {
+      await this.handlePing(dto, user);
+    }
+    return { accepted_event_uids: ordered.map((dto) => dto.event_uid) };
+  }
+
+  private async cachePositionIfNewer(
+    key: string,
+    position: {
+      lat: number;
+      lng: number;
+      battery: number | null;
+      accuracy: number | null;
+      ts: number;
+    },
+  ): Promise<boolean> {
+    const script = `
+      local current = redis.call('GET', KEYS[1])
+      if current then
+        local decoded = cjson.decode(current)
+        if decoded.ts and tonumber(decoded.ts) > tonumber(ARGV[1]) then
+          return 0
+        end
+      end
+      redis.call('SETEX', KEYS[1], ARGV[2], ARGV[3])
+      return 1
+    `;
+    const result = await this.redis.eval(
+      script,
+      1,
+      key,
+      String(position.ts),
+      String(LOCATION_TTL_SEC),
+      JSON.stringify(position),
+    );
+    return Number(result) === 1;
   }
 
   private async handlePublicTracking(

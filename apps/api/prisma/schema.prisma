@@ -88,39 +88,90 @@ enum DispatchMode {
   auto
 }
 
+enum PassengerTripStatus {
+  waiting
+  boarded
+  in_transit
+  dropped_off
+  absent
+  incident
+}
+
+enum TripStatus {
+  planned
+  active
+  completed
+  cancelled
+  incident
+}
+
+enum CheckEventType {
+  board
+  depart
+  dropoff
+  guardian_handoff
+  absence
+  incident
+}
+
+enum CheckValidationStatus {
+  validated_online
+  provisional_offline
+  reconciled
+  rejected
+}
+
+enum PassengerQrAction {
+  board
+  guardian_handoff
+}
+
 // ─────────────────────────────────────────
 // Establishments (tenants)
 // ─────────────────────────────────────────
 
 model Establishment {
-  id                String           @id @default(uuid())
-  name              String
-  slug              String           @unique
-  plan              Plan             @default(starter)
-  trial_ends_at     DateTime?
-  paid_until        DateTime?
-  onboarding_status OnboardingStatus @default(pending)
-  settings          Json             @default("{}")
-  timezone          String           @default("Europe/Kyiv")
-  dispatch_mode     DispatchMode     @default(manual)
-  delivery_sla_minutes Int?
-  lat               Float?
-  lng               Float?
-  city              String?
-  hosted_tracking_enabled Boolean  @default(false)
-  created_at        DateTime         @default(now())
-  updated_at        DateTime         @updatedAt
+  id                      String           @id @default(uuid())
+  name                    String
+  slug                    String           @unique
+  plan                    Plan             @default(starter)
+  trial_ends_at           DateTime?
+  paid_until              DateTime?
+  onboarding_status       OnboardingStatus @default(pending)
+  settings                Json             @default("{}")
+  timezone                String           @default("Europe/Kyiv")
+  dispatch_mode           DispatchMode     @default(manual)
+  delivery_sla_minutes    Int?
+  lat                     Float?
+  lng                     Float?
+  city                    String?
+  hosted_tracking_enabled Boolean          @default(false)
+  created_at              DateTime         @default(now())
+  updated_at              DateTime         @updatedAt
 
-  users          User[]
-  couriers       Courier[]
-  shifts         Shift[]
-  orders         Order[]
-  integrations   Integration[]
-  webhooks       Webhook[]
-  invite_tokens  InviteToken[]
-  retention_logs RetentionLog[]
-  billing_events BillingEvent[]
-  api_keys       ApiKey[]
+  users              User[]
+  couriers           Courier[]
+  shifts             Shift[]
+  orders             Order[]
+  integrations       Integration[]
+  webhooks           Webhook[]
+  invite_tokens      InviteToken[]
+  retention_logs     RetentionLog[]
+  billing_events     BillingEvent[]
+  api_keys           ApiKey[]
+  vehicles           Vehicle[]
+  passengers         Passenger[]
+  guardians          Guardian[]
+  routes             Route[]
+  route_stops        RouteStop[]
+  trips              Trip[]
+  trip_passengers    TripPassenger[]
+  check_events       CheckEvent[]
+  authorized_pickups AuthorizedPickup[]
+  qr_tokens          PassengerQrToken[]
+  qr_exceptions      PassengerQrException[]
+  family_access_tokens FamilyAccessToken[]
+  trip_assignment_changes TripAssignmentChange[]
 
   @@map("establishments")
 }
@@ -153,6 +204,7 @@ model User {
   establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   refresh_tokens RefreshToken[]
   courier        Courier?       @relation(fields: [courier_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  trip_assignment_changes TripAssignmentChange[]
 
   @@index([establishment_id])
   @@map("users")
@@ -180,25 +232,29 @@ model Courier {
   establishment_id            String
   name                        String
   phone                       String?
+  photo_url                   String?
   device_token                String?
   device_platform             DevicePlatform?
   active                      Boolean         @default(true)
   battery_optimization_exempt Boolean         @default(false)
   device_brand                String?
-  telegram_chat_id            String?   @unique
-  telegram_prefs              Json      @default("{}")
+  telegram_chat_id            String?         @unique
+  telegram_prefs              Json            @default("{}")
   last_reminder_sent_at       DateTime?
   reminder_count              Int             @default(0)
   transport_mode              TransportMode?
   created_at                  DateTime        @default(now())
   updated_at                  DateTime        @updatedAt
 
-  establishment  Establishment   @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  establishment  Establishment      @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
   deliveries     Delivery[]
   location_pings LocationPing[]
   invite_tokens  InviteToken[]
   shifts         Shift[]
   user           User?
+  trips          Trip[]
+  check_events   CheckEvent[]
+  qr_tokens      PassengerQrToken[]
 
   @@index([establishment_id])
   @@map("couriers")
@@ -209,17 +265,17 @@ model Courier {
 // ─────────────────────────────────────────
 
 model Shift {
-  id               String    @id @default(uuid())
-  courier_id       String
-  establishment_id String
-  started_at       DateTime  @default(now()) @db.Timestamptz
-  ended_at         DateTime? @db.Timestamptz
-  ended_by         String?   // 'courier' | 'manager' | 'auto'
-  planned_end_at   DateTime? @db.Timestamptz
-  total_deliveries  Int       @default(0)
-  total_distance_km Decimal  @default(0) @db.Decimal(8, 2)
+  id                 String    @id @default(uuid())
+  courier_id         String
+  establishment_id   String
+  started_at         DateTime  @default(now()) @db.Timestamptz
+  ended_at           DateTime? @db.Timestamptz
+  ended_by           String? // 'courier' | 'manager' | 'auto'
+  planned_end_at     DateTime? @db.Timestamptz
+  total_deliveries   Int       @default(0)
+  total_distance_km  Decimal   @default(0) @db.Decimal(8, 2)
   anomaly_alerted_at DateTime? @db.Timestamptz
-  created_at        DateTime  @default(now()) @db.Timestamptz
+  created_at         DateTime  @default(now()) @db.Timestamptz
 
   courier       Courier       @relation(fields: [courier_id], references: [id], onDelete: Cascade)
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
@@ -264,19 +320,19 @@ model Order {
 // ─────────────────────────────────────────
 
 model Delivery {
-  id                    String         @id @default(uuid())
-  order_id              String         @unique
-  courier_id            String
-  status                DeliveryStatus @default(assigned)
-  assigned_at           DateTime       @default(now())
-  started_at            DateTime?
-  completed_at          DateTime?
-  order_closed_at       DateTime?
-  eta_seconds           Int?
-  eta_started_at        DateTime?      @db.Timestamptz
-  eta_overdue_alerted_at DateTime?     @db.Timestamptz
-  created_at            DateTime       @default(now())
-  updated_at            DateTime       @updatedAt
+  id                     String         @id @default(uuid())
+  order_id               String         @unique
+  courier_id             String
+  status                 DeliveryStatus @default(assigned)
+  assigned_at            DateTime       @default(now())
+  started_at             DateTime?
+  completed_at           DateTime?
+  order_closed_at        DateTime?
+  eta_seconds            Int?
+  eta_started_at         DateTime?      @db.Timestamptz
+  eta_overdue_alerted_at DateTime?      @db.Timestamptz
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @updatedAt
 
   order   Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
   courier Courier        @relation(fields: [courier_id], references: [id])
@@ -318,12 +374,15 @@ model DeliveryProof {
 // ─────────────────────────────────────────
 
 model LocationPing {
-  id         String                          @id @default(uuid())
+  id         String                              @id @default(uuid())
+  event_uid  String                              @unique
   courier_id String
   /// PostGIS GEOMETRY(Point,4326) — use ST_DWithin / ST_MakePoint for geo queries
   location   Unsupported("geometry(Point,4326)")
   battery    Int?
-  created_at DateTime                        @default(now())
+  accuracy   Float?
+  captured_at DateTime                           @db.Timestamptz
+  created_at DateTime                            @default(now())
 
   courier Courier @relation(fields: [courier_id], references: [id], onDelete: Cascade)
 
@@ -401,12 +460,12 @@ model InviteToken {
 // ─────────────────────────────────────────
 
 model RetentionLog {
-  id                  String   @id @default(uuid())
-  establishment_id    String
-  deleted_orders      Int      @default(0)
-  deleted_pings       Int      @default(0)
-  deleted_order_ids   Json     @default("[]")
-  run_at              DateTime @default(now())
+  id                String   @id @default(uuid())
+  establishment_id  String
+  deleted_orders    Int      @default(0)
+  deleted_pings     Int      @default(0)
+  deleted_order_ids Json     @default("[]")
+  run_at            DateTime @default(now())
 
   establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
 
@@ -473,4 +532,345 @@ model ApiKey {
 
   @@index([establishment_id])
   @@map("api_keys")
+}
+
+// ─────────────────────────────────────────
+// Transport Base V1 — additive passenger domain
+// ─────────────────────────────────────────
+
+model Vehicle {
+  id               String   @id @default(uuid())
+  establishment_id String
+  name             String
+  plate            String?
+  model            String?
+  color            String?
+  photo_url        String?
+  capacity         Int
+  active           Boolean  @default(true)
+  metadata         Json     @default("{}")
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  establishment     Establishment      @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  trips             Trip[]
+  qr_tokens          PassengerQrToken[]
+
+  @@unique([establishment_id, plate])
+  @@index([establishment_id])
+  @@map("vehicles")
+}
+
+model Passenger {
+  id                  String   @id @default(uuid())
+  establishment_id    String
+  name                String
+  active              Boolean  @default(true)
+  notes               String?
+  metadata            Json     @default("{}")
+  pickup_qr_required  Boolean  @default(false)
+  handoff_qr_required Boolean  @default(false)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  establishment      Establishment          @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  guardians          PassengerGuardian[]
+  trip_passengers    TripPassenger[]
+  check_events       CheckEvent[]
+  authorized_pickups AuthorizedPickup[]
+  qr_tokens          PassengerQrToken[]
+  qr_exceptions      PassengerQrException[]
+
+  @@index([establishment_id])
+  @@map("passengers")
+}
+
+model Guardian {
+  id               String   @id @default(uuid())
+  establishment_id String
+  name             String
+  phone            String?
+  email            String?
+  device_token     String?  @unique
+  device_platform  DevicePlatform?
+  active           Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  establishment      Establishment          @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  passengers         PassengerGuardian[]
+  check_events       CheckEvent[]
+  authorized_pickups AuthorizedPickup[]
+  qr_exceptions      PassengerQrException[]
+  family_access_tokens FamilyAccessToken[]
+
+  @@index([establishment_id])
+  @@index([establishment_id, phone])
+  @@map("guardians")
+}
+
+model PassengerGuardian {
+  id           String   @id @default(uuid())
+  passenger_id String
+  guardian_id  String
+  relationship String?
+  is_primary   Boolean  @default(false)
+  can_pickup   Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  passenger Passenger @relation(fields: [passenger_id], references: [id], onDelete: Cascade)
+  guardian  Guardian  @relation(fields: [guardian_id], references: [id], onDelete: Cascade)
+
+  @@unique([passenger_id, guardian_id])
+  @@index([guardian_id])
+  @@map("passenger_guardians")
+}
+
+model Route {
+  id               String   @id @default(uuid())
+  establishment_id String
+  name             String
+  active           Boolean  @default(true)
+  metadata         Json     @default("{}")
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  stops         RouteStop[]
+  trips         Trip[]
+
+  @@index([establishment_id])
+  @@map("transport_routes")
+}
+
+model RouteStop {
+  id               String   @id @default(uuid())
+  establishment_id String
+  route_id         String
+  name             String
+  sequence         Int
+  address          String?
+  lat              Float?
+  lng              Float?
+  geofence_meters  Int      @default(300)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  establishment Establishment   @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  route         Route           @relation(fields: [route_id], references: [id], onDelete: Cascade)
+  pickup_for    TripPassenger[] @relation("PickupStop")
+  dropoff_for   TripPassenger[] @relation("DropoffStop")
+
+  @@unique([route_id, sequence])
+  @@index([establishment_id])
+  @@index([route_id])
+  @@map("route_stops")
+}
+
+model Trip {
+  id               String     @id @default(uuid())
+  establishment_id String
+  route_id         String?
+  courier_id       String
+  vehicle_id       String?
+  status           TripStatus @default(planned)
+  school_safety    Boolean    @default(false)
+  scheduled_at     DateTime?  @db.Timestamptz
+  started_at       DateTime?  @db.Timestamptz
+  completed_at     DateTime?  @db.Timestamptz
+  eta_seconds      Int?
+  distance_meters  Int?
+  metadata         Json       @default("{}")
+  created_at       DateTime   @default(now()) @db.Timestamptz
+  updated_at       DateTime   @updatedAt
+
+  establishment Establishment          @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  route         Route?                 @relation(fields: [route_id], references: [id], onDelete: SetNull)
+  courier       Courier                @relation(fields: [courier_id], references: [id])
+  vehicle       Vehicle?               @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
+  passengers    TripPassenger[]
+  check_events  CheckEvent[]
+  qr_tokens     PassengerQrToken[]
+  qr_exceptions PassengerQrException[]
+  assignment_changes TripAssignmentChange[]
+
+  @@index([establishment_id])
+  @@index([courier_id, status])
+  @@index([route_id])
+  @@index([scheduled_at])
+  @@map("trips")
+}
+
+model TripPassenger {
+  id               String              @id @default(uuid())
+  establishment_id String
+  trip_id          String
+  passenger_id     String
+  pickup_stop_id   String?
+  dropoff_stop_id  String?
+  status           PassengerTripStatus @default(waiting)
+  recurring_amount Decimal?            @db.Decimal(10, 2)
+  boarded_at       DateTime?           @db.Timestamptz
+  dropped_off_at   DateTime?           @db.Timestamptz
+  scheduled_pickup_at DateTime?        @db.Timestamptz
+  ready_at         DateTime?           @db.Timestamptz
+  created_at       DateTime            @default(now()) @db.Timestamptz
+  updated_at       DateTime            @updatedAt
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  trip          Trip          @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  passenger     Passenger     @relation(fields: [passenger_id], references: [id])
+  pickup_stop   RouteStop?    @relation("PickupStop", fields: [pickup_stop_id], references: [id], onDelete: SetNull)
+  dropoff_stop  RouteStop?    @relation("DropoffStop", fields: [dropoff_stop_id], references: [id], onDelete: SetNull)
+  check_events  CheckEvent[]
+
+  @@unique([trip_id, passenger_id])
+  @@index([establishment_id])
+  @@index([trip_id, status])
+  @@index([passenger_id])
+  @@map("trip_passengers")
+}
+
+model CheckEvent {
+  id                String                @id @default(uuid())
+  establishment_id  String
+  event_uid         String                @unique
+  trip_id           String
+  trip_passenger_id String?
+  passenger_id      String?
+  courier_id        String
+  guardian_id       String?
+  type              CheckEventType
+  validation_status CheckValidationStatus @default(validated_online)
+  captured_at       DateTime              @db.Timestamptz
+  received_at       DateTime              @default(now()) @db.Timestamptz
+  lat               Float?
+  lng               Float?
+  accuracy          Float?
+  qr_nonce_hash     String?
+  metadata          Json                  @default("{}")
+
+  establishment  Establishment  @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  trip           Trip           @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  trip_passenger TripPassenger? @relation(fields: [trip_passenger_id], references: [id], onDelete: SetNull)
+  passenger      Passenger?     @relation(fields: [passenger_id], references: [id], onDelete: SetNull)
+  courier        Courier        @relation(fields: [courier_id], references: [id])
+  guardian       Guardian?      @relation(fields: [guardian_id], references: [id], onDelete: SetNull)
+
+  @@index([establishment_id])
+  @@index([trip_id, captured_at])
+  @@index([passenger_id, captured_at])
+  @@index([validation_status])
+  @@map("check_events")
+}
+
+model AuthorizedPickup {
+  id               String    @id @default(uuid())
+  establishment_id String
+  passenger_id     String
+  guardian_id      String
+  valid_from       DateTime? @db.Timestamptz
+  valid_until      DateTime? @db.Timestamptz
+  active           Boolean   @default(true)
+  created_at       DateTime  @default(now()) @db.Timestamptz
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  passenger     Passenger     @relation(fields: [passenger_id], references: [id], onDelete: Cascade)
+  guardian      Guardian      @relation(fields: [guardian_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@index([passenger_id, active])
+  @@index([guardian_id, active])
+  @@map("authorized_pickups")
+}
+
+model PassengerQrToken {
+  id               String            @id @default(uuid())
+  establishment_id String
+  passenger_id     String
+  trip_id          String
+  courier_id       String
+  vehicle_id       String?
+  action           PassengerQrAction
+  token_hash       String            @unique
+  nonce_hash       String            @unique
+  expires_at       DateTime          @db.Timestamptz
+  used_at          DateTime?         @db.Timestamptz
+  created_at       DateTime          @default(now()) @db.Timestamptz
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  passenger     Passenger     @relation(fields: [passenger_id], references: [id], onDelete: Cascade)
+  trip          Trip          @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  courier       Courier       @relation(fields: [courier_id], references: [id])
+  vehicle       Vehicle?      @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
+
+  @@index([establishment_id])
+  @@index([trip_id, passenger_id, action])
+  @@index([expires_at])
+  @@map("passenger_qr_tokens")
+}
+
+model PassengerQrException {
+  id                        String            @id @default(uuid())
+  establishment_id          String
+  passenger_id              String
+  trip_id                   String?
+  action                    PassengerQrAction
+  authorized_by_guardian_id String
+  reason                    String
+  valid_from                DateTime          @db.Timestamptz
+  valid_until               DateTime          @db.Timestamptz
+  max_uses                  Int               @default(1)
+  used_count                Int               @default(0)
+  revoked_at                DateTime?         @db.Timestamptz
+  created_at                DateTime          @default(now()) @db.Timestamptz
+
+  establishment          Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  passenger              Passenger     @relation(fields: [passenger_id], references: [id], onDelete: Cascade)
+  trip                   Trip?         @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  authorized_by_guardian Guardian      @relation(fields: [authorized_by_guardian_id], references: [id])
+
+  @@index([establishment_id])
+  @@index([passenger_id, action, revoked_at])
+  @@index([trip_id])
+  @@map("passenger_qr_exceptions")
+}
+
+model FamilyAccessToken {
+  id               String    @id @default(uuid())
+  establishment_id String
+  guardian_id      String
+  token_hash       String    @unique
+  expires_at       DateTime  @db.Timestamptz
+  revoked_at       DateTime? @db.Timestamptz
+  created_at       DateTime  @default(now()) @db.Timestamptz
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  guardian      Guardian      @relation(fields: [guardian_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@index([guardian_id, revoked_at])
+  @@index([expires_at])
+  @@map("family_access_tokens")
+}
+
+model TripAssignmentChange {
+  id                 String   @id @default(uuid())
+  establishment_id   String
+  trip_id             String
+  changed_by_user_id  String
+  old_courier_id      String
+  new_courier_id      String
+  old_vehicle_id      String?
+  new_vehicle_id      String?
+  reason              String
+  created_at          DateTime @default(now()) @db.Timestamptz
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  trip          Trip          @relation(fields: [trip_id], references: [id], onDelete: Cascade)
+  changed_by    User          @relation(fields: [changed_by_user_id], references: [id])
+
+  @@index([establishment_id])
+  @@index([trip_id, created_at])
+  @@map("trip_assignment_changes")
 }

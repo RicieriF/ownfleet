@@ -165,7 +165,8 @@ export class AuthService {
       where: { id: userId },
       data: {
         device_token: deviceToken,
-        device_platform: devicePlatform as import('@prisma/client').DevicePlatform,
+        device_platform:
+          devicePlatform as import('@prisma/client').DevicePlatform,
       },
     });
   }
