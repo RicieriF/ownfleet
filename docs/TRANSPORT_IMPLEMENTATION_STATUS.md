@@ -17,29 +17,31 @@
 - Family device registration and safety-event push notifications.
 - Deduplicated vehicle-approach notifications for waiting passengers.
 - Provider-neutral offline route-pack manifest and mobile preparation seam.
+- Driver trip read model, explicit trip start, and audited departure transition.
+- Mobile driver transport workflow with QR scanning and offline event queue.
+- Automatic offline operational-manifest caching before trip start.
 
 ## Validated
 - Prisma generate and schema validation.
-- API typecheck, lint, build, and 604 unit tests.
+- API typecheck, lint, build, and 609 unit tests.
 - Web typecheck, production build, and 22 unit tests.
 - Mobile typecheck.
 
 ## In progress
-- Automatic route-pack preparation trigger in the transport driver workflow.
-- Transport-specific family and driver user interfaces.
+- Family transport user interface.
+- Driver flows for guardian handoff, audited override, absence, and incident.
 
 ## Blocked
 - Full migration application requires a PostgreSQL/PostGIS `DATABASE_URL`.
 - Mobile lint has no ESLint configuration in the current baseline.
 
 ## Next
-- Wire route-pack preparation to the future transport trip workflow.
-- Add transport driver workflow with large, state-aware controls.
 - Add family home UI backed by the protected aggregate endpoint.
+- Complete exceptional driver controls without adding silent bypasses.
 
 ## Last validation
 - Command: `npm test -- --runInBand` in `apps/api`.
-- Result: PASS, 39 suites and 604 tests.
+- Result: PASS, 40 suites and 609 tests.
 - Command: `npm test` and `npm run build` in `apps/web`.
 - Result: PASS, 22 tests and production build.
 - Command: `npx tsc --noEmit -p tsconfig.json` in `apps/mobile`.
