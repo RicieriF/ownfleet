@@ -169,6 +169,7 @@ model Establishment {
   authorized_pickups AuthorizedPickup[]
   qr_tokens          PassengerQrToken[]
   qr_exceptions      PassengerQrException[]
+  family_access_tokens FamilyAccessToken[]
 
   @@map("establishments")
 }
@@ -593,6 +594,7 @@ model Guardian {
   check_events       CheckEvent[]
   authorized_pickups AuthorizedPickup[]
   qr_exceptions      PassengerQrException[]
+  family_access_tokens FamilyAccessToken[]
 
   @@index([establishment_id])
   @@index([establishment_id, phone])
@@ -668,6 +670,8 @@ model Trip {
   scheduled_at     DateTime?  @db.Timestamptz
   started_at       DateTime?  @db.Timestamptz
   completed_at     DateTime?  @db.Timestamptz
+  eta_seconds      Int?
+  distance_meters  Int?
   metadata         Json       @default("{}")
   created_at       DateTime   @default(now()) @db.Timestamptz
   updated_at       DateTime   @updatedAt
@@ -699,6 +703,8 @@ model TripPassenger {
   recurring_amount Decimal?            @db.Decimal(10, 2)
   boarded_at       DateTime?           @db.Timestamptz
   dropped_off_at   DateTime?           @db.Timestamptz
+  scheduled_pickup_at DateTime?        @db.Timestamptz
+  ready_at         DateTime?           @db.Timestamptz
   created_at       DateTime            @default(now()) @db.Timestamptz
   updated_at       DateTime            @updatedAt
 
@@ -819,4 +825,22 @@ model PassengerQrException {
   @@index([passenger_id, action, revoked_at])
   @@index([trip_id])
   @@map("passenger_qr_exceptions")
+}
+
+model FamilyAccessToken {
+  id               String    @id @default(uuid())
+  establishment_id String
+  guardian_id      String
+  token_hash       String    @unique
+  expires_at       DateTime  @db.Timestamptz
+  revoked_at       DateTime? @db.Timestamptz
+  created_at       DateTime  @default(now()) @db.Timestamptz
+
+  establishment Establishment @relation(fields: [establishment_id], references: [id], onDelete: Cascade)
+  guardian      Guardian      @relation(fields: [guardian_id], references: [id], onDelete: Cascade)
+
+  @@index([establishment_id])
+  @@index([guardian_id, revoked_at])
+  @@index([expires_at])
+  @@map("family_access_tokens")
 }
