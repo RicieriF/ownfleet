@@ -12,7 +12,10 @@ export type CheckValidationState =
   | 'reconciled'
   | 'rejected';
 
-const passengerTransitions: Record<PassengerTripState, readonly PassengerTripState[]> = {
+const passengerTransitions: Record<
+  PassengerTripState,
+  readonly PassengerTripState[]
+> = {
   waiting: ['boarded', 'absent', 'incident'],
   boarded: ['in_transit', 'dropped_off', 'incident'],
   in_transit: ['dropped_off', 'incident'],

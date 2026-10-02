@@ -8,6 +8,7 @@ import {
   IsUUID,
 } from 'class-validator';
 import { CheckEventType, CheckValidationStatus } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 export class RecordCheckEventDto {
   @IsString()
@@ -50,5 +51,5 @@ export class RecordCheckEventDto {
 
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonObject;
 }

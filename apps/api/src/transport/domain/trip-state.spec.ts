@@ -27,9 +27,9 @@ describe('Transport Base V1 passenger safety state machine', () => {
   });
 
   it('blocks school trip completion while a passenger is in transit', () => {
-    expect(() =>
-      assertTripCanComplete(true, ['in_transit']),
-    ).toThrow('cannot complete');
+    expect(() => assertTripCanComplete(true, ['in_transit'])).toThrow(
+      'cannot complete',
+    );
   });
 
   it('allows school trip completion after explicit resolution', () => {
@@ -39,7 +39,9 @@ describe('Transport Base V1 passenger safety state machine', () => {
   });
 
   it('does not treat provisional offline events as confirmed state', () => {
-    expect(eventGrantsConfirmedPassengerState('provisional_offline')).toBe(false);
+    expect(eventGrantsConfirmedPassengerState('provisional_offline')).toBe(
+      false,
+    );
     expect(eventGrantsConfirmedPassengerState('validated_online')).toBe(true);
     expect(eventGrantsConfirmedPassengerState('reconciled')).toBe(true);
     expect(eventGrantsConfirmedPassengerState('rejected')).toBe(false);
@@ -51,6 +53,8 @@ describe('Transport Base V1 passenger safety state machine', () => {
   });
 
   it('does not apply the school onboard completion guard to non-school trips', () => {
-    expect(() => assertTripCanComplete(false, ['boarded', 'in_transit'])).not.toThrow();
+    expect(() =>
+      assertTripCanComplete(false, ['boarded', 'in_transit']),
+    ).not.toThrow();
   });
 });

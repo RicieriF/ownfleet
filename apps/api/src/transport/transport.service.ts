@@ -38,9 +38,14 @@ export interface RecordCheckEventInput {
 export class TransportService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async recordCheckEvent(input: RecordCheckEventInput, user: AuthenticatedUser) {
+  async recordCheckEvent(
+    input: RecordCheckEventInput,
+    user: AuthenticatedUser,
+  ) {
     if (!user.courier_id) {
-      throw new ForbiddenException('Only drivers can record passenger check events');
+      throw new ForbiddenException(
+        'Only drivers can record passenger check events',
+      );
     }
 
     const existing = await this.prisma.checkEvent.findUnique({
@@ -154,7 +159,8 @@ export class TransportService {
         const duplicate = await this.prisma.checkEvent.findUnique({
           where: { event_uid: input.event_uid },
         });
-        if (duplicate?.establishment_id === user.establishment_id) return duplicate;
+        if (duplicate?.establishment_id === user.establishment_id)
+          return duplicate;
       }
       throw error;
     }
@@ -190,7 +196,11 @@ export class TransportService {
     if (updated.count === 0) {
       throw new ConflictException('Trip was already transitioned');
     }
-    return { id: trip.id, status: TripStatus.completed, completed_at: completedAt };
+    return {
+      id: trip.id,
+      status: TripStatus.completed,
+      completed_at: completedAt,
+    };
   }
 
   private stateForEvent(type: CheckEventType): PassengerTripStatus | null {
