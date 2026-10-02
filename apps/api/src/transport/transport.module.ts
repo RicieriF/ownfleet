@@ -6,6 +6,7 @@ import { FamilyTransportService } from './family-transport.service.js';
 import { TripAssignmentService } from './trip-assignment.service.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { TransportApproachService } from './transport-approach.service.js';
+import { OfflineRoutePackService } from './offline-route-pack.service.js';
 
 @Module({
   imports: [NotificationsModule],
@@ -15,12 +16,14 @@ import { TransportApproachService } from './transport-approach.service.js';
     FamilyTransportService,
     TripAssignmentService,
     TransportApproachService,
+    OfflineRoutePackService,
   ],
   exports: [
     TransportService,
     FamilyTransportService,
     TripAssignmentService,
     TransportApproachService,
+    OfflineRoutePackService,
   ],
 })
 export class TransportModule {}

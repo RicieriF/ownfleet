@@ -22,6 +22,7 @@ import { ReassignTripDto } from './dto/reassign-trip.dto.js';
 import { TripAssignmentService } from './trip-assignment.service.js';
 import { TransportService } from './transport.service.js';
 import { CreateAuthorizedPickupDto } from './dto/create-authorized-pickup.dto.js';
+import { OfflineRoutePackService } from './offline-route-pack.service.js';
 
 @Controller('transport')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
@@ -30,6 +31,7 @@ export class TransportController {
     private readonly service: TransportService,
     private readonly familyService: FamilyTransportService,
     private readonly assignmentService: TripAssignmentService,
+    private readonly offlineRoutePackService: OfflineRoutePackService,
   ) {}
 
   @Post('check-events')
@@ -128,5 +130,13 @@ export class TransportController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.completeTrip(id, user);
+  }
+
+  @Get('trips/:id/offline-route-pack')
+  getOfflineRoutePack(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.offlineRoutePackService.getManifest(id, user);
   }
 }
