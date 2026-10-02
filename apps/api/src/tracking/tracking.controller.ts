@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PlanAccessGuard } from '../establishments/guards/plan-access.guard.js';
 import { TrackingService } from './tracking.service.js';
 import { PingDto } from './dto/ping.dto.js';
+import { SyncPingsDto } from './dto/sync-pings.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 
@@ -30,6 +31,16 @@ export class TrackingController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<void> {
     await this.service.handlePing(dto, user);
+  }
+
+  @Post('pings/sync')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 6 } })
+  async syncPings(
+    @Body() dto: SyncPingsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.syncPings(dto.pings, user);
   }
 
   @Get('couriers/:id/position')

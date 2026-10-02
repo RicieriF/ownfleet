@@ -39,6 +39,7 @@ const mockRedis = {
   get: jest.fn(),
   set: jest.fn().mockResolvedValue('OK'),
   del: jest.fn().mockResolvedValue(1),
+  eval: jest.fn().mockResolvedValue(1),
 };
 
 const mockPingQueue = {
@@ -66,11 +67,19 @@ describe('TrackingService', () => {
     mockPrisma.$executeRaw.mockResolvedValue(1);
     mockRedis.setex.mockResolvedValue('OK');
     mockRedis.publish.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue(1);
     mockPingQueue.add.mockResolvedValue({});
   });
 
   describe('handlePing', () => {
-    const validPing = { lat: 50.45, lng: 30.52, battery: 80 };
+    const validPing = {
+      lat: 50.45,
+      lng: 30.52,
+      battery: 80,
+      accuracy: 12,
+      event_uid: '11111111-1111-4111-8111-111111111111',
+      captured_at: '2026-10-02T08:00:00.000Z',
+    };
 
     it('rejects ping from non-courier (manager) account', async () => {
       await expect(service.handlePing(validPing, managerUser)).rejects.toThrow(
@@ -86,10 +95,13 @@ describe('TrackingService', () => {
           lat: 50.45,
           lng: 30.52,
           battery: 80,
+          accuracy: 12,
+          event_uid: validPing.event_uid,
+          captured_at: validPing.captured_at,
         },
         // removeOnComplete/removeOnFail are configured in defaultJobOptions at module level,
         // not per-call — so the per-call options object is empty.
-        {},
+        { jobId: validPing.event_uid },
       );
       // DB write is NOT called synchronously — it happens in the processor
       expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
@@ -97,11 +109,42 @@ describe('TrackingService', () => {
 
     it('caches last position in Redis with TTL 300s', async () => {
       await service.handlePing(validPing, courierUser);
-      expect(mockRedis.setex).toHaveBeenCalledWith(
+      expect(mockRedis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
         `courier:location:${courierUser.courier_id}`,
-        300,
-        expect.stringContaining('"lat":50.45'),
+        String(new Date(validPing.captured_at).getTime()),
+        '300',
+        expect.stringContaining('"accuracy":12'),
       );
+    });
+
+    it('does not republish an older offline retry as the live position', async () => {
+      mockRedis.eval.mockResolvedValue(0);
+      await service.handlePing(validPing, courierUser);
+
+      expect(mockPingQueue.add).toHaveBeenCalled();
+      expect(mockRedis.publish).not.toHaveBeenCalled();
+    });
+
+    it('syncs offline pings in captured order with stable job IDs', async () => {
+      const later = {
+        ...validPing,
+        event_uid: '22222222-2222-4222-8222-222222222222',
+        captured_at: '2026-10-02T08:01:00.000Z',
+      };
+      const result = await service.syncPings([later, validPing], courierUser);
+
+      expect(result.accepted_event_uids).toEqual([
+        validPing.event_uid,
+        later.event_uid,
+      ]);
+      expect(mockPingQueue.add.mock.calls[0][1]).toEqual({
+        jobId: validPing.event_uid,
+      });
+      expect(mockPingQueue.add.mock.calls[1][1]).toEqual({
+        jobId: later.event_uid,
+      });
     });
 
     it('publishes courier_moved event to Redis pub/sub', async () => {

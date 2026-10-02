@@ -16,18 +16,26 @@ export class PingPersistProcessor {
 
   @Process()
   async handle(job: Job<PingJob>): Promise<void> {
-    const { courier_id, lat, lng, battery } = job.data;
+    const { event_uid, courier_id, lat, lng, battery, accuracy, captured_at } =
+      job.data;
     try {
-      await this.prisma.$executeRaw`
-        INSERT INTO location_pings (id, courier_id, location, battery, created_at)
+      const inserted = await this.prisma.$executeRaw`
+        INSERT INTO location_pings (
+          id, event_uid, courier_id, location, battery, accuracy, captured_at, created_at
+        )
         VALUES (
           gen_random_uuid(),
+          ${event_uid},
           ${courier_id}::uuid,
           ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326),
           ${battery},
-          NOW()
+          ${accuracy},
+          ${new Date(captured_at)},
+          ${new Date(captured_at)}
         )
+        ON CONFLICT (event_uid) DO NOTHING
       `;
+      if (inserted === 0) return;
     } catch (err) {
       this.logger.error(
         `Failed to persist ping for courier ${courier_id}`,
