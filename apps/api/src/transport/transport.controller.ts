@@ -23,6 +23,7 @@ import { TripAssignmentService } from './trip-assignment.service.js';
 import { TransportService } from './transport.service.js';
 import { CreateAuthorizedPickupDto } from './dto/create-authorized-pickup.dto.js';
 import { OfflineRoutePackService } from './offline-route-pack.service.js';
+import { DriverTripService } from './driver-trip.service.js';
 
 @Controller('transport')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
@@ -32,6 +33,7 @@ export class TransportController {
     private readonly familyService: FamilyTransportService,
     private readonly assignmentService: TripAssignmentService,
     private readonly offlineRoutePackService: OfflineRoutePackService,
+    private readonly driverTripService: DriverTripService,
   ) {}
 
   @Post('check-events')
@@ -132,11 +134,25 @@ export class TransportController {
     return this.service.completeTrip(id, user);
   }
 
+  @Post('trips/:id/start')
+  @HttpCode(HttpStatus.OK)
+  startTrip(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.startTrip(id, user);
+  }
+
   @Get('trips/:id/offline-route-pack')
   getOfflineRoutePack(
     @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.offlineRoutePackService.getManifest(id, user);
+  }
+
+  @Get('driver/trips')
+  listDriverTrips(@CurrentUser() user: AuthenticatedUser) {
+    return this.driverTripService.listAssigned(user);
   }
 }

@@ -7,6 +7,7 @@ import { TripAssignmentService } from './trip-assignment.service.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { TransportApproachService } from './transport-approach.service.js';
 import { OfflineRoutePackService } from './offline-route-pack.service.js';
+import { DriverTripService } from './driver-trip.service.js';
 
 @Module({
   imports: [NotificationsModule],
@@ -17,6 +18,7 @@ import { OfflineRoutePackService } from './offline-route-pack.service.js';
     TripAssignmentService,
     TransportApproachService,
     OfflineRoutePackService,
+    DriverTripService,
   ],
   exports: [
     TransportService,
@@ -24,6 +26,7 @@ import { OfflineRoutePackService } from './offline-route-pack.service.js';
     TripAssignmentService,
     TransportApproachService,
     OfflineRoutePackService,
+    DriverTripService,
   ],
 })
 export class TransportModule {}

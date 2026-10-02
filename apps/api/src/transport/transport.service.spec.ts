@@ -204,6 +204,50 @@ describe('TransportService check-event idempotency', () => {
   });
 });
 
+describe('TransportService trip start', () => {
+  it('starts only a planned trip assigned to the authenticated driver', async () => {
+    const { prisma } = createPrismaMock();
+    prisma.trip.findFirst.mockResolvedValue({
+      id: 'trip-1',
+      establishment_id: 'est-1',
+      courier_id: 'driver-1',
+      status: TripStatus.planned,
+      started_at: null,
+    });
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(service.startTrip('trip-1', user)).resolves.toMatchObject({
+      id: 'trip-1',
+      status: TripStatus.active,
+      started_at: expect.any(Date),
+    });
+    expect(prisma.trip.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          establishment_id: 'est-1',
+          courier_id: 'driver-1',
+          status: TripStatus.planned,
+        }),
+      }),
+    );
+  });
+
+  it('rejects a trip assigned to another driver', async () => {
+    const { prisma } = createPrismaMock();
+    prisma.trip.findFirst.mockResolvedValue({
+      id: 'trip-1',
+      courier_id: 'driver-2',
+      status: TripStatus.planned,
+    });
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(service.startTrip('trip-1', user)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.trip.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('TransportService guardian handoff authorization', () => {
   const handoffInput: RecordCheckEventInput = {
     ...input,

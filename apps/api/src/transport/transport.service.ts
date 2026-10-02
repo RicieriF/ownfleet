@@ -586,6 +586,37 @@ export class TransportService {
     };
   }
 
+  async startTrip(tripId: string, user: AuthenticatedUser) {
+    if (!user.courier_id) {
+      throw new ForbiddenException('Only drivers can start trips');
+    }
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: tripId, establishment_id: user.establishment_id },
+    });
+    if (!trip) throw new NotFoundException('Trip not found');
+    if (trip.courier_id !== user.courier_id) {
+      throw new ForbiddenException('Trip is assigned to another driver');
+    }
+    if (trip.status === TripStatus.active) return trip;
+    if (trip.status !== TripStatus.planned) {
+      throw new ConflictException('Only a planned trip can be started');
+    }
+    const startedAt = new Date();
+    const updated = await this.prisma.trip.updateMany({
+      where: {
+        id: trip.id,
+        establishment_id: user.establishment_id,
+        courier_id: user.courier_id,
+        status: TripStatus.planned,
+      },
+      data: { status: TripStatus.active, started_at: startedAt },
+    });
+    if (updated.count === 0) {
+      throw new ConflictException('Trip state changed concurrently');
+    }
+    return { ...trip, status: TripStatus.active, started_at: startedAt };
+  }
+
   private stateForEvent(type: CheckEventType): PassengerTripStatus | null {
     switch (type) {
       case CheckEventType.board:
