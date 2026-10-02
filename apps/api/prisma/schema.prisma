@@ -374,10 +374,13 @@ model DeliveryProof {
 
 model LocationPing {
   id         String                              @id @default(uuid())
+  event_uid  String                              @unique
   courier_id String
   /// PostGIS GEOMETRY(Point,4326) — use ST_DWithin / ST_MakePoint for geo queries
   location   Unsupported("geometry(Point,4326)")
   battery    Int?
+  accuracy   Float?
+  captured_at DateTime                           @db.Timestamptz
   created_at DateTime                            @default(now())
 
   courier Courier @relation(fields: [courier_id], references: [id], onDelete: Cascade)
