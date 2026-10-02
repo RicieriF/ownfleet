@@ -126,6 +126,53 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
+  async sendGuardianPush(
+    guardianId: string,
+    payload: PushPayload,
+  ): Promise<void> {
+    if (!this.fcmApp) {
+      this.logger.warn(
+        `FCM not initialized — skipping push for guardian ${guardianId}`,
+      );
+      return;
+    }
+    const guardian = await this.prisma.guardian.findUnique({
+      where: { id: guardianId },
+      select: { device_token: true },
+    });
+    if (!guardian?.device_token) return;
+
+    try {
+      await this.fcmApp.messaging().send({
+        token: guardian.device_token,
+        notification: { title: payload.title, body: payload.body },
+        data: payload.data ?? {},
+        android: { priority: 'high' },
+        apns: { payload: { aps: { sound: 'default' } } },
+      });
+    } catch (err: unknown) {
+      const code = (err as { errorInfo?: { code?: string } }).errorInfo?.code;
+      if (
+        code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/registration-token-not-registered'
+      ) {
+        await this.prisma.guardian
+          .update({ where: { id: guardianId }, data: { device_token: null } })
+          .catch((clearError: unknown) =>
+            this.logger.error(
+              `Failed to clear guardian device_token for ${guardianId}`,
+              clearError,
+            ),
+          );
+      } else {
+        this.logger.warn(
+          `FCM send failed for guardian ${guardianId}: ${code ?? ''}`,
+          err,
+        );
+      }
+    }
+  }
+
   /**
    * Fire-and-forget Telegram message.
    * Call without await at the callsite.

@@ -17,6 +17,8 @@ import { RecordCheckEventDto } from './dto/record-check-event.dto.js';
 import { IssuePassengerQrDto } from './dto/issue-passenger-qr.dto.js';
 import { IssueFamilyAccessTokenDto } from './dto/issue-family-access-token.dto.js';
 import { FamilyTransportService } from './family-transport.service.js';
+import { ReassignTripDto } from './dto/reassign-trip.dto.js';
+import { TripAssignmentService } from './trip-assignment.service.js';
 import { TransportService } from './transport.service.js';
 
 @Controller('transport')
@@ -25,6 +27,7 @@ export class TransportController {
   constructor(
     private readonly service: TransportService,
     private readonly familyService: FamilyTransportService,
+    private readonly assignmentService: TripAssignmentService,
   ) {}
 
   @Post('check-events')
@@ -71,6 +74,16 @@ export class TransportController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.familyService.revokeAccessToken(id, user);
+  }
+
+  @Post('trips/:id/reassign')
+  @HttpCode(HttpStatus.OK)
+  reassignTrip(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ReassignTripDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.assignmentService.reassign(id, dto, user);
   }
 
   @Post('trips/:id/complete')

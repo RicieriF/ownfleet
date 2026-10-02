@@ -135,6 +135,19 @@ export class FamilyTransportService {
                 photo_url: true,
               },
             },
+            assignment_changes: {
+              orderBy: { created_at: 'desc' },
+              take: 5,
+              select: {
+                id: true,
+                old_courier_id: true,
+                new_courier_id: true,
+                old_vehicle_id: true,
+                new_vehicle_id: true,
+                reason: true,
+                created_at: true,
+              },
+            },
           },
         },
         check_events: {
@@ -174,6 +187,7 @@ export class FamilyTransportService {
       destination: assignment.dropoff_stop,
       vehicle_position: position,
       latest_safety_events: assignment.check_events,
+      assignment_changes: assignment.trip.assignment_changes,
     };
   }
 
