@@ -5,16 +5,18 @@
 - Passenger safety state machine and school-trip completion guard.
 - Exact check-event idempotency, including concurrent duplicate handling.
 - Tenant-scoped check events and active AuthorizedPickup validation.
+- Per-passenger QR policy with short-lived, context-bound, one-time tokens.
+- Audited bounded QR exceptions and explicit driver override reasons.
+- School drop-off geofence with explicit GPS accuracy tolerance.
 
 ## Validated
 - Prisma generate and schema validation.
-- API typecheck, lint, build, and 552 unit tests.
+- API typecheck, lint, build, and 570 unit tests.
 - Web typecheck, production build, and 22 unit tests.
 - Mobile typecheck.
 
 ## In progress
-- QR policy, short-lived one-time tokens, and audited emergency overrides.
-- School geofence validation and family read model.
+- Protected family read model API and family access-token lifecycle.
 - Persistent mobile offline outbox and server reconciliation.
 
 ## Blocked
@@ -22,12 +24,11 @@
 - Mobile lint has no ESLint configuration in the current baseline.
 
 ## Next
-- Model and test per-passenger QR policy and bounded exceptions.
-- Enforce school drop-off geofence and GPS accuracy policy.
 - Add guardian-authorized family home read model.
+- Audit active driver and vehicle assignment changes.
 
 ## Last validation
 - Command: `npm test -- --runInBand` in `apps/api`.
-- Result: PASS, 33 suites and 552 tests.
+- Result: PASS, 33 suites and 570 tests.
 - Command: `npm test` and `npm run build` in `apps/web`.
 - Result: PASS, 22 tests and production build.
