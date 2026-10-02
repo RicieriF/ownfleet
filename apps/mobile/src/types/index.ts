@@ -4,13 +4,18 @@ export interface Shift {
   establishment_id: string;
   started_at: string;
   ended_at: string | null;
-  ended_by: 'courier' | 'manager' | 'auto' | null;
+  ended_by: "courier" | "manager" | "auto" | null;
   planned_end_at: string | null;
   total_deliveries: number;
   total_distance_km: string;
 }
 
-export type TransportMode = 'car' | 'moto_gas' | 'moto_electric' | 'bicycle' | 'walking';
+export type TransportMode =
+  | "car"
+  | "moto_gas"
+  | "moto_electric"
+  | "bicycle"
+  | "walking";
 
 export interface CourierUser {
   id: string;
@@ -19,7 +24,11 @@ export interface CourierUser {
   phone: string;
 }
 
-export type DeliveryStatus = 'assigned' | 'in_progress' | 'completed' | 'failed';
+export type DeliveryStatus =
+  | "assigned"
+  | "in_progress"
+  | "completed"
+  | "failed";
 
 export interface ActiveDelivery {
   id: string;
@@ -65,9 +74,59 @@ export interface WorkloadToday {
   };
 }
 
+export type PassengerTripState =
+  | "waiting"
+  | "boarded"
+  | "in_transit"
+  | "dropped_off"
+  | "absent"
+  | "incident";
+
+export interface DriverTransportTrip {
+  id: string;
+  status: "planned" | "active";
+  school_safety: boolean;
+  scheduled_at: string | null;
+  started_at: string | null;
+  eta_seconds: number | null;
+  distance_meters: number | null;
+  route: { id: string; name: string } | null;
+  vehicle: {
+    id: string;
+    name: string;
+    plate: string | null;
+    model: string | null;
+    color: string | null;
+  } | null;
+  passengers: Array<{
+    id: string;
+    status: PassengerTripState;
+    scheduled_pickup_at: string | null;
+    ready_at: string | null;
+    boarded_at: string | null;
+    dropped_off_at: string | null;
+    passenger: {
+      id: string;
+      name: string;
+      pickup_qr_required: boolean;
+      handoff_qr_required: boolean;
+    };
+    pickup_stop: TransportStop | null;
+    dropoff_stop: TransportStop | null;
+  }>;
+}
+
+export interface TransportStop {
+  id: string;
+  name: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 export interface DeliveryHistoryItem {
   id: string;
-  status: 'completed' | 'failed';
+  status: "completed" | "failed";
   assigned_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -82,7 +141,7 @@ export interface ShiftHistoryItem {
   id: string;
   started_at: string;
   ended_at: string;
-  ended_by: 'courier' | 'manager' | 'auto';
+  ended_by: "courier" | "manager" | "auto";
   planned_end_at: string | null;
   total_deliveries: number;
   total_distance_km: string;
@@ -103,7 +162,7 @@ export interface ProofPayload {
 
 // ── Manager types ─────────────────────────────────────────────────────────────
 
-export type UserRole = 'owner' | 'manager' | 'dispatcher';
+export type UserRole = "owner" | "manager" | "dispatcher";
 
 export interface ManagerUser {
   id: string;
@@ -114,12 +173,12 @@ export interface ManagerUser {
 }
 
 export type OrderStatus =
-  | 'pending'
-  | 'assigned'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
+  | "pending"
+  | "assigned"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "failed";
 
 export interface ManagerOrder {
   id: string;
@@ -143,7 +202,11 @@ export interface ManagerOrder {
 }
 
 /** Courier status for manager dashboard — based on last ping timestamp */
-export type CourierOnlineStatus = 'online' | 'background' | 'not_responding' | 'offline';
+export type CourierOnlineStatus =
+  | "online"
+  | "background"
+  | "not_responding"
+  | "offline";
 
 export interface ManagerCourier {
   id: string;
@@ -270,7 +333,7 @@ export interface HistoryOrder {
   id: string;
   external_id: string | null;
   address: string;
-  status: 'completed' | 'failed' | 'cancelled';
+  status: "completed" | "failed" | "cancelled";
   created_at: string;
   delivery?: {
     id: string;
