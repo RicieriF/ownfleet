@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Param,
@@ -14,12 +15,17 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { RecordCheckEventDto } from './dto/record-check-event.dto.js';
 import { IssuePassengerQrDto } from './dto/issue-passenger-qr.dto.js';
+import { IssueFamilyAccessTokenDto } from './dto/issue-family-access-token.dto.js';
+import { FamilyTransportService } from './family-transport.service.js';
 import { TransportService } from './transport.service.js';
 
 @Controller('transport')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
 export class TransportController {
-  constructor(private readonly service: TransportService) {}
+  constructor(
+    private readonly service: TransportService,
+    private readonly familyService: FamilyTransportService,
+  ) {}
 
   @Post('check-events')
   @HttpCode(HttpStatus.OK)
@@ -46,6 +52,25 @@ export class TransportController {
       dto.ttl_seconds,
       user,
     );
+  }
+
+  @Post('guardians/:id/access-tokens')
+  @HttpCode(HttpStatus.CREATED)
+  issueFamilyAccessToken(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: IssueFamilyAccessTokenDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.familyService.issueAccessToken(id, dto.ttl_days, user);
+  }
+
+  @Delete('family-access-tokens/:id')
+  @HttpCode(HttpStatus.OK)
+  revokeFamilyAccessToken(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.familyService.revokeAccessToken(id, user);
   }
 
   @Post('trips/:id/complete')
