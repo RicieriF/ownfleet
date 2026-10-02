@@ -248,6 +248,50 @@ describe('TransportService trip start', () => {
   });
 });
 
+describe('TransportService passenger departure', () => {
+  it('records an auditable boarded to in-transit transition', async () => {
+    const { prisma, tx } = createPrismaMock();
+    prisma.checkEvent.findUnique.mockResolvedValue(null);
+    prisma.tripPassenger.findFirst.mockResolvedValue({
+      id: 'tp-1',
+      trip_id: 'trip-1',
+      passenger_id: 'passenger-1',
+      status: PassengerTripStatus.boarded,
+      trip: {
+        courier_id: 'driver-1',
+        vehicle_id: 'vehicle-1',
+        status: TripStatus.active,
+        school_safety: true,
+      },
+      passenger: {
+        pickup_qr_required: true,
+        handoff_qr_required: true,
+      },
+      dropoff_stop: null,
+    });
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await service.recordCheckEvent(
+      { ...input, event_uid: 'evt-depart', type: CheckEventType.depart },
+      user,
+    );
+
+    expect(tx.checkEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: CheckEventType.depart }),
+      }),
+    );
+    expect(tx.tripPassenger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: PassengerTripStatus.boarded }),
+        data: expect.objectContaining({
+          status: PassengerTripStatus.in_transit,
+        }),
+      }),
+    );
+  });
+});
+
 describe('TransportService guardian handoff authorization', () => {
   const handoffInput: RecordCheckEventInput = {
     ...input,

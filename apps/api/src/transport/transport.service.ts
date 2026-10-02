@@ -621,6 +621,8 @@ export class TransportService {
     switch (type) {
       case CheckEventType.board:
         return PassengerTripStatus.boarded;
+      case CheckEventType.depart:
+        return PassengerTripStatus.in_transit;
       case CheckEventType.dropoff:
       case CheckEventType.guardian_handoff:
         return PassengerTripStatus.dropped_off;

@@ -107,6 +107,7 @@ enum TripStatus {
 
 enum CheckEventType {
   board
+  depart
   dropoff
   guardian_handoff
   absence
