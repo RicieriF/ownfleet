@@ -63,6 +63,10 @@ function createPrismaMock() {
     checkEvent: { findUnique: jest.fn() },
     tripPassenger: { findFirst: jest.fn() },
     authorizedPickup: { findFirst: jest.fn() },
+    trip: {
+      findFirst: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
     $transaction: jest.fn(
       async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
     ),
@@ -130,6 +134,115 @@ describe('TransportService check-event idempotency', () => {
 
     await expect(service.recordCheckEvent(input, user)).resolves.toEqual(
       existingEvent,
+    );
+  });
+});
+
+describe('TransportService guardian handoff authorization', () => {
+  const handoffInput: RecordCheckEventInput = {
+    ...input,
+    event_uid: 'evt-handoff',
+    type: CheckEventType.guardian_handoff,
+    guardian_id: 'guardian-1',
+  };
+
+  function prepareHandoff() {
+    const mocks = createPrismaMock();
+    mocks.prisma.checkEvent.findUnique.mockResolvedValue(null);
+    mocks.prisma.tripPassenger.findFirst.mockResolvedValue({
+      id: 'tp-1',
+      passenger_id: 'passenger-1',
+      status: PassengerTripStatus.in_transit,
+      trip: { courier_id: 'driver-1', status: TripStatus.active },
+    });
+    return mocks;
+  }
+
+  it('accepts a currently valid authorized pickup', async () => {
+    const { prisma, tx } = prepareHandoff();
+    prisma.authorizedPickup.findFirst.mockResolvedValue({ id: 'pickup-1' });
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(service.recordCheckEvent(handoffInput, user)).resolves.toEqual(
+      existingEvent,
+    );
+    expect(prisma.authorizedPickup.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        establishment_id: 'est-1',
+        passenger_id: 'passenger-1',
+        guardian_id: 'guardian-1',
+        active: true,
+      }),
+    });
+    expect(tx.tripPassenger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: PassengerTripStatus.dropped_off,
+        }),
+      }),
+    );
+  });
+
+  it.each(['expired', 'revoked'])(
+    'rejects an %s authorized pickup',
+    async () => {
+      const { prisma } = prepareHandoff();
+      prisma.authorizedPickup.findFirst.mockResolvedValue(null);
+      const service = new TransportService(prisma as unknown as PrismaService);
+
+      await expect(
+        service.recordCheckEvent(handoffInput, user),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('TransportService school trip completion invariant', () => {
+  it.each([PassengerTripStatus.boarded, PassengerTripStatus.in_transit])(
+    'blocks completion with a %s passenger',
+    async (status) => {
+      const { prisma } = createPrismaMock();
+      prisma.trip.findFirst.mockResolvedValue({
+        id: 'trip-1',
+        establishment_id: 'est-1',
+        courier_id: 'driver-1',
+        status: TripStatus.active,
+        school_safety: true,
+        passengers: [{ status }],
+      });
+      const service = new TransportService(prisma as unknown as PrismaService);
+
+      await expect(service.completeTrip('trip-1', user)).rejects.toThrow(
+        'cannot complete',
+      );
+      expect(prisma.trip.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('completes after every passenger has an explicit safe resolution', async () => {
+    const { prisma } = createPrismaMock();
+    prisma.trip.findFirst.mockResolvedValue({
+      id: 'trip-1',
+      establishment_id: 'est-1',
+      courier_id: 'driver-1',
+      status: TripStatus.active,
+      school_safety: true,
+      passengers: [
+        { status: PassengerTripStatus.dropped_off },
+        { status: PassengerTripStatus.absent },
+      ],
+    });
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(service.completeTrip('trip-1', user)).resolves.toMatchObject({
+      id: 'trip-1',
+      status: TripStatus.completed,
+    });
+    expect(prisma.trip.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ establishment_id: 'est-1' }),
+      }),
     );
   });
 });
