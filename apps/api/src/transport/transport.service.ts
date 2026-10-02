@@ -47,6 +47,96 @@ export interface RecordCheckEventInput {
 export class TransportService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async createAuthorizedPickup(
+    passengerId: string,
+    guardianId: string,
+    validFrom: Date | undefined,
+    validUntil: Date | undefined,
+    user: AuthenticatedUser,
+  ) {
+    if (user.courier_id) {
+      throw new ForbiddenException(
+        'Drivers cannot manage pickup authorizations',
+      );
+    }
+    if (validFrom && validUntil && validUntil <= validFrom) {
+      throw new BadRequestException('Authorization end must follow its start');
+    }
+    const [passenger, guardian] = await Promise.all([
+      this.prisma.passenger.findFirst({
+        where: {
+          id: passengerId,
+          establishment_id: user.establishment_id,
+          active: true,
+        },
+        select: { id: true },
+      }),
+      this.prisma.guardian.findFirst({
+        where: {
+          id: guardianId,
+          establishment_id: user.establishment_id,
+          active: true,
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (!passenger || !guardian) {
+      throw new NotFoundException('Passenger or guardian not found');
+    }
+    return this.prisma.authorizedPickup.create({
+      data: {
+        establishment_id: user.establishment_id,
+        passenger_id: passenger.id,
+        guardian_id: guardian.id,
+        valid_from: validFrom,
+        valid_until: validUntil,
+      },
+    });
+  }
+
+  async revokeAuthorizedPickup(id: string, user: AuthenticatedUser) {
+    if (user.courier_id) {
+      throw new ForbiddenException(
+        'Drivers cannot manage pickup authorizations',
+      );
+    }
+    const authorization = await this.prisma.authorizedPickup.findFirst({
+      where: { id, establishment_id: user.establishment_id },
+    });
+    if (!authorization) {
+      throw new NotFoundException('Pickup authorization not found');
+    }
+    if (!authorization.active) return authorization;
+    return this.prisma.authorizedPickup.update({
+      where: { id: authorization.id },
+      data: { active: false },
+    });
+  }
+
+  async listAuthorizedPickups(passengerId: string, user: AuthenticatedUser) {
+    if (user.courier_id) {
+      throw new ForbiddenException(
+        'Drivers cannot manage pickup authorizations',
+      );
+    }
+    const passenger = await this.prisma.passenger.findFirst({
+      where: {
+        id: passengerId,
+        establishment_id: user.establishment_id,
+      },
+      select: { id: true },
+    });
+    if (!passenger) throw new NotFoundException('Passenger not found');
+    return this.prisma.authorizedPickup.findMany({
+      where: {
+        passenger_id: passenger.id,
+        establishment_id: user.establishment_id,
+      },
+      include: { guardian: true },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
   async issuePassengerQrToken(
     tripPassengerId: string,
     action: PassengerQrAction,

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -20,6 +21,7 @@ import { FamilyTransportService } from './family-transport.service.js';
 import { ReassignTripDto } from './dto/reassign-trip.dto.js';
 import { TripAssignmentService } from './trip-assignment.service.js';
 import { TransportService } from './transport.service.js';
+import { CreateAuthorizedPickupDto } from './dto/create-authorized-pickup.dto.js';
 
 @Controller('transport')
 @UseGuards(JwtAuthGuard, PlanAccessGuard)
@@ -55,6 +57,39 @@ export class TransportController {
       dto.ttl_seconds,
       user,
     );
+  }
+
+  @Post('passengers/:id/authorized-pickups')
+  @HttpCode(HttpStatus.CREATED)
+  createAuthorizedPickup(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CreateAuthorizedPickupDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.createAuthorizedPickup(
+      id,
+      dto.guardian_id,
+      dto.valid_from ? new Date(dto.valid_from) : undefined,
+      dto.valid_until ? new Date(dto.valid_until) : undefined,
+      user,
+    );
+  }
+
+  @Get('passengers/:id/authorized-pickups')
+  listAuthorizedPickups(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.listAuthorizedPickups(id, user);
+  }
+
+  @Delete('authorized-pickups/:id')
+  @HttpCode(HttpStatus.OK)
+  revokeAuthorizedPickup(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.revokeAuthorizedPickup(id, user);
   }
 
   @Post('guardians/:id/access-tokens')
