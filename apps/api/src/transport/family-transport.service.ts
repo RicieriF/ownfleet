@@ -10,7 +10,7 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import type IORedis from 'ioredis';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
-import { PassengerTripStatus } from '@prisma/client';
+import { PassengerQrAction, PassengerTripStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../shared/redis/redis.constants.js';
 
@@ -20,6 +20,15 @@ interface CachedPosition {
   lat: number;
   lng: number;
   ts: number;
+}
+
+interface CreateQrExceptionInput {
+  action: PassengerQrAction;
+  trip_id?: string;
+  reason: string;
+  valid_from: Date;
+  valid_until: Date;
+  max_uses: number;
 }
 
 @Injectable()
@@ -234,6 +243,72 @@ export class FamilyTransportService {
       return { ready_at: winner.ready_at };
     }
     return { ready_at: readyAt };
+  }
+
+  async createQrException(
+    passengerId: string,
+    input: CreateQrExceptionInput,
+    rawToken: string | undefined,
+  ) {
+    const access = await this.resolveAccess(rawToken);
+    if (input.valid_until <= input.valid_from) {
+      throw new BadRequestException('Exception end must follow its start');
+    }
+    if (input.valid_until <= new Date()) {
+      throw new BadRequestException('Exception must end in the future');
+    }
+    const relationship = await this.prisma.passengerGuardian.findFirst({
+      where: {
+        passenger_id: passengerId,
+        guardian_id: access.guardian_id,
+        passenger: { establishment_id: access.establishment_id, active: true },
+      },
+      select: { id: true },
+    });
+    if (!relationship) throw new NotFoundException('Passenger not found');
+
+    if (input.trip_id) {
+      const tripPassenger = await this.prisma.tripPassenger.findFirst({
+        where: {
+          trip_id: input.trip_id,
+          passenger_id: passengerId,
+          establishment_id: access.establishment_id,
+        },
+        select: { id: true },
+      });
+      if (!tripPassenger) throw new NotFoundException('Trip not found');
+    }
+
+    return this.prisma.passengerQrException.create({
+      data: {
+        establishment_id: access.establishment_id,
+        passenger_id: passengerId,
+        trip_id: input.trip_id,
+        action: input.action,
+        authorized_by_guardian_id: access.guardian_id,
+        reason: input.reason.trim(),
+        valid_from: input.valid_from,
+        valid_until: input.valid_until,
+        max_uses: input.max_uses,
+      },
+    });
+  }
+
+  async revokeQrException(id: string, rawToken: string | undefined) {
+    const access = await this.resolveAccess(rawToken);
+    const exception = await this.prisma.passengerQrException.findFirst({
+      where: {
+        id,
+        establishment_id: access.establishment_id,
+        authorized_by_guardian_id: access.guardian_id,
+      },
+    });
+    if (!exception) throw new NotFoundException('QR exception not found');
+    if (exception.revoked_at) return exception;
+    return this.prisma.passengerQrException.update({
+      where: { id: exception.id },
+      data: { revoked_at: new Date() },
+    });
   }
 
   private async resolveAccess(rawToken: string | undefined) {

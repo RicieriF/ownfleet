@@ -1,5 +1,7 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -9,6 +11,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { FamilyTransportService } from './family-transport.service.js';
+import { CreateQrExceptionDto } from './dto/create-qr-exception.dto.js';
 
 @Controller('transport/family')
 export class FamilyTransportController {
@@ -29,5 +32,32 @@ export class FamilyTransportController {
     @Headers('x-family-token') token?: string,
   ) {
     return this.service.markReady(id, token);
+  }
+
+  @Post('passengers/:id/qr-exceptions')
+  @HttpCode(HttpStatus.CREATED)
+  createQrException(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CreateQrExceptionDto,
+    @Headers('x-family-token') token?: string,
+  ) {
+    return this.service.createQrException(
+      id,
+      {
+        ...dto,
+        valid_from: new Date(dto.valid_from),
+        valid_until: new Date(dto.valid_until),
+      },
+      token,
+    );
+  }
+
+  @Delete('qr-exceptions/:id')
+  @HttpCode(HttpStatus.OK)
+  revokeQrException(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Headers('x-family-token') token?: string,
+  ) {
+    return this.service.revokeQrException(id, token);
   }
 }

@@ -1,5 +1,14 @@
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { PassengerTripStatus, TripStatus, UserRole } from '@prisma/client';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  PassengerQrAction,
+  PassengerTripStatus,
+  TripStatus,
+  UserRole,
+} from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type IORedis from 'ioredis';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
@@ -27,6 +36,12 @@ function createMocks() {
     tripPassenger: {
       findFirst: jest.fn(),
       updateMany: jest.fn(),
+    },
+    passengerGuardian: { findFirst: jest.fn() },
+    passengerQrException: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
     },
   };
   const redis = { get: jest.fn() };
@@ -200,5 +215,96 @@ describe('FamilyTransportService protected home', () => {
       ready_at: readyAt,
     });
     expect(prisma.tripPassenger.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('FamilyTransportService QR exceptions', () => {
+  const exceptionInput = {
+    action: PassengerQrAction.board,
+    trip_id: 'trip-1',
+    reason: 'Phone unavailable',
+    valid_from: new Date(Date.now() + 60_000),
+    valid_until: new Date(Date.now() + 3_600_000),
+    max_uses: 1,
+  };
+
+  it('creates a bounded exception for a related passenger and trip', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+    prisma.passengerGuardian.findFirst.mockResolvedValue({ id: 'relation-1' });
+    prisma.tripPassenger.findFirst.mockResolvedValue({ id: 'tp-1' });
+    prisma.passengerQrException.create.mockImplementation(({ data }) => data);
+
+    await service.createQrException(
+      'passenger-1',
+      exceptionInput,
+      'family-secret',
+    );
+
+    expect(prisma.passengerQrException.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        establishment_id: 'est-1',
+        passenger_id: 'passenger-1',
+        trip_id: 'trip-1',
+        authorized_by_guardian_id: 'guardian-1',
+        max_uses: 1,
+      }),
+    });
+  });
+
+  it('rejects an unrelated passenger without revealing tenant data', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+    prisma.passengerGuardian.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.createQrException(
+        'foreign-passenger',
+        exceptionInput,
+        'family-secret',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.passengerQrException.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects expired or inverted exception windows', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+
+    await expect(
+      service.createQrException(
+        'passenger-1',
+        {
+          ...exceptionInput,
+          valid_from: new Date(Date.now() + 60_000),
+          valid_until: new Date(Date.now() - 60_000),
+        },
+        'family-secret',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('revokes only an exception issued by the authenticated guardian', async () => {
+    const { prisma, service } = createMocks();
+    prisma.familyAccessToken.findUnique.mockResolvedValue(activeAccess);
+    prisma.passengerQrException.findFirst.mockResolvedValue({
+      id: 'exception-1',
+      revoked_at: null,
+    });
+    prisma.passengerQrException.update.mockResolvedValue({
+      id: 'exception-1',
+      revoked_at: new Date(),
+    });
+
+    await service.revokeQrException('exception-1', 'family-secret');
+
+    expect(prisma.passengerQrException.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'exception-1',
+        establishment_id: 'est-1',
+        authorized_by_guardian_id: 'guardian-1',
+      },
+    });
+    expect(prisma.passengerQrException.update).toHaveBeenCalledTimes(1);
   });
 });
