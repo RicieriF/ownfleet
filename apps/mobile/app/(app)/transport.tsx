@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -44,6 +44,7 @@ export default function TransportScreen() {
     passenger: Passenger;
   } | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const scanLockedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -104,6 +105,7 @@ export default function TransportScreen() {
           return;
         }
       }
+      scanLockedRef.current = false;
       setScanTarget({ trip, passenger });
       return;
     }
@@ -259,9 +261,12 @@ export default function TransportScreen() {
             style={StyleSheet.absoluteFill}
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
             onBarcodeScanned={({ data }: BarcodeScanningResult) => {
+              if (scanLockedRef.current) return;
               const target = scanTarget;
-              if (target)
+              if (target) {
+                scanLockedRef.current = true;
                 void submitEvent(target.trip, target.passenger, "board", data);
+              }
             }}
           />
           <Text style={styles.scanLabel}>Aponte para o QR do passageiro</Text>
