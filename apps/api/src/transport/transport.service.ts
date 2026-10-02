@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CheckEvent,
   CheckEventType,
   CheckValidationStatus,
   PassengerTripStatus,
@@ -55,6 +56,7 @@ export class TransportService {
       if (existing.establishment_id !== user.establishment_id) {
         throw new ForbiddenException('Event belongs to another organization');
       }
+      this.assertIdempotentReplay(existing, input, user.courier_id);
       return existing;
     }
 
@@ -159,8 +161,10 @@ export class TransportService {
         const duplicate = await this.prisma.checkEvent.findUnique({
           where: { event_uid: input.event_uid },
         });
-        if (duplicate?.establishment_id === user.establishment_id)
+        if (duplicate?.establishment_id === user.establishment_id) {
+          this.assertIdempotentReplay(duplicate, input, user.courier_id);
           return duplicate;
+        }
       }
       throw error;
     }
@@ -216,6 +220,31 @@ export class TransportService {
         return PassengerTripStatus.incident;
       default:
         return null;
+    }
+  }
+
+  private assertIdempotentReplay(
+    event: CheckEvent,
+    input: RecordCheckEventInput,
+    courierId: string,
+  ): void {
+    const matches =
+      event.trip_id === input.trip_id &&
+      event.trip_passenger_id === input.trip_passenger_id &&
+      event.courier_id === courierId &&
+      event.guardian_id === (input.guardian_id ?? null) &&
+      event.type === input.type &&
+      event.validation_status === input.validation_status &&
+      event.captured_at.getTime() === input.captured_at.getTime() &&
+      event.lat === (input.lat ?? null) &&
+      event.lng === (input.lng ?? null) &&
+      event.accuracy === (input.accuracy ?? null) &&
+      event.qr_nonce_hash === (input.qr_nonce_hash ?? null);
+
+    if (!matches) {
+      throw new ConflictException(
+        'event_uid already belongs to a different passenger event',
+      );
     }
   }
 }
