@@ -504,3 +504,102 @@ describe('TransportService passenger QR issuance', () => {
     expect(prisma.passengerQrToken.create).not.toHaveBeenCalled();
   });
 });
+
+describe('TransportService school drop-off geofence', () => {
+  const dropoffInput: RecordCheckEventInput = {
+    ...input,
+    event_uid: 'evt-school-dropoff',
+    type: CheckEventType.dropoff,
+    lat: -23.55,
+    lng: -46.63,
+    accuracy: 10,
+  };
+
+  function prepareDropoff() {
+    const mocks = createPrismaMock();
+    mocks.prisma.checkEvent.findUnique.mockResolvedValue(null);
+    mocks.prisma.tripPassenger.findFirst.mockResolvedValue({
+      id: 'tp-1',
+      trip_id: 'trip-1',
+      passenger_id: 'passenger-1',
+      status: PassengerTripStatus.in_transit,
+      trip: {
+        courier_id: 'driver-1',
+        vehicle_id: 'vehicle-1',
+        status: TripStatus.active,
+        school_safety: true,
+      },
+      passenger: {
+        pickup_qr_required: false,
+        handoff_qr_required: false,
+      },
+      dropoff_stop: {
+        id: 'school-stop',
+        lat: -23.55,
+        lng: -46.63,
+        geofence_meters: 100,
+      },
+    });
+    return mocks;
+  }
+
+  it('accepts a precise school drop-off inside the configured geofence', async () => {
+    const { prisma, tx } = prepareDropoff();
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await service.recordCheckEvent(dropoffInput, user);
+    expect(tx.tripPassenger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: PassengerTripStatus.dropped_off,
+        }),
+      }),
+    );
+    expect(tx.checkEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        metadata: expect.objectContaining({
+          school_geofence: expect.objectContaining({
+            stop_id: 'school-stop',
+            radius_meters: 100,
+            accuracy_tolerance_meters: 10,
+          }),
+        }),
+      }),
+    });
+  });
+
+  it('rejects school drop-off outside the configured geofence', async () => {
+    const { prisma } = prepareDropoff();
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(
+      service.recordCheckEvent({ ...dropoffInput, lat: -23.54 }, user),
+    ).rejects.toThrow('outside the geofence');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inaccurate GPS reading at school', async () => {
+    const { prisma } = prepareDropoff();
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await expect(
+      service.recordCheckEvent({ ...dropoffInput, accuracy: 101 }, user),
+    ).rejects.toThrow('accuracy of 100 meters or better');
+  });
+
+  it('keeps an offline school drop-off provisional until reconciliation', async () => {
+    const { prisma, tx } = prepareDropoff();
+    const service = new TransportService(prisma as unknown as PrismaService);
+
+    await service.recordCheckEvent(
+      {
+        ...dropoffInput,
+        validation_status: CheckValidationStatus.provisional_offline,
+        lat: -23.54,
+      },
+      user,
+    );
+    expect(tx.checkEvent.create).toHaveBeenCalled();
+    expect(tx.tripPassenger.updateMany).not.toHaveBeenCalled();
+  });
+});

@@ -17,11 +17,15 @@ import {
 } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { haversineMeters } from '../shared/geo.js';
 import {
   assertPassengerTransition,
   assertTripCanComplete,
   eventGrantsConfirmedPassengerState,
 } from './domain/trip-state.js';
+
+const MAX_SCHOOL_GPS_ACCURACY_METERS = 100;
+const MAX_SCHOOL_ACCURACY_TOLERANCE_METERS = 50;
 
 export interface RecordCheckEventInput {
   event_uid: string;
@@ -120,7 +124,7 @@ export class TransportService {
         trip_id: input.trip_id,
         establishment_id: user.establishment_id,
       },
-      include: { trip: true, passenger: true },
+      include: { trip: true, passenger: true, dropoff_stop: true },
     });
     if (!tripPassenger) throw new NotFoundException('Trip passenger not found');
     if (tripPassenger.trip.courier_id !== user.courier_id) {
@@ -146,11 +150,62 @@ export class TransportService {
       ReturnType<typeof this.prisma.passengerQrToken.findUnique>
     > = null;
     let qrException: { id: string; used_count: number } | null = null;
+    let schoolGeofenceAudit: Prisma.InputJsonObject | undefined;
 
     if (input.override_reason?.trim() && (!qrRequired || !qrAction)) {
       throw new ConflictException(
         'QR override is not applicable to this event',
       );
+    }
+
+    if (
+      grantsConfirmedState &&
+      tripPassenger.trip.school_safety &&
+      input.type === CheckEventType.dropoff
+    ) {
+      const stop = tripPassenger.dropoff_stop;
+      if (!stop || stop.lat === null || stop.lng === null) {
+        throw new ConflictException(
+          'School drop-off stop has no geofence coordinates',
+        );
+      }
+      if (
+        input.lat === undefined ||
+        input.lng === undefined ||
+        input.accuracy === undefined
+      ) {
+        throw new BadRequestException(
+          'School drop-off requires location and GPS accuracy',
+        );
+      }
+      if (
+        input.accuracy < 0 ||
+        input.accuracy > MAX_SCHOOL_GPS_ACCURACY_METERS
+      ) {
+        throw new BadRequestException(
+          `School drop-off requires GPS accuracy of ${MAX_SCHOOL_GPS_ACCURACY_METERS} meters or better`,
+        );
+      }
+      const distanceMeters = haversineMeters(
+        input.lat,
+        input.lng,
+        stop.lat,
+        stop.lng,
+      );
+      const toleranceMeters = Math.min(
+        input.accuracy,
+        MAX_SCHOOL_ACCURACY_TOLERANCE_METERS,
+      );
+      const allowedMeters = stop.geofence_meters + toleranceMeters;
+      if (distanceMeters > allowedMeters) {
+        throw new ForbiddenException('School drop-off is outside the geofence');
+      }
+      schoolGeofenceAudit = {
+        stop_id: stop.id,
+        distance_meters: Math.round(distanceMeters),
+        radius_meters: stop.geofence_meters,
+        accuracy_tolerance_meters: toleranceMeters,
+      };
     }
 
     if (grantsConfirmedState && qrRequired && qrAction) {
@@ -251,7 +306,12 @@ export class TransportService {
             lng: input.lng,
             accuracy: input.accuracy,
             qr_nonce_hash: qrToken?.nonce_hash,
-            metadata: this.auditMetadata(input, qrToken?.id, qrException?.id),
+            metadata: this.auditMetadata(
+              input,
+              qrToken?.id,
+              qrException?.id,
+              schoolGeofenceAudit,
+            ),
           },
         });
 
@@ -428,6 +488,7 @@ export class TransportService {
     input: RecordCheckEventInput,
     qrTokenId?: string,
     qrExceptionId?: string,
+    schoolGeofence?: Prisma.InputJsonObject,
   ): Prisma.InputJsonObject {
     const metadata: Prisma.InputJsonObject = this.isJsonObject(input.metadata)
       ? input.metadata
@@ -441,6 +502,7 @@ export class TransportService {
           : qrTokenId
             ? { mode: 'qr', token_id: qrTokenId }
             : { mode: 'not_required' },
+      ...(schoolGeofence ? { school_geofence: schoolGeofence } : {}),
     };
   }
 
