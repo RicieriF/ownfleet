@@ -162,63 +162,79 @@ export async function flushTransportOutbox(
 
   const succeeded = new Set<string>();
   const errors = new Map<string, { terminal: boolean; message: string }>();
-  const locations = batch.filter(
-    (entry): entry is LocationOutboxEntry => entry.kind === "location",
-  );
-  const checkEvents = batch.filter(
-    (entry): entry is CheckEventOutboxEntry => entry.kind === "check_event",
-  );
 
   try {
-    if (locations.length > 0) {
-      const response = await fetch(`${API_URL}/api/v1/tracking/pings/sync`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          pings: locations.map((entry) => ({
-            event_uid: entry.event_uid,
-            captured_at: entry.captured_at,
-            ...entry.payload,
-          })),
-        }),
-      });
-      if (response.ok) {
-        locations.forEach((entry) => succeeded.add(entry.id));
-      } else {
-        const message = `HTTP ${response.status}`;
-        locations.forEach((entry) =>
+    // Process the persisted sequence exactly as captured. A check event is only
+    // removed after the server has authoritatively validated its transition.
+    for (const entry of batch) {
+      if (entry.kind === "location") {
+        const response = await fetch(`${API_URL}/api/v1/tracking/pings/sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            pings: [
+              {
+                event_uid: entry.event_uid,
+                captured_at: entry.captured_at,
+                ...entry.payload,
+              },
+            ],
+          }),
+        });
+        if (response.ok) {
+          succeeded.add(entry.id);
+        } else {
           errors.set(entry.id, {
             terminal: response.status < 500 && response.status !== 401,
-            message,
-          }),
+            message: `HTTP ${response.status}`,
+          });
+          break;
+        }
+      } else {
+        const response = await fetch(
+          `${API_URL}/api/v1/transport/check-events`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              ...entry.payload,
+              event_uid: entry.event_uid,
+              captured_at: entry.captured_at,
+              validation_status: "validated_online",
+              metadata: {
+                ...((entry.payload.metadata as Record<string, unknown>) ?? {}),
+                captured_offline: true,
+                outbox_sequence: entry.sequence,
+              },
+            }),
+          },
         );
+        if (response.ok) {
+          succeeded.add(entry.id);
+        } else {
+          errors.set(entry.id, {
+            terminal: response.status < 500 && response.status !== 401,
+            message: `HTTP ${response.status}`,
+          });
+          break;
+        }
       }
     }
-
-    for (const entry of checkEvents) {
-      const response = await fetch(`${API_URL}/api/v1/transport/check-events`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          ...entry.payload,
-          event_uid: entry.event_uid,
-          captured_at: entry.captured_at,
-          validation_status: "provisional_offline",
-        }),
+    if (errors.size > 0) {
+      batch.forEach((entry) => {
+        if (!succeeded.has(entry.id) && !errors.has(entry.id)) {
+          errors.set(entry.id, {
+            terminal: false,
+            message: "Waiting for an earlier outbox event",
+          });
+        }
       });
-      if (response.ok) succeeded.add(entry.id);
-      else {
-        errors.set(entry.id, {
-          terminal: response.status < 500 && response.status !== 401,
-          message: `HTTP ${response.status}`,
-        });
-      }
     }
   } catch (error) {
     const message =
@@ -259,7 +275,13 @@ export async function getTransportOutboxStatus(
   const failed = queue.filter((entry) => entry.state === "failed").length;
   return {
     connectivity:
-      pending > 0 ? (networkSucceeded ? "SYNCING" : "OFFLINE") : "ONLINE",
+      pending > 0
+        ? networkSucceeded
+          ? "SYNCING"
+          : "OFFLINE"
+        : failed > 0
+          ? "OFFLINE"
+          : "ONLINE",
     pending,
     failed,
   };
